@@ -934,3 +934,18 @@ body.dense .v2 .pr { padding-top: 5px; padding-bottom: 5px; }
 .hof2 .hof-ctl .seg button { border-radius: 99px; background: none; min-height: 34px; color: var(--dim); font-weight: 700; }
 .hof2 .hof-ctl .seg button.on { background: var(--accent); color: #06210f; }
 .v2 .lgtabs { margin: 0 0 6px; }
+
+/* ---- v16.2: finish pop-ups and summer card ---- */
+#modal-box { border-radius: 24px; }
+.ce-t { font-size: 16px; color: var(--dim); font-weight: 600; }
+.ce-w { font-size: 26px; letter-spacing: -.02em; }
+.ce-facts { background: var(--bg); border: 1px solid var(--line); border-radius: 18px; padding: 4px 14px; }
+.ce-f:first-child { border-top: 0; }
+.ce-btns { display: grid; gap: 8px; margin-top: 16px; }
+.ce-btns button { min-height: 46px; border-radius: 23px; font-size: 15px; font-weight: 700; width: 100%; }
+.ce-btns button.pri { background: var(--accent); border-color: var(--accent); color: #06210f; }
+.ce-btns button.gold { background: var(--accent2); border-color: var(--accent2); color: #2b2200; }
+.card.summer .row.prg { flex-wrap: wrap !important; row-gap: 8px; }
+.card.summer .prg .prow { flex: 1 0 100% !important; min-width: 0 !important; }
+.card.summer { border-radius: 20px; }
+.row.prg { flex-wrap: wrap !important; row-gap: 8px; } .row.prg .prow { flex: 1 0 100%; min-width: 0; }
