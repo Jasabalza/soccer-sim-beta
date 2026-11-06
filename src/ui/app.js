@@ -75,44 +75,47 @@ const TAB_ICONS = {
   history: '<path d="M8 4h8v5a4 4 0 0 1-8 0zM8 6H4v1a4 4 0 0 0 4 4M16 6h4v1a4 4 0 0 1-4 4M12 13v4M8 21h8M10 17h4"/>',
   more: '<circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/>',
 };
-const TAB_OF = { world: "season", moves: "season", ledger: "season", prospects: "season", ceremony: "history", continent: "leagues", league: "leagues", club: "leagues", comp: "leagues", c: "leagues", matchup: "leagues", rivals: "leagues", nations: "leagues", nation: "leagues", players: "players", player: "players", coach: "players", academies: "players", news: "history", hof: "history", hofcard: "history", hofday: "history", hofnation: "history", hofleague: "history", trophies: "history", records: "history", money: "more" };
+const TAB_OF = { more: "more", history: "history", leagues: "leagues", world: "season", moves: "season", ledger: "season", prospects: "season", ceremony: "history", continent: "leagues", league: "leagues", club: "leagues", comp: "leagues", c: "leagues", matchup: "leagues", rivals: "leagues", nations: "leagues", nation: "leagues", players: "players", player: "players", coach: "players", academies: "players", news: "history", hof: "history", hofcard: "history", hofday: "history", hofnation: "history", hofleague: "history", trophies: "history", records: "history", money: "more" };
 function renderTabbar(has, route) {
   const el = $("#tabbar"); if (!el) return;
   if (!has) { el.innerHTML = ""; el.hidden = true; return; }
   el.hidden = false;
   const cur = TAB_OF[route] || "season";
   const tab = (k, t, href) => `<a data-tab="${k}" href="${href || "#"}" class="${cur === k ? "on" : ""}"><svg width="22" height="22" viewBox="0 0 24 24" fill="${k === "more" ? "currentColor" : "none"}" stroke="${k === "more" ? "none" : "currentColor"}" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${TAB_ICONS[k]}</svg><span>${t}</span></a>`;
-  el.innerHTML = tab("season", "Season", "#/world") + tab("leagues", "Leagues") + tab("players", "Players", "#/players") + tab("history", "History") + tab("more", "More");
-  el.querySelector('[data-tab="leagues"]').onclick = (e) => { e.preventDefault(); leaguesSheet(); };
-  el.querySelector('[data-tab="history"]').onclick = (e) => { e.preventDefault(); historySheet(); };
-  el.querySelector('[data-tab="more"]').onclick = (e) => { e.preventDefault(); moreSheet(); };
+  el.innerHTML = tab("season", "Season", "#/world") + tab("leagues", "Leagues", "#/leagues") + tab("players", "Players", "#/players") + tab("history", "History", "#/history") + tab("more", "More", "#/more");
 }
-function sheetLinks(title, rows) {
-  openModal(`<h2>${title}</h2><div class="sheet">${rows.map(([h, t, sub]) => `<a class="sheet-row" href="${h}"><b>${t}</b>${sub ? `<span class="dim small">${sub}</span>` : ""}<svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></a>`).join("")}</div><p style="margin:12px 0 0"><button id="sheet-x">Close</button></p>`);
-  $("#sheet-x").onclick = closeModal;
-  document.querySelectorAll("#modal-box .sheet-row").forEach((a) => a.addEventListener("click", closeModal));
+const CHEV = '<svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg>';
+const MENU_ICON = (d) => `<span class="mi"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg></span>`;
+const MI = { money: '<circle cx="12" cy="12" r="8"/><path d="M12 8v8M9.5 10c0-1 1-1.6 2.5-1.6s2.5.6 2.5 1.6-1 1.5-2.5 1.8-2.5.8-2.5 1.8 1 1.6 2.5 1.6 2.5-.6 2.5-1.6"/>', moves: '<path d="M7 7h11l-3-3M17 17H6l3 3"/>', grad: '<path d="M3 9l9-4 9 4-9 4zM7 11v5c0 1 2.2 2 5 2s5-1 5-2v-5"/>', rivals: '<path d="M6 4l12 16M18 4L6 20"/>', nations: '<circle cx="12" cy="12" r="8"/><path d="M4 12h16M12 4c3 3 3 13 0 16M12 4c-3 3-3 13 0 16"/>', acad: '<path d="M4 20V10l8-5 8 5v10zM9 20v-6h6v6"/>', save: '<path d="M5 4h11l3 3v13H5zM8 4v5h7V4M8 20v-6h8v6"/>', gear: '<circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/>', aw: '<path d="M8 4h8v5a4 4 0 0 1-8 0zM8 6H4v1a4 4 0 0 0 4 4M16 6h4v1a4 4 0 0 1-4 4M12 13v4M8 21h8M10 17h4"/>', hof: '<path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/>', news: '<path d="M5 4h12v16H5zM8 8h6M8 12h6M8 16h4M17 8h2v10a2 2 0 0 1-2 2"/>', trophy: '<path d="M8 4h8v5a4 4 0 0 1-8 0zM12 13v4M8 21h8"/>', rec: '<path d="M4 20V8M10 20V4M16 20v-9M22 20H2"/>', ppl: '<circle cx="9" cy="8" r="3.5"/><path d="M2 20c0-3.5 3-5.5 7-5.5s7 2 7 5.5M17 5a3.5 3.5 0 0 1 0 7M19 15c2 .7 3 2.2 3 5"/>' };
+function menuPage(title, sub, groups) {
+  $("#view").innerHTML = `<div class="v2"><h1>${title}</h1><div class="sub">${sub}</div>${groups.map(([g, rows]) => `<div class="card menu"><h3>${g}</h3>${rows.map(([ic, t, d, href, id]) => `<a class="mrow" ${href ? `href="${href}"` : `href="#" id="${id}"`}>${MENU_ICON(MI[ic])}<span class="mt"><b>${t}</b><span class="dim small">${d}</span></span>${CHEV}</a>`).join("")}</div>`).join("")}</div>`;
 }
-async function leaguesSheet() {
-  let d; try { d = await api("/api/world"); } catch (e) { toast(e.message); return; }
-  const rows = [["#/nations", "Nations", "national teams"], ["#/rivals", "Rivals", "derbies and rivalries"]];
-  for (const c of d.continents) {
-    rows.push([`#/continent/${c.code}`, esc(c.name), c.leagues.length ? c.leagues.length + " leagues" : "national teams"]);
-    for (const l of c.leagues) rows.push([leagueHref(l.name), "&nbsp;&nbsp;" + esc(l.name), ""]);
-  }
-  sheetLinks("Leagues", rows);
+function viewMore() {
+  menuPage("More", "Everything else, in one place.", [
+    ["Money and moves", [["money", "Money", "finances across the world", "#/money"], ["moves", "Off-season moves", "transfers, retirements, new players", "#/moves"], ["grad", "Graduates", "academy prospects", "#/prospects"]]],
+    ["Explore", [["nations", "Nations", "national teams and rankings", "#/nations"], ["rivals", "Rivals", "derbies and rivalries", "#/rivals"], ["acad", "Academies", "ranked by prestige", "#/academies"]]],
+    ["Game", [["save", "Save and load", "slots, export, import", "", "mr-save"], ["gear", "Settings", "animations, god mode, logos", "", "mr-set"]]],
+  ]);
+  $("#mr-save").onclick = (e) => { e.preventDefault(); saveDialog(); };
+  $("#mr-set").onclick = (e) => { e.preventDefault(); settingsDialog(); };
 }
-function historySheet() {
-  sheetLinks("History", [["#/ceremony", "Awards", "ceremony, overview, winners"], ["#/hof", "Hall of Fame", "inductees and ceremonies"], ["#/news", "News", "everything that happened"], ["#/trophies", "Trophies", "the cabinet"], ["#/records", "Records", "world records"], ["#/academies", "Academies", "ranked by prestige"]]);
+function viewHistory() {
+  menuPage("History", "Look back at what happened.", [
+    ["Seasons", [["aw", "Awards", "ceremony, overview, winners", "#/ceremony"], ["hof", "Hall of Fame", "inductees and ceremonies", "#/hof"], ["news", "News", "everything that happened", "#/news"]]],
+    ["Records", [["trophy", "Trophies", "the trophy cabinet", "#/trophies"], ["rec", "Records", "world records", "#/records"], ["acad", "Academies", "what graduates became", "#/academies"]]],
+  ]);
 }
-function moreSheet() {
-  sheetLinks("More", [["#/money", "Money", "finances across the world"], ["#/moves", "Off-season", "moves, retirements, new players"], ["#/prospects", "Graduates", "academy prospects"], ["#/rivals", "Rivals", "derbies"], ["#/nations", "Nations", "national teams"]]);
-  const box = $("#modal-box");
-  const extra = document.createElement("p"); extra.style.margin = "12px 0 0";
-  extra.innerHTML = `<button id="sheet-save">Save / Load</button> <button id="sheet-set">Settings</button>`;
-  box.appendChild(extra);
-  $("#sheet-save").onclick = () => { closeModal(); saveDialog(); };
-  $("#sheet-set").onclick = () => { closeModal(); settingsDialog(); };
+async function viewLeagues() {
+  const d = await api("/api/world");
+  const conts = d.continents.filter((c) => c.leagues.length);
+  const sel = LGV.c && conts.some((c) => c.code === LGV.c) ? LGV.c : "";
+  const shown = conts.filter((c) => !sel || c.code === sel);
+  $("#view").innerHTML = `<div class="v2"><h1>Leagues</h1><div class="sub">${conts.reduce((n, c) => n + c.leagues.length, 0)} leagues across ${conts.length} continents.</div>
+    <nav class="chips" aria-label="Continent"><button data-c="" class="${sel ? "" : "on"}">All</button>${conts.map((c) => `<button data-c="${c.code}" class="${sel === c.code ? "on" : ""}">${esc(c.name)}</button>`).join("")}<a href="#/nations">Nations</a><a href="#/rivals">Rivals</a></nav>
+    ${shown.map((c) => `<div class="sep">${esc(c.name)}</div><div class="card lg">${c.leagues.map((l) => `<a class="lrow" href="#/league/${enc(l.name)}">${logoBox("leagues", l.name, 40) || '<span class="lph">${esc(l.name.split(" ").map((w) => w[0]).join("").slice(0, 3))}</span>'}<span class="mt"><b>${esc(l.name)}</b><span class="dim small">${l.done >= l.total ? "finished · champion " : "leader "}${esc(l.leader)}${l.done >= l.total ? "" : " · " + l.pts + " pts"}</span><span class="bar"><i style="width:${l.total ? Math.round(100 * l.done / l.total) : 0}%"></i></span></span><span class="dim small">${l.done}/${l.total}</span>${CHEV}</a>`).join("")}</div>`).join("")}</div>`;
+  document.querySelectorAll("#view .chips [data-c]").forEach((b) => (b.onclick = () => { LGV.c = b.dataset.c; viewLeagues(); }));
 }
+const LGV = { c: "" };
 let SBOPEN = false;
 // the season loop: Season -> Summer tournaments -> Awards -> Transfers -> next season (the engine's header.phase says where we are)
 const FLOW_STEPS = [["season", "Season"], ["summer", "Summer"], ["awards", "Awards"], ["transfers", "Moves"], ["graduates", "Graduates"]];
@@ -1806,6 +1809,9 @@ async function routeInner(r, a, b) {
   {
     if (!r || r === "start") return viewStart();
     if (r === "world") return await viewWorld();
+    if (r === "leagues") return await viewLeagues();
+    if (r === "more") return viewMore();
+    if (r === "history") return viewHistory();
     if (r === "continent") return await viewContinent(a);
     if (r === "league") return await viewLeague(a, b ? +b : null);
     if (r === "club") { await viewClub(a); return await clubRivals(a); }

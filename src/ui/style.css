@@ -854,3 +854,13 @@ a + .lbox, .lbox + a { margin-left: 4px; } .lbox { vertical-align: middle; margi
 .v2 .hero2 h1 { margin: 0; font-size: 26px; letter-spacing: -.02em; line-height: 1.05; }
 .v2 .hero2 .sub { margin-top: 4px; color: #d3e2d8; }
 .v2 .hero2 .sub a { color: #bfe3ff; }
+
+.v2 .menu { padding: 4px 14px; }
+.v2 .menu h3 { margin: 10px 0 2px; }
+.v2 .mrow, .v2 .lrow { display: flex; align-items: center; gap: 12px; min-height: 56px; border-bottom: 1px solid #223629; color: var(--text); text-decoration: none; }
+.v2 .mrow:last-child, .v2 .lrow:last-child { border-bottom: 0; }
+.v2 .mi { flex: none; width: 36px; height: 36px; border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; background: rgba(61,220,132,.12); color: var(--accent); }
+.v2 .mt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.v2 .mt b { font-size: 15px; } .v2 .chev { flex: none; color: var(--accent); }
+.v2 .lg { padding: 2px 14px; } .v2 .lrow { min-height: 64px; } .v2 .lrow .bar { margin-top: 5px; }
+.v2 .lph { flex: none; width: 40px; height: 40px; border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; background: var(--panel2); color: var(--accent2); font-size: 12px; font-weight: 800; }
