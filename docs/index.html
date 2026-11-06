@@ -10626,7 +10626,7 @@ function hofReveal(e, scopeText, idx, n, icon) {
     <div class="hrv-p"><span class="dim small">${e.via === "world" ? "With his World induction" : e.n === 1 ? "First ballot" : "Year " + e.n + " on the ballot"}</span><b class="hrv-pct" data-p="${pc}">${hofPct(e.pct)}</b></div>
     <div class="hbar big"><i class="g" style="width:${pc}%"></i><u style="left:75%"></u></div>
     <div class="dim small hrv-need">${e.via === "world" ? "The federation honours the world's inductees (World vote shown)" : "75% of the votes are needed"}</div>
-    ${e.both ? `<div class="dim small" style="margin-top:8px">${esc(e.both)} league vote: <b>${hofPct(e.bothPct)}</b></div><div class="hbar"><i class="g" style="width:${Math.round(e.bothPct * 100)}%"></i><u style="left:75%"></u></div>` : ""}
+    ${e.both ? `<div class="dim small" style="margin-top:8px">${esc(e.both)} vote: <b>${hofPct(e.bothPct)}</b></div><div class="hbar"><i class="g" style="width:${Math.round(e.bothPct * 100)}%"></i><u style="left:75%"></u></div>` : ""}
     <div class="dim small">${esc(e.line || "")}</div>
     <div class="hrv-v"><span class="tag gold">${e.both ? "Inducted into both" : "Inducted"}</span> ${hofBadge(e.tier ? { tier: e.tier, scope: e.scope || null } : (e.badge || { tier: "W" }), 26)}${e.both ? " " + hofBadge({ tier: "L", scope: e.both }, 26) : ""}</div></div>`;
 }
