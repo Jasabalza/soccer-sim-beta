@@ -3,7 +3,7 @@
 // the world induction day (final-year watch, the vote, who fell off), and a league's Hall of Fame day with its results.
 // Loaded before app.js; the helpers it uses (api, esc, enc, flag, crest, emblem, clubLink, ...) are only touched when a page is drawn.
 
-const HOF = { kind: "p", tab: "ind" };
+const HOF = { kind: "p", tab: "ind", ranked: false };
 const HOF_CLR = { W: "#f5c542", C: "#b48cff", L: "#4aa8ff", K: "#8fa8b8" };
 const HOF_LBL = { W: "World", C: "Country", L: "League", K: "Club" };
 const hueOf = (s) => { let h = 0; for (const ch of String(s)) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return h % 360; };
@@ -65,7 +65,10 @@ async function viewHof(tier, name) {
   const people = HOF.kind === "c" ? "coaches" : "players";
   if (tab === "ind") {
     const ctl = d.classes.length > 1 ? `<div class="hexp"><span class="dim small">Classes</span>${[["ten", "Last 10"], ["one", "Latest"], ["all", "All"], ["none", "Collapse"]].map(([k, t]) => `<button data-hexp="${k}" class="${(HOF.open || "ten") === k ? "on" : ""}">${t}</button>`).join("")}</div>` : "";
-    body = d.classes.length ? ctl + d.classes.map((c, i) => `<details class="hcls" ${i < (HOF.open === "all" ? 999 : HOF.open === "none" ? 0 : HOF.open === "one" ? 1 : 10) ? "open" : ""}><summary><b>Class of ${esc(c.label)}</b><span class="dim small">${c.rows.length} inducted</span></summary>${c.rows.map((r) => hofRow(r, { right: r.n === 1 ? "first ballot" : "year " + r.n, sub: hofSub(Object.assign({}, r, { n: 0 })) })).join("")}</details>`).join("")
+    const rankedOn = !!HOF.ranked && d.classes.length;
+    const viewSw = d.classes.length ? `<div class="hof-ctl">${hofSeg("data-hrank", [["0", "By class"], ["1", "Ranked"]], rankedOn ? "1" : "0")}</div>` : "";
+    const ranked = rankedOn ? `<div class="dim small" style="margin:8px 2px">Everyone in this hall, ranked by their score for it: awards, titles and peak rating.</div><div class="hlist">${d.classes.flatMap((c) => c.rows.map((r) => Object.assign({ cl: c.label }, r))).sort((a, b) => (b.score || 0) - (a.score || 0)).map((r, i) => hofRow(r, { right: (r.score != null ? r.score + " pts" : ""), sub: "#" + (i + 1) + " &middot; class of " + esc(r.cl) + " &middot; " + hofSub(Object.assign({}, r, { n: 0 })) })).join("")}</div>` : "";
+    body = rankedOn ? viewSw + ranked : d.classes.length ? viewSw + ctl + d.classes.map((c, i) => `<details class="hcls" ${i < (HOF.open === "all" ? 999 : HOF.open === "none" ? 0 : HOF.open === "one" ? 1 : 10) ? "open" : ""}><summary><b>Class of ${esc(c.label)}</b><span class="dim small">${c.rows.length} inducted</span></summary>${c.rows.map((r) => hofRow(r, { right: r.n === 1 ? "first ballot" : "year " + r.n, sub: hofSub(Object.assign({}, r, { n: 0 })) })).join("")}</details>`).join("")
       : `<div class="card dim small">No ${people} in this hall yet. People become eligible ${d.cfg.wait} years after they retire.</div>`;
   } else if (tab === "bal") {
     body = d.ballot.length ? `<div class="dim small" style="margin:0 2px 8px">${esc(d.ballot_label)} vote &middot; ${Math.round(d.cfg.pass * 100)}% to get in &middot; up to ${d.cfg.window} years on the ballot</div><div class="hlist">${d.ballot.map((r) => hofRow(r, { right: hofPct(r.pct), bar: r.pct, tag: r.left <= 1 ? (r.left === 0 ? "last year" : "1 year left") : "", tagc: "red" })).join("")}</div>`
@@ -74,7 +77,7 @@ async function viewHof(tier, name) {
     body = d.watch.length ? `<div class="dim small" style="margin:0 2px 8px">Running out of time: two years or fewer left on the ballot.</div><div class="hlist">${d.watch.map((r) => hofRow(r, { right: hofPct(r.pct), bar: r.pct, tag: r.left === 0 ? "last year" : r.left + " left", tagc: "red" })).join("")}</div>` : `<div class="card dim small">Nobody is close to running out of time.</div>`;
   } else if (tab === "snub") {
     const list = (tier === "W" || tier === "C") && HOF.kind === "p" ? d.snubs : [];
-    body = (list.length ? `<div class="dim small" style="margin:0 2px 8px">Great careers that fell off the ballot without being voted in.</div><div class="hlist">${list.map((r) => hofRow(Object.assign({ still: false, k: "p" }, r), { sub: `${esc(r.pos || "")} &middot; ${esc(r.nat)} &middot; peak ${r.peak}`, right: "off " + r.y })).join("")}</div>` : "")
+    body = (list.length ? `<div class="dim small" style="margin:0 2px 8px">Great careers that fell off the ballot without being voted in.</div><div class="hlist">${list.map((r) => hofRow(Object.assign({ still: false, k: "p" }, r), { sub: `${esc(r.pos || "")} &middot; ${esc(r.nat)} &middot; peak ${r.peak} &middot; score ${Math.round((tier === "C" ? r.C : r.W) * 10) / 10}`, right: "off " + r.y })).join("")}</div>` : "")
       + (d.dropped.length ? `<h2 class="lbl2">Came off the ballot</h2><div class="hlist">${d.dropped.map((r) => hofRow(r, { right: r.why === "time" ? "ten years" : "no support", sub: hofSub(Object.assign({}, r, { n: 0 })) })).join("")}</div>` : "")
       || `<div class="card dim small">Nobody has fallen off the ballot yet.</div>`;
   } else {
@@ -86,11 +89,12 @@ async function viewHof(tier, name) {
     <div class="hof-sc">${HOF_LBL[tier]}${name ? " &middot; " + esc(name) : ""} <span class="dim small">&middot; ${d.total} ${people} inducted</span></div>
     <nav class="chips hof-tabs">${tabs.map(([k, t]) => `<button data-htab="${k}" class="${k === tab ? "on" : ""}">${t}</button>`).join("")}</nav>
     ${body}
-    <a class="more" href="#/academies"><span>Academies ranking</span><span>&rsaquo;</span></a><a class="more" href="#/trophies/players"><span>All-time rankings by points</span><span>&rsaquo;</span></a></div>`;
+    <a class="more" href="#/academies"><span>Academies ranking</span><span>&rsaquo;</span></a><a class="more" href="#/trophies/clubs"><span>Club rankings by trophies</span><span>&rsaquo;</span></a></div>`;
   document.querySelectorAll("[data-tier]").forEach((b) => (b.onclick = () => (location.hash = "#/hof/" + b.dataset.tier)));
   document.querySelectorAll("[data-kind]").forEach((b) => (b.onclick = () => { HOF.kind = b.dataset.kind; route(); }));
   document.querySelectorAll("[data-hexp]").forEach((b) => (b.onclick = () => { HOF.open = b.dataset.hexp; document.querySelectorAll("[data-hexp]").forEach((x) => x.classList.toggle("on", x === b)); document.querySelectorAll("details.hcls").forEach((el, i) => { el.open = HOF.open === "all" || (HOF.open === "ten" && i < 10) || (HOF.open === "one" && i < 1); }); }));
   document.querySelectorAll("[data-htab]").forEach((b) => (b.onclick = () => { HOF.tab = b.dataset.htab; route(); }));
+  document.querySelectorAll("[data-hrank]").forEach((b) => (b.onclick = () => { HOF.ranked = b.dataset.hrank === "1"; route(); }));
   const sel = $("#hof-scope"); if (sel) sel.onchange = () => (location.hash = "#/hof/" + tier + "/" + enc(sel.value));
 }
 

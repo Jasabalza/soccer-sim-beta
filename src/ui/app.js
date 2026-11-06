@@ -1393,7 +1393,7 @@ function awWatch(d) {
 }
 async function viewTrophies(key, tab) {
   tab = tab || "winners";
-  const tabs = `<div class="tabs hof-tabs">${[["winners", "Winners"], ["players", "Players"], ["coaches", "Coaches"], ["clubs", "Clubs"]].map(([k, t]) => `<button data-tab="${k}" class="${tab === k ? "on" : ""}">${t}</button>`).join("")}</div>`;
+  const tabs = `<div class="tabs hof-tabs">${[["winners", "Winners"], ["clubs", "Clubs"]].map(([k, t]) => `<button data-tab="${k}" class="${tab === k ? "on" : ""}">${t}</button>`).join("")}</div>`;
   const go = (t) => (location.hash = t === "winners" ? "#/trophies" : "#/trophies/" + t);
   const rk = (i) => `<span class="rk ${i === 0 ? "g" : i === 1 ? "s" : i === 2 ? "b" : ""}">${i + 1}</span>`;
   const rrow = (i, main, sub, hon, score) => `<div class="rrow">${rk(i)}<div class="rm"><div class="rn">${main}</div><div class="dim small">${sub}</div>${hon ? `<div class="dim small rh">${hon}</div>` : ""}</div><div class="rs"><b>${score}</b><span class="dim small">score</span></div></div>`;
@@ -1405,7 +1405,8 @@ async function viewTrophies(key, tab) {
       `<div class="dim small" style="margin-top:8px">How the score works: ${esc(h.points)}. ${h.total} clubs have scored so far.</div>`);
     return;
   }
-  if (tab === "players" || tab === "coaches") {
+  if (tab === "players" || tab === "coaches") { location.replace("#/hof"); return; }
+  if (false) {
     const h = await api("/api/halloffame");
     if (tab === "players") wrap("Greatest players and coaches of all time, scored on awards, titles and peak rating.",
       h.players.map((p, i) => { const hon = Object.entries(p.honours).map(([k, v]) => `${v}&times; ${esc(k)}`).join(" &middot; "); return rrow(i, `<b>${p.uid ? playerLink(p) : esc(p.name)}</b> ${ovr(p.peak)}`, `<span class="pos-${esc(p.pos)}">${esc(p.pos)}</span> &middot; ${esc(p.nat)} &middot; ${p.goals} goals &middot; ${p.seasons} seasons &middot; ${p.retired ? "retired" : p.club ? esc(p.club) : "free agent"}`, hon, p.score); }).join(""));

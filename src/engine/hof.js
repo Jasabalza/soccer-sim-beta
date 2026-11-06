@@ -454,6 +454,6 @@ $mods["hof"] = (function () {
   }
   // a fresh World starts founded: nothing to found
   function init(w) { const H = ensure(w); H.founded = true; return H; }
-  return { CFG, HP, ensure, init, pscores, cscores, makePlayerCard, makeCoachCard, fixKeys, onRetire, onCoachRetire, coachHired, coachLeft, natCoachSet, closeStint, openStint,
+  return { CFG, HP, scoreOf, ensure, init, pscores, cscores, makePlayerCard, makeCoachCard, fixKeys, onRetire, onCoachRetire, coachHired, coachLeft, natCoachSet, closeStint, openStint,
     acadTick, acadInit, acadView, acadRanking, mgrPromoted, mgrGrade, mgrOdds, drawGrade, stretch, isChaser, borderline, runScope, dataOf, cKey, runLeagueDay, runYearDay, rollover, foundOnce, prune, scoreOf, pctFor, rnd, nrm, leagueOf, stintsOf, stintNums, rkey, scopeName, scopeKind, quality, natRecordPoor };
 })();
