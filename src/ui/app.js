@@ -115,7 +115,7 @@ function moreSheet() {
 }
 let SBOPEN = false;
 // the season loop: Season -> Summer tournaments -> Awards -> Transfers -> next season (the engine's header.phase says where we are)
-const FLOW_STEPS = [["season", "Season"], ["summer", "Summer"], ["awards", "Awards"], ["transfers", "Off-season"], ["graduates", "Graduates"]];
+const FLOW_STEPS = [["season", "Season"], ["summer", "Summer"], ["awards", "Awards"], ["transfers", "Moves"], ["graduates", "Graduates"]];
 function flowBar(h) {
   const at = { season: 0, summer: 1, done: 2, awards: 2, transfers: 3, graduates: 4 }[h.phase] ?? 0;
   const cell = (i, [k, t]) => `<div class="${i < at ? "done" : i === at ? "on" : ""}"${i === at ? ' aria-current="step"' : ""}>${i < at ? "&#10003; " : ""}${t}</div>`;
