@@ -7761,7 +7761,23 @@ $mods["hof"] = (function () {
   }
   function coachHired(w, co, club) { closeStint(w, co); openStint(w, co, "club", club); }
   function coachLeft(w, co) { closeStint(w, co, "club"); }
-  function natCoachSet(w, co, nation) { closeStint(w, co, "nat"); if (nation) openStint(w, co, "nat", nation); }
+  // a coach who retired from club work and then led a national team earns country halls for it: when such a spell ends, his record is brought up to date
+  function refreshCoachCard(w, co) {
+    const H = ensure(w); let card = null;
+    for (const id of Object.keys(H.cards)) { const c = H.cards[id]; if (c.k === "c" && c.co === co) { card = c; break; } }
+    if (!card) return makeCoachCard(w, co, w.season, 0);
+    const sc = cscores(w, co), first = w.season + CFG.wait;
+    for (const [n, s] of Object.entries(sc.C)) { const key = "C:" + n; if (gateOf("cc", s) && !card.st[key]) put(H, card, key, newState(first)); }
+    return card;
+  }
+  function natCoachSet(w, co, nation) {
+    closeStint(w, co, "nat");
+    if (nation) {
+      // the same nation hiring him again straight away is one spell, not two
+      const L = co.stints, last = L && L[L.length - 1];
+      if (last && last.k === "nat" && last.t === nation && last.u !== null && last.u !== undefined && last.u === w.season - 1) { last.u = null; for (const k of ["s", "ti", "cu", "cwc", "w", "d", "l", "wc", "ct", "nl"]) delete last[k]; }
+      else openStint(w, co, "nat", nation);
+    } else if (co.ret_s != null) { try { refreshCoachCard(w, co); } catch (e) { } } }
   // ---- chasers: a borderline player with the trait plays on, hoping the late seasons tip the vote -------------------------
   const isChaser = (p) => rnd("chase|" + p.name + "|" + p.nat + "|" + (p.career.length ? p.career[0][0] : 0)) < CFG.chaser;
   function borderline(w, p) {
@@ -12622,8 +12638,8 @@ async function viewMoney() {
 async function viewRecords() {
   const d = await api("/api/records");
   $("#view").innerHTML = `<h1>Records and Hall of Fame</h1>
-    <div class="cols3"><div><h2>Best retired coaches</h2>${d.coaches.length ? d.coaches.map((c) => `<div class="row"><span>${esc(c.name)} <span class="meta">${esc(c.nat)}</span></span><span class="meta">${c.titles} titles, ${c.cups} cups, ${c.cwc} CWC, ${c.win}%</span></div>`).join("") : '<div class="meta">None retired yet.</div>'}</div>
-    <div><h2>World Cup winners</h2>${d.wc.length ? d.wc.map((r) => `<div class="row"><span>S${r.season} ${natLink(r.winner)}</span><span class="meta">beat ${esc(r.runner_up)}, host ${esc(r.host)}</span></div>`).join("") : '<div class="meta">None yet.</div>'}
+    <a class="more" href="#/hof"><span>Coaches and players: Hall of Fame, ranked, with snubs</span><span>&rsaquo;</span></a>
+    <div class="cols3"><div><h2>World Cup winners</h2>${d.wc.length ? d.wc.map((r) => `<div class="row"><span>S${r.season} ${natLink(r.winner)}</span><span class="meta">beat ${esc(r.runner_up)}, host ${esc(r.host)}</span></div>`).join("") : '<div class="meta">None yet.</div>'}
     <h2>Club World Cup winners</h2>${d.cwc.length ? d.cwc.map((r) => `<div class="row"><span>S${r.season} ${clubLink(r.winner)}</span><span class="meta">beat ${esc(r.runner_up)}</span></div>`).join("") : '<div class="meta">None yet.</div>'}</div>
     <div><h2>League records</h2>${d.records.map((r) => `<div class="row"><span>${leagueLink(r.league)}</span><span class="meta">${r.pts} pts (${esc(r.pts_club)})</span></div>`).join("") || '<div class="meta">None yet.</div>'}</div></div>`;
 }

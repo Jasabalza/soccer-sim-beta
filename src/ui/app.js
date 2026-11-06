@@ -1498,8 +1498,8 @@ async function viewMoney() {
 async function viewRecords() {
   const d = await api("/api/records");
   $("#view").innerHTML = `<h1>Records and Hall of Fame</h1>
-    <div class="cols3"><div><h2>Best retired coaches</h2>${d.coaches.length ? d.coaches.map((c) => `<div class="row"><span>${esc(c.name)} <span class="meta">${esc(c.nat)}</span></span><span class="meta">${c.titles} titles, ${c.cups} cups, ${c.cwc} CWC, ${c.win}%</span></div>`).join("") : '<div class="meta">None retired yet.</div>'}</div>
-    <div><h2>World Cup winners</h2>${d.wc.length ? d.wc.map((r) => `<div class="row"><span>S${r.season} ${natLink(r.winner)}</span><span class="meta">beat ${esc(r.runner_up)}, host ${esc(r.host)}</span></div>`).join("") : '<div class="meta">None yet.</div>'}
+    <a class="more" href="#/hof"><span>Coaches and players: Hall of Fame, ranked, with snubs</span><span>&rsaquo;</span></a>
+    <div class="cols3"><div><h2>World Cup winners</h2>${d.wc.length ? d.wc.map((r) => `<div class="row"><span>S${r.season} ${natLink(r.winner)}</span><span class="meta">beat ${esc(r.runner_up)}, host ${esc(r.host)}</span></div>`).join("") : '<div class="meta">None yet.</div>'}
     <h2>Club World Cup winners</h2>${d.cwc.length ? d.cwc.map((r) => `<div class="row"><span>S${r.season} ${clubLink(r.winner)}</span><span class="meta">beat ${esc(r.runner_up)}</span></div>`).join("") : '<div class="meta">None yet.</div>'}</div>
     <div><h2>League records</h2>${d.records.map((r) => `<div class="row"><span>${leagueLink(r.league)}</span><span class="meta">${r.pts} pts (${esc(r.pts_club)})</span></div>`).join("") || '<div class="meta">None yet.</div>'}</div></div>`;
 }
