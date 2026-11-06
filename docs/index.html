@@ -868,6 +868,35 @@ a + .lbox, .lbox + a { margin-left: 4px; } .lbox { vertical-align: middle; margi
 .v2 .lg { padding: 2px 14px; } .v2 .lrow { min-height: 64px; } .v2 .lrow .bar { margin-top: 5px; }
 .v2 .lph { flex: none; width: 40px; height: 40px; border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; background: var(--panel2); color: var(--accent2); font-size: 12px; font-weight: 800; }
 
+.prg .prow { width: auto !important; min-width: 168px; display: flex; align-items: center; gap: 6px; }
+.prg .prow .mini { min-height: 34px; padding: 0 12px; border-radius: 17px; font-weight: 700; }
+.prg .prow .mini.pri { background: var(--accent); color: #06210f; border-color: var(--accent); }
+.prg .rl { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.prg .lph { flex: none; width: 34px; height: 34px; border-radius: 10px; display: inline-flex; align-items: center; justify-content: center; background: var(--panel2); color: var(--accent2); font-size: 11px; font-weight: 800; }
+@media (max-width: 560px) { .row.prg { flex-wrap: wrap; } .prg .prow { flex: 1 0 100%; padding-left: 0; } }
+.whero { padding: 4px 0; }
+
+/* ---- v16.2 scores hub ---- */
+.sec-h { display: flex; justify-content: space-between; align-items: center; margin: 18px 0 8px; font-size: 12px; font-weight: 800; letter-spacing: .08em; color: var(--accent2); }
+.sec-h .link { background: none; border: 0; color: var(--dim); font-weight: 600; letter-spacing: 0; cursor: pointer; }
+.lcard { margin-bottom: 10px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 20px; background: linear-gradient(135deg, hsl(var(--hh) 45% 26% / .55) 0%, var(--panel) 60%); }
+.lcard .lhead { display: flex; align-items: center; gap: 12px; color: var(--text); text-decoration: none; }
+.lcard .mt { flex: 1; min-width: 0; display: flex; flex-direction: column; } .lcard .mt b { font-size: 17px; font-weight: 800; }
+.lcard .chev { color: var(--dim); } .lcard .bar { height: 6px; margin: 12px 0; background: #0006; border-radius: 3px; overflow: hidden; } .lcard .bar i { display: block; height: 100%; background: var(--accent); }
+.lbtns { display: flex; gap: 8px; }
+.pill { flex: 1; min-height: 44px; border-radius: 22px; border: 1.5px solid #2b3d32; background: transparent; color: var(--text); font-size: 15px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; text-decoration: none; }
+.pill.pri { background: var(--accent); border-color: var(--accent); color: #06210f; } .pill.wide { width: 100%; }
+.srows { padding: 2px 16px; } .srow { display: flex; align-items: center; gap: 12px; min-height: 54px; border-bottom: 1px solid var(--line); }
+.srow:last-child { border-bottom: 0; } .srow .sl { flex: 1; display: flex; align-items: center; gap: 12px; color: var(--text); min-width: 0; } .srow .sl b { font-size: 15px; }
+.srow .mini { min-height: 32px; padding: 0 12px; border-radius: 16px; background: rgba(61,220,132,.14); color: var(--accent); border: 0; font-weight: 700; font-size: 13px; text-decoration: none; display: inline-flex; align-items: center; }
+.chiprow { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; padding-bottom: 4px; } .chiprow::-webkit-scrollbar { display: none; }
+.cchip { flex: none; display: flex; align-items: center; gap: 8px; height: 44px; padding: 0 14px 0 10px; border-radius: 22px; background: var(--panel); border: 1px solid var(--line); color: var(--text); font-size: 13px; font-weight: 700; white-space: nowrap; }
+.flags { display: flex; gap: 14px; margin-top: 12px; overflow-x: auto; } .flags a { display: flex; flex-direction: column; align-items: center; gap: 5px; width: 54px; color: var(--dim); font-size: 11px; font-weight: 600; flex: none; }
+.flags .fb { width: 48px; height: 48px; border-radius: 24px; background: var(--panel); border: 1px solid var(--line); display: flex; align-items: center; justify-content: center; }
+details.acc2 { margin-top: 18px; border: 1px solid var(--line); border-radius: 16px; padding: 0 14px 12px; background: var(--panel); }
+details.acc2 > summary { min-height: 52px; display: flex; align-items: center; font-weight: 700; cursor: pointer; }
+.lph { flex: none; display: inline-flex; align-items: center; justify-content: center; border-radius: 10px; background: var(--panel2); color: var(--accent2); font-size: 11px; font-weight: 800; }
+
 </style>
 
 <div id="top">
@@ -11574,8 +11603,10 @@ async function viewStart() {
 }
 
 function progressRow(c) {
-  const btn = c.sim && c.done < c.total ? `<button class="mini" data-lsim="${esc(c.sim)}" title="Sim this competition to the end of its season">Sim</button>` : "";
-  return `<div class="row prg"><span class="rl">${c.key ? starBtn(c.key, !!c.fav) : ""}<span class="rt">${c.link}<div class="meta">${c.sub || ""}</div></span></span><span class="prow" style="width:150px"><span style="flex:1">${bar(c.done, c.total)}<div class="meta" style="text-align:right">${c.done}/${c.total}</div></span>${btn}</span></div>`;
+  const open = c.sim && c.done < c.total;
+  const btn = open ? `<button class="mini" data-lwk="${esc(c.sim)}" title="Sim one week of this competition">Week</button><button class="mini pri" data-lsim="${esc(c.sim)}" title="Sim this competition to the end of its season">Season</button>` : "";
+  const mark = c.kind === "league" ? (logoBox("leagues", c.name, 34) || `<span class="lph">${esc(c.name.split(" ").map((w) => w[0]).join("").slice(0, 3))}</span>`) : "";
+  return `<div class="row prg"><span class="rl">${c.key ? starBtn(c.key, !!c.fav) : ""}${mark}<span class="rt">${c.link}<div class="meta">${c.sub || ""}</div></span></span><span class="prow"><span style="flex:1;min-width:60px">${bar(c.done, c.total)}<div class="meta" style="text-align:right">${c.done}/${c.total}</div></span>${btn}</span></div>`;
 }
 async function viewWorld() {
   const d = await api("/api/world");
@@ -11620,13 +11651,34 @@ async function viewWorld() {
       <a class="stat" href="#/nation/${enc(q.nation.name)}"><div class="k">Strongest nation</div><div class="v">${natBadge(q.nation.name, 22)} ${esc(q.nation.name)}</div><div class="meta">rating ${q.nation.eff}</div></a>
       <a class="stat" href="#/club/${enc(q.rich.name)}"><div class="k">Richest club</div><div class="v">${esc(q.rich.name)}</div><div class="meta">${money(q.rich.budget)} yearly income</div></a>
       <a class="stat" href="#/players"><div class="k">Players</div><div class="v">${q.players.toLocaleString()}</div><div class="meta">${q.clubs} clubs &middot; ${q.nations} nations</div></a></div>` : ""}`;
-  $("#view").innerHTML = `<div class="whead"><h1>The world</h1>${chosen ? `<div class="seg" role="group"><button data-fv="all" class="${onlyFav ? "" : "on"}">All</button><button data-fv="fav" class="${onlyFav ? "on" : ""}">Favorites ${FAVS.filter((k) => !k.startsWith("nation:")).length}</button></div>` : ""}</div>
-    <div class="sub">${chosen ? "Star the competitions you care about, then flip to Favorites to hide the rest." : "Click a continent to go deeper, or use the buttons at the top to sim everything."}</div>
-    ${onlyFav ? "" : info}
-    ${strip}
-    <div class="grid">${summerCard}${conts.map(card).join("")}</div><div id="w-halls"></div>${hidden}${onlyFav ? info : ""}${hint}`;
+  // ---- v16.2 scores block (matches the mock-up): followed leagues as big cards, the rest as compact rows, competitions as chips, followed nations as flags
+  const allLg = d.continents.flatMap((c) => c.leagues.map((l) => ({ ...l, conf: c.code })));
+  const isFavL = (l) => chosen && FAVS.includes("L:" + l.name);
+  const bigL = chosen ? allLg.filter(isFavL) : [];
+  const smallL = allLg.filter((l) => !isFavL(l) && (!onlyFav));
+  const mw = (l) => (l.done >= l.total ? "Finished" : "Matchweek " + (l.done + 1) + " of " + l.total);
+  const mark = (l, n) => logoBox("leagues", l.name, n) || `<span class="lph" style="width:${n}px;height:${n}px">${esc(l.name.split(" ").map((w) => w[0]).join("").slice(0, 3))}</span>`;
+  const bigCard = (l) => `<div class="lcard" style="--hh:${_hash(l.name) % 360}"><a class="lhead" href="#/league/${enc(l.name)}">${mark(l, 38)}<span class="mt"><b>${esc(l.name)}</b><span class="dim small">${mw(l)} &middot; ${esc(l.leader)} lead</span></span>${CHEV}</a>
+    <div class="bar"><i style="width:${l.total ? Math.round(100 * l.done / l.total) : 0}%"></i></div>
+    ${l.done < l.total ? `<div class="lbtns"><button class="pill pri" data-lsim="L:${esc(l.name)}">Sim rest of league</button><button class="pill" data-lwk="L:${esc(l.name)}">Next matchweek</button></div>` : `<a class="pill wide" href="#/ceremony">Season review</a>`}</div>`;
+  const smallRow = (l) => `<div class="srow"><a class="sl" href="#/league/${enc(l.name)}">${mark(l, 30)}<b>${esc(l.name)}</b></a><span class="dim small">${l.done >= l.total ? "Finished" : "MW " + (l.done + 1)}</span>${l.done < l.total ? `<button class="mini pri" data-lsim="L:${esc(l.name)}">Sim &#9656;</button>` : `<a class="mini" href="#/league/${enc(l.name)}">Table</a>`}</div>`;
+  const compChips = d.continents.flatMap((c) => c.comps.map((x) => ({ ...x, c }))).filter((x) => !onlyFav || FAVS.includes(x.kind + ":" + x.c.code));
+  const favNat = chosen ? FAVS.filter((k) => k.startsWith("nation:")).map((k) => k.slice(7)) : [];
+  const scores = `<div class="sec-h">LEAGUES${chosen ? `<button class="link" id="edit-favs2">Edit</button>` : ""}</div>
+    ${bigL.map(bigCard).join("")}
+    ${smallL.length ? `<div class="card srows">${smallL.slice(0, bigL.length ? 12 : 8).map(smallRow).join("")}${smallL.length > (bigL.length ? 12 : 8) ? `<a class="more" href="#/leagues"><span>All ${allLg.length} leagues</span><span>&rsaquo;</span></a>` : ""}</div>` : ""}
+    ${compChips.length || favNat.length ? `<div class="sec-h">COMPETITIONS AND NATIONS</div>
+    <div class="chiprow">${compChips.map((x) => `<a class="cchip" href="#/comp/${enc(x.id)}">${logoBox("comps", x.title, 28) || ""}<span>${esc(x.title)}</span></a>`).join("")}</div>
+    ${favNat.length ? `<div class="flags">${favNat.map((n) => `<a href="#/nation/${enc(n)}"><span class="fb">${natBadge(n, 30)}</span><span>${esc(n)}</span></a>`).join("")}</div>` : ""}` : ""}`;
+  $("#view").innerHTML = `<div class="whead whero"><h1>The world</h1>${chosen ? `<div class="seg" role="group"><button data-fv="all" class="${onlyFav ? "" : "on"}">All</button><button data-fv="fav" class="${onlyFav ? "on" : ""}">Favorites ${FAVS.filter((k) => !k.startsWith("nation:")).length}</button></div>` : ""}</div>
+    <div class="sub">Season ${STATUS.header.season} &middot; ${esc(STATUS.header.season_label)}</div>
+    ${scores}
+    ${summerOn ? `<div class="grid" style="margin-top:12px">${summerCard}</div>` : ""}${hint}
+    ${hidden}
+    <details class="acc2"><summary>By continent and everything else</summary>${strip}<div class="grid">${conts.map(card).join("")}</div>${info}</details><div id="w-halls"></div>`;
   worldCompCards().catch(() => {}); worldHallsCard("#w-halls").catch(() => {});
   const ids = (code) => { const c = d.continents.find((x) => x.code === code); return [...c.leagues.map((l) => "L:" + l.name), ...c.comps.map((x) => x.id)]; };
+  document.querySelectorAll("[data-lwk]").forEach((b) => b.onclick = () => simIds([b.dataset.lwk], { weeks: 1 }));
   document.querySelectorAll("[data-lsim]").forEach((b) => b.onclick = () => simIds([b.dataset.lsim], { to_end: true }));
   document.querySelectorAll("[data-sim]").forEach((b) => b.onclick = () => simIds(ids(b.dataset.sim), { weeks: 1 }));
   document.querySelectorAll("[data-end]").forEach((b) => b.onclick = () => simIds(ids(b.dataset.end), { to_end: true }));
@@ -11639,6 +11691,7 @@ async function viewWorld() {
   });
   document.querySelectorAll(".sim-others").forEach((b) => b.onclick = () => simOthersDialog(others, d));
   if ($("#edit-favs")) $("#edit-favs").onclick = () => favPicker(d);
+  if ($("#edit-favs2")) $("#edit-favs2").onclick = () => favPicker(d);
   if (!chosen && !PICK_ASKED) { PICK_ASKED = true; favPicker(d); }
 }
 

@@ -864,3 +864,32 @@ a + .lbox, .lbox + a { margin-left: 4px; } .lbox { vertical-align: middle; margi
 .v2 .mt b { font-size: 15px; } .v2 .chev { flex: none; color: var(--accent); }
 .v2 .lg { padding: 2px 14px; } .v2 .lrow { min-height: 64px; } .v2 .lrow .bar { margin-top: 5px; }
 .v2 .lph { flex: none; width: 40px; height: 40px; border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; background: var(--panel2); color: var(--accent2); font-size: 12px; font-weight: 800; }
+
+.prg .prow { width: auto !important; min-width: 168px; display: flex; align-items: center; gap: 6px; }
+.prg .prow .mini { min-height: 34px; padding: 0 12px; border-radius: 17px; font-weight: 700; }
+.prg .prow .mini.pri { background: var(--accent); color: #06210f; border-color: var(--accent); }
+.prg .rl { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.prg .lph { flex: none; width: 34px; height: 34px; border-radius: 10px; display: inline-flex; align-items: center; justify-content: center; background: var(--panel2); color: var(--accent2); font-size: 11px; font-weight: 800; }
+@media (max-width: 560px) { .row.prg { flex-wrap: wrap; } .prg .prow { flex: 1 0 100%; padding-left: 0; } }
+.whero { padding: 4px 0; }
+
+/* ---- v16.2 scores hub ---- */
+.sec-h { display: flex; justify-content: space-between; align-items: center; margin: 18px 0 8px; font-size: 12px; font-weight: 800; letter-spacing: .08em; color: var(--accent2); }
+.sec-h .link { background: none; border: 0; color: var(--dim); font-weight: 600; letter-spacing: 0; cursor: pointer; }
+.lcard { margin-bottom: 10px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 20px; background: linear-gradient(135deg, hsl(var(--hh) 45% 26% / .55) 0%, var(--panel) 60%); }
+.lcard .lhead { display: flex; align-items: center; gap: 12px; color: var(--text); text-decoration: none; }
+.lcard .mt { flex: 1; min-width: 0; display: flex; flex-direction: column; } .lcard .mt b { font-size: 17px; font-weight: 800; }
+.lcard .chev { color: var(--dim); } .lcard .bar { height: 6px; margin: 12px 0; background: #0006; border-radius: 3px; overflow: hidden; } .lcard .bar i { display: block; height: 100%; background: var(--accent); }
+.lbtns { display: flex; gap: 8px; }
+.pill { flex: 1; min-height: 44px; border-radius: 22px; border: 1.5px solid #2b3d32; background: transparent; color: var(--text); font-size: 15px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; text-decoration: none; }
+.pill.pri { background: var(--accent); border-color: var(--accent); color: #06210f; } .pill.wide { width: 100%; }
+.srows { padding: 2px 16px; } .srow { display: flex; align-items: center; gap: 12px; min-height: 54px; border-bottom: 1px solid var(--line); }
+.srow:last-child { border-bottom: 0; } .srow .sl { flex: 1; display: flex; align-items: center; gap: 12px; color: var(--text); min-width: 0; } .srow .sl b { font-size: 15px; }
+.srow .mini { min-height: 32px; padding: 0 12px; border-radius: 16px; background: rgba(61,220,132,.14); color: var(--accent); border: 0; font-weight: 700; font-size: 13px; text-decoration: none; display: inline-flex; align-items: center; }
+.chiprow { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; padding-bottom: 4px; } .chiprow::-webkit-scrollbar { display: none; }
+.cchip { flex: none; display: flex; align-items: center; gap: 8px; height: 44px; padding: 0 14px 0 10px; border-radius: 22px; background: var(--panel); border: 1px solid var(--line); color: var(--text); font-size: 13px; font-weight: 700; white-space: nowrap; }
+.flags { display: flex; gap: 14px; margin-top: 12px; overflow-x: auto; } .flags a { display: flex; flex-direction: column; align-items: center; gap: 5px; width: 54px; color: var(--dim); font-size: 11px; font-weight: 600; flex: none; }
+.flags .fb { width: 48px; height: 48px; border-radius: 24px; background: var(--panel); border: 1px solid var(--line); display: flex; align-items: center; justify-content: center; }
+details.acc2 { margin-top: 18px; border: 1px solid var(--line); border-radius: 16px; padding: 0 14px 12px; background: var(--panel); }
+details.acc2 > summary { min-height: 52px; display: flex; align-items: center; font-weight: 700; cursor: pointer; }
+.lph { flex: none; display: inline-flex; align-items: center; justify-content: center; border-radius: 10px; background: var(--panel2); color: var(--accent2); font-size: 11px; font-weight: 800; }
