@@ -213,8 +213,9 @@ function hofReveal(e, scopeText, idx, n, icon) {
     <div class="hrv-p"><span class="dim small">${e.via === "world" ? "With his World induction" : e.n === 1 ? "First ballot" : "Year " + e.n + " on the ballot"}</span><b class="hrv-pct" data-p="${pc}">${hofPct(e.pct)}</b></div>
     <div class="hbar big"><i class="g" style="width:${pc}%"></i><u style="left:75%"></u></div>
     <div class="dim small hrv-need">${e.via === "world" ? "The federation honours the world's inductees (World vote shown)" : "75% of the votes are needed"}</div>
+    ${e.both ? `<div class="dim small" style="margin-top:8px">${esc(e.both)} league vote: <b>${hofPct(e.bothPct)}</b></div><div class="hbar"><i class="g" style="width:${Math.round(e.bothPct * 100)}%"></i><u style="left:75%"></u></div>` : ""}
     <div class="dim small">${esc(e.line || "")}</div>
-    <div class="hrv-v"><span class="tag gold">Inducted</span> ${hofBadge(e.tier ? { tier: e.tier, scope: e.scope || null } : (e.badge || { tier: "W" }), 26)}</div></div>`;
+    <div class="hrv-v"><span class="tag gold">${e.both ? "Inducted into both" : "Inducted"}</span> ${hofBadge(e.tier ? { tier: e.tier, scope: e.scope || null } : (e.badge || { tier: "W" }), 26)}${e.both ? " " + hofBadge({ tier: "L", scope: e.both }, 26) : ""}</div></div>`;
 }
 // the vote counts up and the verdict lands last (CSS does the bar and the stamp; this only counts the number)
 function hofCount() {
@@ -339,7 +340,15 @@ function hofCeremony(cfg) {
 function hofLeagueWatch(d) {
   const lg = d.league, spec = { kind: "league_cup", color: `hsl(${hueOf(lg)} 62% 58%)` }, items = [];
   for (const c of d.clubs) for (const e of c.inducted) items.push({ e: Object.assign({}, e, { tier: "K", scope: c.club }), scope: c.club + " Hall of Fame" + (e.k === "c" ? " · coach" : ""), icon: crest(c.club, 30), phase: "The club halls" });
-  for (const e of d.league_ind.slice().sort((a, b) => a.pct - b.pct)) items.push({ e: Object.assign({}, e, { tier: "L", scope: lg }), scope: lg + " Hall of Fame" + (e.k === "c" ? " · coach" : ""), icon: compEmb(lg, spec, 30), phase: "The league hall" });
+  // one card for a name voted into both his club hall and the league hall (matched by id, else name and nation)
+  const idOf = (e) => (e.id != null ? "i" + e.id : e.pid != null ? "i" + e.pid : e.cid != null ? "c" + e.cid : (e.k || "p") + "|" + e.name + "|" + (e.nat || ""));
+  const clubItem = new Map(items.map((it) => [idOf(it.e), it]));
+  for (const e of d.league_ind.slice().sort((a, b) => a.pct - b.pct)) {
+    const both = clubItem.get(idOf(e));
+    if (both) { both.scope += " and " + lg + " Hall of Fame"; both.phase = "Inducted into both"; both.e.both = lg; both.e.bothPct = e.pct; continue; }
+    items.push({ e: Object.assign({}, e, { tier: "L", scope: lg }), scope: lg + " Hall of Fame" + (e.k === "c" ? " · coach" : ""), icon: compEmb(lg, spec, 30), phase: "The league hall" });
+  }
+  items.sort((a, b) => (a.phase === "Inducted into both" ? 1 : 0) - (b.phase === "Inducted into both" ? 1 : 0) || 0);
   const res = `#/hofleague/${enc(lg)}/${d.season}`;
   hofCeremony({ title: lg, sub: d.label, logo: (n) => compEmb(lg, spec, n), items, counts: [[d.nClubs, "club inductees"], [d.nLeague, "league inductees"]], blurb: "The clubs vote first, then the league. Each name needs 75% of the votes.",
     back: res, backLabel: "‹ Results", results: res, end: ["Results", res], hall: `#/hof/L/${enc(lg)}`, hallLabel: "League hall",
