@@ -845,3 +845,12 @@ a + .lbox, .lbox + a { margin-left: 4px; } .lbox { vertical-align: middle; margi
   #tabbar a { flex: 1; margin: 6px 2px; border-radius: 26px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; color: var(--dim); font-size: 10.5px; font-weight: 700; text-decoration: none; }
   #tabbar a.on { background: rgba(61,220,132,.14); color: var(--accent); }
 }
+
+.v2 .hero2 { position: relative; overflow: hidden; border-radius: 18px; padding: 16px; margin: 4px 0 0; border: 1px solid var(--line);
+  background: linear-gradient(135deg, hsl(var(--hh) 45% 24%) 0%, var(--panel) 85%); }
+.v2 .hero2 .wm { position: absolute; right: -34px; top: -26px; opacity: .16; pointer-events: none; filter: saturate(.8); }
+.v2 .hero2 .wm > * { width: 200px !important; height: 200px !important; }
+.v2 .hero2 .hrow { position: relative; display: flex; align-items: center; gap: 14px; }
+.v2 .hero2 h1 { margin: 0; font-size: 26px; letter-spacing: -.02em; line-height: 1.05; }
+.v2 .hero2 .sub { margin-top: 4px; color: #d3e2d8; }
+.v2 .hero2 .sub a { color: #bfe3ff; }
