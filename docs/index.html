@@ -953,6 +953,11 @@ body.dense .v2 .pr { padding-top: 5px; padding-bottom: 5px; }
 .card.summer { border-radius: 20px; }
 .row.prg { flex-wrap: wrap !important; row-gap: 8px; } .row.prg .prow { flex: 1 0 100%; min-width: 0; }
 
+.v2 .rlist { padding: 2px 14px; }
+.rrow { display: flex; align-items: flex-start; gap: 12px; padding: 12px 0; border-bottom: 1px solid #223629; } .rrow:last-child { border-bottom: 0; }
+.rrow .rm { flex: 1; min-width: 0; } .rrow .rn { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 15px; }
+.rrow .rh { margin-top: 2px; } .rrow .rs { text-align: right; flex: none; display: flex; flex-direction: column; } .rrow .rs b { font-size: 18px; color: var(--accent2); }
+
 </style>
 
 <div id="top">
@@ -12510,24 +12515,22 @@ async function viewTrophies(key, tab) {
   tab = tab || "winners";
   const tabs = `<div class="tabs hof-tabs">${[["winners", "Winners"], ["players", "Players"], ["coaches", "Coaches"], ["clubs", "Clubs"]].map(([k, t]) => `<button data-tab="${k}" class="${tab === k ? "on" : ""}">${t}</button>`).join("")}</div>`;
   const go = (t) => (location.hash = t === "winners" ? "#/trophies" : "#/trophies/" + t);
+  const rk = (i) => `<span class="rk ${i === 0 ? "g" : i === 1 ? "s" : i === 2 ? "b" : ""}">${i + 1}</span>`;
+  const rrow = (i, main, sub, hon, score) => `<div class="rrow">${rk(i)}<div class="rm"><div class="rn">${main}</div><div class="dim small">${sub}</div>${hon ? `<div class="dim small rh">${hon}</div>` : ""}</div><div class="rs"><b>${score}</b><span class="dim small">score</span></div></div>`;
+  const wrap = (sub, rows, foot) => { $("#view").innerHTML = `<div class="v2"><h1>All-time ranking</h1><div class="sub">${sub}</div>${tabs.replace('class="tabs hof-tabs"', 'class="tabs2 hof-tabs"')}<div class="card rlist">${rows || '<div class="empty">Nothing yet. Sim a season first.</div>'}</div>${foot || ""}</div>`; document.querySelectorAll("[data-tab]").forEach((b) => b.onclick = () => go(b.dataset.tab)); };
   if (tab === "clubs") {
     const h = await api("/api/hof_clubs");
-    $("#view").innerHTML = `<h1>All-time ranking</h1><div class="sub">Greatest clubs of all time, ranked on trophies the way players are ranked on honours.</div>${tabs}
-      <div class="scroll"><table class="hof"><thead><tr><th>#</th><th class="l">Club</th><th>Score</th><th class="l hide-m">League</th><th>Titles</th><th>Cont.</th><th class="hide-m">CWC</th><th title="Individual awards won by their players and coaches, plus Team of the Year places">Awards</th><th class="hide-m">Runner-up</th><th class="hide-m">Last</th><th class="l hide-m">Major honours</th></tr></thead><tbody>
-      ${h.clubs.map((c, i) => `<tr><td>${i + 1}</td><td class="l"><b>${clubLink(c.name)}</b><div class="meta show-m">${esc(c.league)} &middot; last S${c.last}</div></td><td class="pts">${c.score}</td><td class="l meta hide-m">${esc(c.league)}</td><td>${c.league_titles}</td><td>${c.continental}</td><td class="hide-m">${c.cwc}</td><td>${c.awards + c.toty}</td><td class="hide-m">${c.runner_ups}</td><td class="hide-m">S${c.last}</td><td class="l meta wrap hide-m">${esc(c.honours)}</td></tr>`).join("") || '<tr><td colspan="11" class="empty">No trophies yet. Sim a season first.</td></tr>'}</tbody></table></div>
-      <div class="meta" style="margin-top:8px">How the score works: ${esc(h.points)}. ${h.total} clubs have scored so far.</div>`;
-    document.querySelectorAll("[data-tab]").forEach((b) => b.onclick = () => go(b.dataset.tab));
+    wrap("Greatest clubs of all time, ranked on trophies the way players are ranked on honours.",
+      h.clubs.map((c, i) => rrow(i, `<b>${clubLink(c.name)}</b>`, `${esc(c.league)} &middot; last S${c.last}`, `${c.league_titles} league &middot; ${c.continental} continental${c.cwc ? " &middot; " + c.cwc + " CWC" : ""} &middot; ${c.awards + c.toty} awards &middot; ${c.runner_ups} runner-up${c.honours ? " &middot; " + esc(c.honours) : ""}`, c.score)).join(""),
+      `<div class="dim small" style="margin-top:8px">How the score works: ${esc(h.points)}. ${h.total} clubs have scored so far.</div>`);
     return;
   }
   if (tab === "players" || tab === "coaches") {
     const h = await api("/api/halloffame");
-    $("#view").innerHTML = `<h1>All-time ranking</h1><div class="sub">Greatest players and coaches of all time, scored on awards, titles and peak rating.</div>${tabs}` + (tab === "players"
-      ? `<div class="scroll"><table class="hof"><thead><tr><th>#</th><th class="l">Player</th><th class="l hide-m">Nation</th><th class="l hide-m">Pos</th><th>Peak</th><th class="hide-m">Goals</th><th class="hide-m">Seasons</th><th class="l hide-m">Honours</th><th>Score</th></tr></thead><tbody>
-      ${h.players.map((p, i) => { const hon = Object.entries(p.honours).map(([k, v]) => `${v}&times; ${esc(k)}`).join(" &middot; "); return `<tr><td>${i + 1}</td><td class="l"><b>${p.uid ? playerLink(p) : esc(p.name)}</b> ${p.retired ? '<span class="tag">retired</span>' : `<span class="meta">${p.club ? esc(p.club) : "free agent"}</span>`}<div class="meta show-m"><span class="pos-${esc(p.pos)}">${esc(p.pos)}</span> &middot; ${esc(p.nat)} &middot; ${p.goals} goals &middot; ${p.seasons} seasons</div>${hon ? `<div class="meta show-m">${hon}</div>` : ""}</td><td class="l hide-m">${natLink(p.nat)}</td><td class="l hide-m pos-${esc(p.pos)}">${esc(p.pos)}</td><td>${ovr(p.peak)}</td><td class="hide-m">${p.goals}</td><td class="hide-m">${p.seasons}</td>
-      <td class="l meta wrap hide-m">${hon}</td><td class="pts">${p.score}</td></tr>`; }).join("") || '<tr><td colspan="9" class="empty">Nobody yet.</td></tr>'}</tbody></table></div>`
-      : `<div class="scroll"><table class="hof"><thead><tr><th>#</th><th class="l">Coach</th><th class="l hide-m">Nation</th><th class="hide-m">Seasons</th><th>Titles</th><th>Cups</th><th class="hide-m">CWC</th><th>Awards</th><th class="hide-m">Win %</th><th>Score</th></tr></thead><tbody>
-      ${h.coaches.map((c, i) => `<tr><td>${i + 1}</td><td class="l"><b>${esc(c.name)}</b> ${c.retired ? '<span class="tag">retired</span>' : ""}<div class="meta show-m">${esc(c.nat)} &middot; ${c.seasons} seasons &middot; ${c.win}% wins</div></td><td class="l hide-m">${esc(c.nat)}</td><td class="hide-m">${c.seasons}</td><td>${c.titles}</td><td>${c.cups}</td><td class="hide-m">${c.cwc}</td><td>${c.awards}</td><td class="hide-m">${c.win}</td><td class="pts">${c.score}</td></tr>`).join("") || '<tr><td colspan="10" class="empty">Nobody yet.</td></tr>'}</tbody></table></div>`);
-    document.querySelectorAll("[data-tab]").forEach((b) => b.onclick = () => go(b.dataset.tab));
+    if (tab === "players") wrap("Greatest players and coaches of all time, scored on awards, titles and peak rating.",
+      h.players.map((p, i) => { const hon = Object.entries(p.honours).map(([k, v]) => `${v}&times; ${esc(k)}`).join(" &middot; "); return rrow(i, `<b>${p.uid ? playerLink(p) : esc(p.name)}</b> ${ovr(p.peak)}`, `<span class="pos-${esc(p.pos)}">${esc(p.pos)}</span> &middot; ${esc(p.nat)} &middot; ${p.goals} goals &middot; ${p.seasons} seasons &middot; ${p.retired ? "retired" : p.club ? esc(p.club) : "free agent"}`, hon, p.score); }).join(""));
+    else wrap("Greatest players and coaches of all time, scored on awards, titles and peak rating.",
+      h.coaches.map((c, i) => rrow(i, `${flag(c.nat, 20)} <b>${esc(c.name)}</b>`, `${esc(c.nat)} &middot; ${c.seasons} seasons &middot; ${c.win}% wins${c.retired ? " &middot; retired" : ""}`, `${c.titles} titles &middot; ${c.cups} cups${c.cwc ? " &middot; " + c.cwc + " CWC" : ""} &middot; ${c.awards} awards`, c.score)).join(""));
     return;
   }
   const d = await api("/api/trophies" + (key ? "?key=" + enc(key) : "?key=award:ballon"));

@@ -949,3 +949,8 @@ body.dense .v2 .pr { padding-top: 5px; padding-bottom: 5px; }
 .card.summer .prg .prow { flex: 1 0 100% !important; min-width: 0 !important; }
 .card.summer { border-radius: 20px; }
 .row.prg { flex-wrap: wrap !important; row-gap: 8px; } .row.prg .prow { flex: 1 0 100%; min-width: 0; }
+
+.v2 .rlist { padding: 2px 14px; }
+.rrow { display: flex; align-items: flex-start; gap: 12px; padding: 12px 0; border-bottom: 1px solid #223629; } .rrow:last-child { border-bottom: 0; }
+.rrow .rm { flex: 1; min-width: 0; } .rrow .rn { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 15px; }
+.rrow .rh { margin-top: 2px; } .rrow .rs { text-align: right; flex: none; display: flex; flex-direction: column; } .rrow .rs b { font-size: 18px; color: var(--accent2); }
