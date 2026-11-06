@@ -38,6 +38,7 @@ function ovrColor(o) {
 }
 const ovr = (o) => `<span class="ovr" style="background:${ovrColor(o)}">${o}</span>`;
 const clubLink = (n) => `${crest(n, 16)}<a href="#/club/${enc(n)}">${esc(n)}</a>`;
+const leagueHref = (n) => `#/league/${enc(n)}`;
 const leagueLink = (n) => `${logoBox("leagues", n, 16)}<a href="#/league/${enc(n)}">${esc(n)}</a>`;
 const natLink = (n) => `${natBadge(n, 18)}<a href="#/nation/${enc(n)}">${esc(n)}</a>`;
 // a coach name that opens the coach page (names stay plain text for old records that have no coach id)
@@ -55,6 +56,7 @@ function renderShell() {
   const route = location.hash.split("/")[1] || "";
   const items = [["world", "World"], ["nations", "Nations"], ["news", "News"], ["money", "Money"], ["moves", "Off-season"], ["rivals", "Rivals"], ["players", "Players"], ["ceremony", "Awards"], ["hof", "Hall of Fame"], ["trophies", "Trophies"], ["records", "Records"]];
   $("#nav").innerHTML = has ? items.map(([k, t]) => `<a href="#/${k}" class="${route === k || (k === "moves" && route === "ledger") ? "on" : ""}">${t}</a>`).join("") : "";
+  renderTabbar(has, route);
   const h = STATUS && STATUS.header;
   $("#season-info").innerHTML = h
     ? (h.flow
@@ -63,6 +65,53 @@ function renderShell() {
         (h.done ? "<b>season complete</b>" : `next: <b>${h.date ? h.date.text : "week " + h.week}</b>`))
     : "";
   renderSimBar();
+}
+
+// ---------------------------------------------------------------- bottom tab bar (phones): Season, Leagues, Players, History, More. Every old top-nav page is still reachable.
+const TAB_ICONS = {
+  season: '<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/>',
+  leagues: '<path d="M4 6h16M4 12h16M4 18h10"/>',
+  players: '<circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/>',
+  history: '<path d="M8 4h8v5a4 4 0 0 1-8 0zM8 6H4v1a4 4 0 0 0 4 4M16 6h4v1a4 4 0 0 1-4 4M12 13v4M8 21h8M10 17h4"/>',
+  more: '<circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/>',
+};
+const TAB_OF = { world: "season", moves: "season", ledger: "season", prospects: "season", ceremony: "history", continent: "leagues", league: "leagues", club: "leagues", comp: "leagues", c: "leagues", matchup: "leagues", rivals: "leagues", nations: "leagues", nation: "leagues", players: "players", player: "players", coach: "players", academies: "players", news: "history", hof: "history", hofcard: "history", hofday: "history", hofnation: "history", hofleague: "history", trophies: "history", records: "history", money: "more" };
+function renderTabbar(has, route) {
+  const el = $("#tabbar"); if (!el) return;
+  if (!has) { el.innerHTML = ""; el.hidden = true; return; }
+  el.hidden = false;
+  const cur = TAB_OF[route] || "season";
+  const tab = (k, t, href) => `<a data-tab="${k}" href="${href || "#"}" class="${cur === k ? "on" : ""}"><svg width="22" height="22" viewBox="0 0 24 24" fill="${k === "more" ? "currentColor" : "none"}" stroke="${k === "more" ? "none" : "currentColor"}" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${TAB_ICONS[k]}</svg><span>${t}</span></a>`;
+  el.innerHTML = tab("season", "Season", "#/world") + tab("leagues", "Leagues") + tab("players", "Players", "#/players") + tab("history", "History") + tab("more", "More");
+  el.querySelector('[data-tab="leagues"]').onclick = (e) => { e.preventDefault(); leaguesSheet(); };
+  el.querySelector('[data-tab="history"]').onclick = (e) => { e.preventDefault(); historySheet(); };
+  el.querySelector('[data-tab="more"]').onclick = (e) => { e.preventDefault(); moreSheet(); };
+}
+function sheetLinks(title, rows) {
+  openModal(`<h2>${title}</h2><div class="sheet">${rows.map(([h, t, sub]) => `<a class="sheet-row" href="${h}"><b>${t}</b>${sub ? `<span class="dim small">${sub}</span>` : ""}<svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></a>`).join("")}</div><p style="margin:12px 0 0"><button id="sheet-x">Close</button></p>`);
+  $("#sheet-x").onclick = closeModal;
+  document.querySelectorAll("#modal-box .sheet-row").forEach((a) => a.addEventListener("click", closeModal));
+}
+async function leaguesSheet() {
+  let d; try { d = await api("/api/world"); } catch (e) { toast(e.message); return; }
+  const rows = [["#/nations", "Nations", "national teams"], ["#/rivals", "Rivals", "derbies and rivalries"]];
+  for (const c of d.continents) {
+    rows.push([`#/continent/${c.code}`, esc(c.name), c.leagues.length ? c.leagues.length + " leagues" : "national teams"]);
+    for (const l of c.leagues) rows.push([leagueHref(l.name), "&nbsp;&nbsp;" + esc(l.name), ""]);
+  }
+  sheetLinks("Leagues", rows);
+}
+function historySheet() {
+  sheetLinks("History", [["#/ceremony", "Awards", "ceremony, overview, winners"], ["#/hof", "Hall of Fame", "inductees and ceremonies"], ["#/news", "News", "everything that happened"], ["#/trophies", "Trophies", "the cabinet"], ["#/records", "Records", "world records"], ["#/academies", "Academies", "ranked by prestige"]]);
+}
+function moreSheet() {
+  sheetLinks("More", [["#/money", "Money", "finances across the world"], ["#/moves", "Off-season", "moves, retirements, new players"], ["#/prospects", "Graduates", "academy prospects"], ["#/rivals", "Rivals", "derbies"], ["#/nations", "Nations", "national teams"]]);
+  const box = $("#modal-box");
+  const extra = document.createElement("p"); extra.style.margin = "12px 0 0";
+  extra.innerHTML = `<button id="sheet-save">Save / Load</button> <button id="sheet-set">Settings</button>`;
+  box.appendChild(extra);
+  $("#sheet-save").onclick = () => { closeModal(); saveDialog(); };
+  $("#sheet-set").onclick = () => { closeModal(); settingsDialog(); };
 }
 let SBOPEN = false;
 // the season loop: Season -> Summer tournaments -> Awards -> Transfers -> next season (the engine's header.phase says where we are)

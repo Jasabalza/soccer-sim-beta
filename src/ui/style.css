@@ -828,3 +828,20 @@ a + .lbox, .lbox + a { margin-left: 4px; } .lbox { vertical-align: middle; margi
 
 .hexp { display: flex; align-items: center; gap: 6px; margin: 0 2px 10px; flex-wrap: wrap; }
 .hexp button { background: transparent; border: 1px solid var(--line, #2c3b33); color: var(--dim); border-radius: 999px; padding: 5px 11px; font-size: 12px; } .hexp button.on { background: var(--accent2, #f5c542); color: #121a15; border-color: transparent; font-weight: 700; }
+
+/* ---- v16.2 beta: bottom tab bar (phones), sheets ---- */
+#tabbar { display: none; }
+.sheet { display: flex; flex-direction: column; max-height: 62vh; overflow-y: auto; background: var(--bg); border: 1px solid var(--line); border-radius: 16px; padding: 2px 14px; }
+.sheet-row { display: flex; align-items: center; gap: 10px; min-height: 46px; border-bottom: 1px solid var(--line); color: var(--text); }
+.sheet-row:last-child { border-bottom: 0; }
+.sheet-row b { font-weight: 700; } .sheet-row .dim { flex: 1; } .sheet-row .chev { margin-left: auto; color: var(--accent); font-weight: 800; }
+@media (max-width: 760px) {
+  #nav { display: none; }
+  #top { padding-bottom: 6px; }
+  #season-info { max-width: 100%; flex: 1 0 100%; margin-left: 0; text-align: left; order: 3; }
+  main { padding-bottom: 96px; }
+  #tabbar:not([hidden]) { display: flex; position: fixed; left: 12px; right: 12px; bottom: max(12px, env(safe-area-inset-bottom, 0px)); height: 64px; padding: 0 6px; z-index: 30;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 32px; box-shadow: 0 8px 24px rgba(0,0,0,.45); }
+  #tabbar a { flex: 1; margin: 6px 2px; border-radius: 26px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; color: var(--dim); font-size: 10.5px; font-weight: 700; text-decoration: none; }
+  #tabbar a.on { background: rgba(61,220,132,.14); color: var(--accent); }
+}
