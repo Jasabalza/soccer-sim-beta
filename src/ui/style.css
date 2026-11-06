@@ -915,3 +915,13 @@ details.acc2 > summary { min-height: 52px; display: flex; align-items: center; f
 
 details.newsfold { margin-top: 10px; padding: 0 14px; } details.newsfold > summary { justify-content: space-between; gap: 10px; }
 details.newsfold .row { border-bottom: 1px solid #223629; } details.newsfold .row:last-child { border-bottom: 0; }
+
+#k-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 12px 0; }
+#k-row button { min-height: 44px; border-radius: 22px; padding: 0 18px; font-weight: 700; font-size: 15px; }
+#k-row button.pri { background: var(--accent); border-color: var(--accent); color: #06210f; }
+
+body.dense .v2 .row, body.dense .row { padding-top: 5px; padding-bottom: 5px; }
+body.dense .v2 .card { padding: 9px 11px; margin-top: 8px; }
+body.dense .v2 .mrow, body.dense .v2 .lrow, body.dense .srow { min-height: 44px; }
+body.dense .lcard { padding: 10px 14px; margin-bottom: 7px; }
+body.dense .v2 .pr { padding-top: 5px; padding-bottom: 5px; }

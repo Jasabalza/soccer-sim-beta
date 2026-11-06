@@ -52,6 +52,7 @@ const moneyS = (m) => (m > 0 ? "+" : "") + money(m);
 
 // ---------------------------------------------------------------- shell
 function renderShell() {
+  applyDense();
   const has = STATUS && STATUS.has_world;
   const route = location.hash.split("/")[1] || "";
   const items = [["world", "World"], ["nations", "Nations"], ["news", "News"], ["money", "Money"], ["moves", "Off-season"], ["rivals", "Rivals"], ["players", "Players"], ["ceremony", "Awards"], ["hof", "Hall of Fame"], ["trophies", "Trophies"], ["records", "Records"]];
@@ -1033,7 +1034,7 @@ async function viewComp(id) {
       <div id="tab-fld" hidden><div class="scroll"><table><thead><tr><th class="l">Club</th><th class="l">League</th><th>OVR</th></tr></thead><tbody>${x.field.map((f) => `<tr><td class="l">${clubLink(f.club)}</td><td class="l meta">${esc(f.league)}</td><td>${ovr(f.ovr)}</td></tr>`).join("")}</tbody></table></div></div>` : ""}`;
   }
   const finished = p.done >= p.total;
-  $("#view").innerHTML = `<div class="crumbs"><a href="#/world">World</a> / ${esc(x.title)}</div><h1>${withEmb(x.emblem, 44, esc(x.title), x.title, editionYear({ current: true }), x.host)}</h1>${liveTabs(id)}
+  $("#view").innerHTML = `<div class="v2"><div class="crumbs dim small" style="min-height:30px;display:flex;align-items:center"><a href="#/world">World</a>&nbsp;›&nbsp;${esc(x.title)}</div>${heroBlock(x.title, compEmb(x.title, x.emblem, 220), compEmb(x.title, x.emblem, 52, editionYear({ current: true }), x.host), esc(x.title), `<div class="sub">${p.done}/${p.total} played${p.next ? " · next: " + esc(p.next) : finished0 ? " · finished" : ""}</div>`)}</div>${liveTabs(id)}
     ${locked ? `<div class="card" style="margin-bottom:14px"><span class="tag red">LOCKED</span> needs ${p.locked.map((m) => `<a href="#/comp/${enc(m.id)}">${esc(m.title)}</a>`).join(", ")} to finish first.
       <p style="margin:10px 0 0"><button id="k-up" class="pri">Sim up to here</button> <span class="meta">plays only what it needs, then stops so you can play it your way.</span></p>
       <p style="margin:8px 0 0"><button id="k-pre">Sim everything it needs, then this to the end</button></p></div>`
@@ -1618,6 +1619,8 @@ async function loadStats(el, id, season) {
 }
 
 // ---------------------------------------------------------------- competition-end overview (optional animation)
+const denseOn = () => { try { return localStorage.getItem("ssb_dense") === "1"; } catch (e) { return false; } };
+const applyDense = () => document.body.classList.toggle("dense", denseOn());
 const animOn = () => { try { return localStorage.getItem("ssb_anim") === "1"; } catch (e) { return false; } };
 async function playFinished(list) {
   if (!list || !list.length || !animOn()) return;
@@ -1765,6 +1768,7 @@ async function settingsDialog() {
   const s = await api("/api/settings");
   openModal(`<h2>Settings</h2>
     <label class="check"><input type="checkbox" id="st-anim" ${animOn() ? "checked" : ""}> Show a winner animation and overview when a league or cup finishes</label>
+    <label class="check"><input type="checkbox" id="st-dense" ${denseOn() ? "checked" : ""}> Full density: tighter rows so more fits on screen</label>
     <label class="check"><input type="checkbox" id="st-god" ${s.god ? "checked" : ""}> God mode (commissioner editor: edit players, clubs, nations and money)</label>
     <p class="meta">Money is shown in euros (1 engine unit = ${s.money_x} million).</p>
     ${logoPanel()}
@@ -1773,7 +1777,8 @@ async function settingsDialog() {
   $("#st-log").onclick = editLogDialog;
   wireLogoPanel();
   $("#st-ok").onclick = async () => {
-    try { localStorage.setItem("ssb_anim", $("#st-anim").checked ? "1" : "0"); } catch (e) {}
+    try { localStorage.setItem("ssb_anim", $("#st-anim").checked ? "1" : "0"); localStorage.setItem("ssb_dense", $("#st-dense").checked ? "1" : "0"); } catch (e) {}
+    applyDense();
     await api("/api/settings_set", { god: $("#st-god").checked });
     closeModal(); await refreshStatus(); await route();
   };
