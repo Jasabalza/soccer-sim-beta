@@ -902,3 +902,13 @@ details.acc2 > summary { min-height: 52px; display: flex; align-items: center; f
 #simbar button { border-radius: 22px; font-weight: 700; }
 #simbar button.main { min-height: 44px; font-size: 15px; }
 #simbar button.pri { background: var(--accent); border-color: var(--accent); color: #06210f; }
+@media (max-width: 760px) {
+  #simbar { gap: 6px; padding-top: 6px; padding-bottom: 6px; }
+  #simbar button.main { min-height: 38px; font-size: 14px; padding: 0 8px; }
+  #simbar .sb-tog { min-height: 38px; padding: 0 12px; }
+  #simbar .stages.flow div { padding: 5px 0; }
+}
+.v2 .tabs2.hof-tabs { display: flex; gap: 0; }
+.v2 .tabs2.hof-tabs button { background: none; border: 0; border-bottom: 3px solid transparent; border-radius: 0; color: var(--dim); padding: 12px 14px; font-weight: 600; font-size: 14px; }
+.v2 .tabs2.hof-tabs button.on { background: none; color: var(--text); border-bottom-color: var(--accent); }
+@media (max-width: 760px) { #simbar button.main { font-size: 13px; padding: 0 4px; white-space: nowrap; } #simbar .sb-tog { padding: 0 10px; font-size: 13px; } }

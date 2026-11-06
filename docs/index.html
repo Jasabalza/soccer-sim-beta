@@ -905,6 +905,16 @@ details.acc2 > summary { min-height: 52px; display: flex; align-items: center; f
 #simbar button { border-radius: 22px; font-weight: 700; }
 #simbar button.main { min-height: 44px; font-size: 15px; }
 #simbar button.pri { background: var(--accent); border-color: var(--accent); color: #06210f; }
+@media (max-width: 760px) {
+  #simbar { gap: 6px; padding-top: 6px; padding-bottom: 6px; }
+  #simbar button.main { min-height: 38px; font-size: 14px; padding: 0 8px; }
+  #simbar .sb-tog { min-height: 38px; padding: 0 12px; }
+  #simbar .stages.flow div { padding: 5px 0; }
+}
+.v2 .tabs2.hof-tabs { display: flex; gap: 0; }
+.v2 .tabs2.hof-tabs button { background: none; border: 0; border-bottom: 3px solid transparent; border-radius: 0; color: var(--dim); padding: 12px 14px; font-weight: 600; font-size: 14px; }
+.v2 .tabs2.hof-tabs button.on { background: none; color: var(--text); border-bottom-color: var(--accent); }
+@media (max-width: 760px) { #simbar button.main { font-size: 13px; padding: 0 4px; white-space: nowrap; } #simbar .sb-tog { padding: 0 10px; font-size: 13px; } }
 
 </style>
 
@@ -12486,10 +12496,13 @@ async function viewTrophies(key, tab) {
     ? `<tr><td class="l meta">S${r.season}<div>${r.date || ""}</div></td><td class="l" colspan="2">${r.team.map((p) => `<span class="pos-${esc(p.pos)}">${esc(p.name)}</span> <span class="meta">(${esc(p.club)})</span>`).join(" &middot; ")}</td></tr>`
     : `<tr><td class="l meta nw">S${r.season}<div>${r.date ? esc(String(r.date).slice(-4)) : ""}</div></td><td class="l"><b>${aw() ? esc(r.winner) : L(r.winner)}</b>${r.club ? `<div class="meta">${clubOrNat(r.club)}</div>` : ""}
       ${r.runner_up ? `<div class="meta">${aw() ? "2nd " + esc(r.runner_up) : "beat " + L(r.runner_up)}</div>` : ""}${r.coach ? `<div class="meta">coach ${esc(r.coach)}</div>` : ""}</td><td class="nw">${esc(r.text || "")}</td></tr>`;
-  $("#view").innerHTML = `<h1>${sel ? withEmb(sel.emblem, 48, esc(sel.title), sel.title) : "Trophies"}</h1><div class="sub">Every winner so far. Pick any competition from the list.</div>${tabs}
+  const wrow = (r) => sel.key === "award:team"
+    ? `<div class="row" style="align-items:flex-start"><span class="rk">S${r.season}</span><span style="flex:1;margin-left:10px">${r.team.map((p) => `<span class="pos-${esc(p.pos)}">${esc(p.name)}</span> <span class="dim small">(${esc(p.club)})</span>`).join(" &middot; ")}</span></div>`
+    : `<div class="row"><span class="l"><span class="dim small" style="width:34px;font-weight:800">S${r.season}</span><span><b>${aw() ? esc(r.winner) : L(r.winner)}</b><div class="dim small">${r.club ? clubOrNat(r.club) : ""}${r.runner_up ? (r.club ? " &middot; " : "") + (aw() ? "2nd " + esc(r.runner_up) : "beat " + L(r.runner_up)) : ""}${r.coach ? " &middot; coach " + esc(r.coach) : ""}</div></span></span><span class="dim small" style="text-align:right">${esc(r.text || "")}</span></div>`;
+  $("#view").innerHTML = `<div class="v2"><h1>${sel ? withEmb(sel.emblem, 48, esc(sel.title), sel.title) : "Trophies"}</h1><div class="sub">Every winner so far. Pick any competition from the list.</div>${tabs.replace('class="tabs hof-tabs"', 'class="tabs2 hof-tabs"')}
     <p><select id="tro-sel" style="min-width:min(300px,100%);max-width:100%">${Object.entries(groups).map(([g, os]) => `<optgroup label="${esc(g)}">${os.map((o) => `<option value="${esc(o.key)}" ${sel && sel.key === o.key ? "selected" : ""}>${esc(o.title)}</option>`).join("")}</optgroup>`).join("")}</select></p>
-    ${sel && sel.rows.length ? `<div class="cols"><div><div class="scroll"><table class="hof"><thead><tr><th class="l">Season</th><th class="l">Winner</th><th>${aw() ? "Votes / stat" : "Final"}</th></tr></thead><tbody>${sel.rows.map(rowHTML).join("")}</tbody></table></div></div>
-      <div><div class="card"><h3>Most successful</h3>${sel.board.map((b, i) => `<div class="row"><span>${i + 1}. ${sel.key.startsWith("award:") ? esc(b.name) : L(b.name)}</span><span class="meta"><b style="color:var(--accent2)">${b.count}</b> &middot; S${b.seasons.join(", S")}</span></div>`).join("")}</div></div></div>` : '<div class="empty">No winners yet. Sim a season first.</div>'}`;
+    ${sel && sel.rows.length ? `<div class="card board"><h3>Most successful</h3>${sel.board.slice(0, 5).map((b, i) => `<div class="row"><span class="l"><span class="rk ${i === 0 ? "g" : i === 1 ? "s" : i === 2 ? "b" : ""}">${i + 1}</span><span>${sel.key.startsWith("award:") ? esc(b.name) : L(b.name)}</span></span><span class="dim small"><b class="gold">${b.count}</b> &middot; S${b.seasons.join(", S")}</span></div>`).join("")}</div>
+      <div class="sep">Every winner</div><div class="card">${sel.rows.map((r) => wrow(r)).join("")}</div>` : '<div class="empty">No winners yet. Sim a season first.</div>'}</div>`;
   $("#tro-sel").onchange = (e) => (location.hash = "#/trophies/winners/" + enc(e.target.value));
   document.querySelectorAll("[data-tab]").forEach((b) => b.onclick = () => go(b.dataset.tab));
 }
