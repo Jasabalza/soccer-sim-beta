@@ -976,6 +976,10 @@ body.dense .v2 .pr { padding-top: 5px; padding-bottom: 5px; }
 .pr-h { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .prow .crest, .prow img { flex: none; }
 
+/* v16.2 chrome: no brand bar once a world is open (each page has its own header), sim bar only on the Season tab */
+body.inapp #top { display: none; }
+body.nosim #simbar { display: none; }
+
 </style>
 
 <div id="top">
@@ -11209,6 +11213,11 @@ const money = (m) => { m = Number(m); const a = Math.abs(m), sg = m < 0 ? "-" : 
 const moneyS = (m) => (m > 0 ? "+" : "") + money(m);
 
 // ---------------------------------------------------------------- shell
+const SIM_ROUTES = new Set(["world", "moves", "ledger", "prospects", "ceremony"]);   // the sim controls live on the Season tab (and the awards step), as in the mock-up
+function seasonLine(h) {
+  return h.flow ? `Off-season after season ${h.flow.season} &middot; season ${h.season} (${esc(h.season_label)}) starts ${h.date ? h.date.text : "week " + h.week}`
+    : `Season ${h.season} &middot; ${esc(h.season_label)} &middot; year ${h.cycle_year}/4 (${esc(h.cycle_text)})${h.done ? " &middot; season complete" : " &middot; next " + (h.date ? h.date.text : "week " + h.week)}`;
+}
 function renderShell() {
   applyDense();
   const has = STATUS && STATUS.has_world;
@@ -11216,6 +11225,8 @@ function renderShell() {
   const items = [["world", "World"], ["nations", "Nations"], ["news", "News"], ["money", "Money"], ["moves", "Off-season"], ["rivals", "Rivals"], ["players", "Players"], ["ceremony", "Awards"], ["hof", "Hall of Fame"], ["trophies", "Trophies"], ["records", "Records"]];
   $("#nav").innerHTML = has ? items.map(([k, t]) => `<a href="#/${k}" class="${route === k || (k === "moves" && route === "ledger") ? "on" : ""}">${t}</a>`).join("") : "";
   renderTabbar(has, route);
+  document.body.classList.toggle("inapp", !!has);
+  document.body.classList.toggle("nosim", !has || !SIM_ROUTES.has(route));
   const h = STATUS && STATUS.header;
   $("#season-info").innerHTML = h
     ? (h.flow
@@ -11245,7 +11256,7 @@ function renderTabbar(has, route) {
 }
 const CHEV = '<svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg>';
 const MENU_ICON = (d) => `<span class="mi"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg></span>`;
-const MI = { money: '<circle cx="12" cy="12" r="8"/><path d="M12 8v8M9.5 10c0-1 1-1.6 2.5-1.6s2.5.6 2.5 1.6-1 1.5-2.5 1.8-2.5.8-2.5 1.8 1 1.6 2.5 1.6 2.5-.6 2.5-1.6"/>', moves: '<path d="M7 7h11l-3-3M17 17H6l3 3"/>', grad: '<path d="M3 9l9-4 9 4-9 4zM7 11v5c0 1 2.2 2 5 2s5-1 5-2v-5"/>', rivals: '<path d="M6 4l12 16M18 4L6 20"/>', nations: '<circle cx="12" cy="12" r="8"/><path d="M4 12h16M12 4c3 3 3 13 0 16M12 4c-3 3-3 13 0 16"/>', acad: '<path d="M4 20V10l8-5 8 5v10zM9 20v-6h6v6"/>', save: '<path d="M5 4h11l3 3v13H5zM8 4v5h7V4M8 20v-6h8v6"/>', gear: '<circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/>', aw: '<path d="M8 4h8v5a4 4 0 0 1-8 0zM8 6H4v1a4 4 0 0 0 4 4M16 6h4v1a4 4 0 0 1-4 4M12 13v4M8 21h8M10 17h4"/>', hof: '<path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/>', news: '<path d="M5 4h12v16H5zM8 8h6M8 12h6M8 16h4M17 8h2v10a2 2 0 0 1-2 2"/>', trophy: '<path d="M8 4h8v5a4 4 0 0 1-8 0zM12 13v4M8 21h8"/>', rec: '<path d="M4 20V8M10 20V4M16 20v-9M22 20H2"/>', ppl: '<circle cx="9" cy="8" r="3.5"/><path d="M2 20c0-3.5 3-5.5 7-5.5s7 2 7 5.5M17 5a3.5 3.5 0 0 1 0 7M19 15c2 .7 3 2.2 3 5"/>' };
+const MI = { pres: '<path d="M4 18l-1-10 5 4 4-7 4 7 5-4-1 10zM5 21h14"/>', money: '<circle cx="12" cy="12" r="8"/><path d="M12 8v8M9.5 10c0-1 1-1.6 2.5-1.6s2.5.6 2.5 1.6-1 1.5-2.5 1.8-2.5.8-2.5 1.8 1 1.6 2.5 1.6 2.5-.6 2.5-1.6"/>', moves: '<path d="M7 7h11l-3-3M17 17H6l3 3"/>', grad: '<path d="M3 9l9-4 9 4-9 4zM7 11v5c0 1 2.2 2 5 2s5-1 5-2v-5"/>', rivals: '<path d="M6 4l12 16M18 4L6 20"/>', nations: '<circle cx="12" cy="12" r="8"/><path d="M4 12h16M12 4c3 3 3 13 0 16M12 4c-3 3-3 13 0 16"/>', acad: '<path d="M4 20V10l8-5 8 5v10zM9 20v-6h6v6"/>', save: '<path d="M5 4h11l3 3v13H5zM8 4v5h7V4M8 20v-6h8v6"/>', gear: '<circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/>', aw: '<path d="M8 4h8v5a4 4 0 0 1-8 0zM8 6H4v1a4 4 0 0 0 4 4M16 6h4v1a4 4 0 0 1-4 4M12 13v4M8 21h8M10 17h4"/>', hof: '<path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/>', news: '<path d="M5 4h12v16H5zM8 8h6M8 12h6M8 16h4M17 8h2v10a2 2 0 0 1-2 2"/>', trophy: '<path d="M8 4h8v5a4 4 0 0 1-8 0zM12 13v4M8 21h8"/>', rec: '<path d="M4 20V8M10 20V4M16 20v-9M22 20H2"/>', ppl: '<circle cx="9" cy="8" r="3.5"/><path d="M2 20c0-3.5 3-5.5 7-5.5s7 2 7 5.5M17 5a3.5 3.5 0 0 1 0 7M19 15c2 .7 3 2.2 3 5"/>' };
 function menuPage(title, sub, groups) {
   $("#view").innerHTML = `<div class="v2"><h1>${title}</h1><div class="sub">${sub}</div>${groups.map(([g, rows]) => `<div class="card menu"><h3>${g}</h3>${rows.map(([ic, t, d, href, id]) => `<a class="mrow" ${href ? `href="${href}"` : `href="#" id="${id}"`}>${MENU_ICON(MI[ic])}<span class="mt"><b>${t}</b><span class="dim small">${d}</span></span>${CHEV}</a>`).join("")}</div>`).join("")}</div>`;
 }
@@ -11783,8 +11794,7 @@ async function viewWorld() {
     ${compChips.length || favNat.length ? `<div class="sec-h">COMPETITIONS AND NATIONS</div>
     <div class="chiprow">${compChips.map((x) => `<a class="cchip" href="#/comp/${enc(x.id)}">${logoBox("comps", x.title, 28) || ""}<span>${esc(x.title)}</span></a>`).join("")}</div>
     ${favNat.length ? `<div class="flags">${favNat.map((n) => `<a href="#/nation/${enc(n)}"><span class="fb">${natBadge(n, 30)}</span><span>${esc(n)}</span></a>`).join("")}</div>` : ""}` : ""}`;
-  $("#view").innerHTML = `<div class="whead whero"><h1>The world</h1>${chosen ? `<div class="seg" role="group"><button data-fv="all" class="${onlyFav ? "" : "on"}">All</button><button data-fv="fav" class="${onlyFav ? "on" : ""}">Favorites ${FAVS.filter((k) => !k.startsWith("nation:")).length}</button></div>` : ""}</div>
-    <div class="sub">Season ${STATUS.header.season} &middot; ${esc(STATUS.header.season_label)}</div>
+  $("#view").innerHTML = `<div class="dim small" style="margin-bottom:2px">${seasonLine(STATUS.header)}</div><div class="whead whero"><h1>Scores</h1>${chosen ? `<div class="seg" role="group"><button data-fv="all" class="${onlyFav ? "" : "on"}">All</button><button data-fv="fav" class="${onlyFav ? "on" : ""}">Favorites ${FAVS.filter((k) => !k.startsWith("nation:")).length}</button></div>` : ""}</div>
     ${scores}
     ${summerOn ? `<div class="grid" style="margin-top:12px">${summerCard}</div>` : ""}${hint}
     ${hidden}

@@ -972,3 +972,7 @@ body.dense .v2 .pr { padding-top: 5px; padding-bottom: 5px; }
 .card.note .gold-lbl { font-size: 11px; letter-spacing: .8px; text-transform: uppercase; color: #f5c542; font-weight: 800; margin-bottom: 4px; }
 .pr-h { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .prow .crest, .prow img { flex: none; }
+
+/* v16.2 chrome: no brand bar once a world is open (each page has its own header), sim bar only on the Season tab */
+body.inapp #top { display: none; }
+body.nosim #simbar { display: none; }
