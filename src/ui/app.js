@@ -76,7 +76,7 @@ const TAB_ICONS = {
   history: '<path d="M8 4h8v5a4 4 0 0 1-8 0zM8 6H4v1a4 4 0 0 0 4 4M16 6h4v1a4 4 0 0 1-4 4M12 13v4M8 21h8M10 17h4"/>',
   more: '<circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/>',
 };
-const TAB_OF = { more: "more", history: "history", leagues: "leagues", world: "season", moves: "season", ledger: "season", prospects: "season", ceremony: "history", continent: "leagues", league: "leagues", club: "leagues", comp: "leagues", c: "leagues", matchup: "leagues", rivals: "leagues", nations: "leagues", nation: "leagues", players: "players", player: "players", coach: "players", academies: "players", news: "history", hof: "history", hofcard: "history", hofday: "history", hofnation: "history", hofleague: "history", trophies: "history", records: "history", money: "more" };
+const TAB_OF = { more: "more", history: "history", leagues: "leagues", world: "season", moves: "season", ledger: "season", prospects: "season", ceremony: "history", continent: "leagues", league: "leagues", club: "leagues", comp: "leagues", c: "leagues", matchup: "leagues", rivals: "leagues", nations: "leagues", nation: "leagues", players: "players", player: "players", coach: "players", academies: "players", news: "history", hof: "history", hofcard: "history", hofday: "history", hofnation: "history", hofleague: "history", trophies: "history", prestige: "history", records: "history", money: "more" };
 function renderTabbar(has, route) {
   const el = $("#tabbar"); if (!el) return;
   if (!has) { el.innerHTML = ""; el.hidden = true; return; }
@@ -103,7 +103,7 @@ function viewMore() {
 function viewHistory() {
   menuPage("History", "Look back at what happened.", [
     ["Seasons", [["aw", "Awards", "ceremony, overview, winners", "#/ceremony"], ["hof", "Hall of Fame", "inductees and ceremonies", "#/hof"], ["news", "News", "everything that happened", "#/news"]]],
-    ["Records", [["trophy", "Trophies", "the trophy cabinet", "#/trophies"], ["rec", "Records", "world records", "#/records"], ["acad", "Academies", "what graduates became", "#/academies"]]],
+    ["Records", [["trophy", "Trophies", "the trophy cabinet", "#/trophies"], ["pres", "Prestige", "club ranking", "#/prestige"], ["rec", "Records", "world records", "#/records"], ["acad", "Academies", "what graduates became", "#/academies"]]],
   ]);
 }
 const lgTabs = (cur) => `<nav class="tabs2 lgtabs" aria-label="Leagues and nations">${[["leagues", "Leagues"], ["nations", "Nations"], ["rivals", "Rivals"]].map(([k, t]) => `<a href="#/${k}" class="${k === cur ? "on" : ""}">${t}</a>`).join("")}</nav>`;
@@ -1391,20 +1391,35 @@ function awWatch(d) {
   };
   draw();
 }
+let PRES = { f: "all", lg: "" };
+async function viewPrestige() {
+  const h = await api("/api/hof_clubs");
+  const followed = (c) => !!(FAVS && FAVS.includes("L:" + c.league));
+  const leagues = [...new Set(h.clubs.map((c) => c.league))].sort();
+  if (PRES.f === "lg" && !leagues.includes(PRES.lg)) PRES.lg = (h.clubs[0] && h.clubs[0].league) || leagues[0] || "";
+  let rows = h.clubs.map((c, i) => ({ c, i }));
+  if (PRES.f === "fav") rows = rows.filter((r) => followed(r.c));
+  if (PRES.f === "lg") rows = rows.filter((r) => r.c.league === PRES.lg);
+  const row = ({ c, i }) => `<a class="prow" href="#/club/${enc(c.name)}"><span class="pr-rk${i < 3 ? " top" : ""}">${i + 1}</span>${crest(c.name, 28)}<span class="pr-m"><b>${esc(c.name)}</b><span class="dim small">${esc(c.league)} &middot; last S${c.last}</span><span class="dim small pr-h">${c.league_titles} league &middot; ${c.continental} continental${c.cwc ? " &middot; " + c.cwc + " CWC" : ""} &middot; ${c.awards + c.toty} awards &middot; ${c.runner_ups} runner-up${c.honours ? " &middot; " + esc(c.honours) : ""}</span></span><span class="pr-s">${c.score}</span><span class="pr-st${followed(c) ? " on" : ""}">${followed(c) ? "&#9733;" : "&#9734;"}</span></a>`;
+  $("#view").innerHTML = `<div class="v2"><div class="dim small" style="margin-bottom:2px">Ranked by prestige</div><h1>Prestige</h1>
+    <div class="pr-sw"><button class="on">Clubs</button><button data-pr="hof">Hall of Fame winners</button></div>
+    <div class="chips"><button data-prf="all" class="${PRES.f === "all" ? "on" : ""}">All clubs</button><button data-prf="fav" class="${PRES.f === "fav" ? "on" : ""}">&#9733; Favorites</button><button data-prf="lg" class="${PRES.f === "lg" ? "on" : ""}">By league</button></div>
+    ${PRES.f === "lg" ? `<div class="chips">${leagues.map((l) => `<button data-prl="${esc(l)}" class="${PRES.lg === l ? "on" : ""}">${esc(l)}</button>`).join("")}</div>` : ""}
+    <div class="card rlist">${rows.length ? rows.map(row).join("") : `<div class="empty">${h.clubs.length ? "No clubs match this filter." : "Nothing yet. Sim a season first."}</div>`}</div>
+    <div class="dim small" style="margin-top:8px">How the score works: ${esc(h.points)}. ${h.total} clubs have scored so far.</div>
+    <div class="card note"><div class="gold-lbl">Players and coaches</div><div class="dim small">Everyone inducted into the Hall of Fame is ranked by the same kind of score, with a Players or Coaches filter, on the Hall of Fame page under Ranked.</div></div></div>`;
+  document.querySelectorAll("[data-prf]").forEach((b) => (b.onclick = () => { PRES.f = b.dataset.prf; viewPrestige(); }));
+  document.querySelectorAll("[data-prl]").forEach((b) => (b.onclick = () => { PRES.lg = b.dataset.prl; viewPrestige(); }));
+  const hb = document.querySelector("[data-pr=hof]"); if (hb) hb.onclick = () => { HOF.ranked = true; location.hash = "#/hof"; };
+}
 async function viewTrophies(key, tab) {
   tab = tab || "winners";
-  const tabs = `<div class="tabs hof-tabs">${[["winners", "Winners"], ["clubs", "Clubs"]].map(([k, t]) => `<button data-tab="${k}" class="${tab === k ? "on" : ""}">${t}</button>`).join("")}</div>`;
+  const tabs = `<div class="tabs hof-tabs">${[["winners", "Winners"], ["clubs", "Prestige"]].map(([k, t]) => `<button data-tab="${k}" class="${tab === k ? "on" : ""}">${t}</button>`).join("")}</div>`;
   const go = (t) => (location.hash = t === "winners" ? "#/trophies" : "#/trophies/" + t);
   const rk = (i) => `<span class="rk ${i === 0 ? "g" : i === 1 ? "s" : i === 2 ? "b" : ""}">${i + 1}</span>`;
   const rrow = (i, main, sub, hon, score) => `<div class="rrow">${rk(i)}<div class="rm"><div class="rn">${main}</div><div class="dim small">${sub}</div>${hon ? `<div class="dim small rh">${hon}</div>` : ""}</div><div class="rs"><b>${score}</b><span class="dim small">score</span></div></div>`;
   const wrap = (sub, rows, foot) => { $("#view").innerHTML = `<div class="v2"><h1>All-time ranking</h1><div class="sub">${sub}</div>${tabs.replace('class="tabs hof-tabs"', 'class="tabs2 hof-tabs"')}<div class="card rlist">${rows || '<div class="empty">Nothing yet. Sim a season first.</div>'}</div>${foot || ""}</div>`; document.querySelectorAll("[data-tab]").forEach((b) => b.onclick = () => go(b.dataset.tab)); };
-  if (tab === "clubs") {
-    const h = await api("/api/hof_clubs");
-    wrap("Greatest clubs of all time, ranked on trophies the way players are ranked on honours.",
-      h.clubs.map((c, i) => rrow(i, `<b>${clubLink(c.name)}</b>`, `${esc(c.league)} &middot; last S${c.last}`, `${c.league_titles} league &middot; ${c.continental} continental${c.cwc ? " &middot; " + c.cwc + " CWC" : ""} &middot; ${c.awards + c.toty} awards &middot; ${c.runner_ups} runner-up${c.honours ? " &middot; " + esc(c.honours) : ""}`, c.score)).join(""),
-      `<div class="dim small" style="margin-top:8px">How the score works: ${esc(h.points)}. ${h.total} clubs have scored so far.</div>`);
-    return;
-  }
+  if (tab === "clubs") { location.replace("#/prestige"); return; }
   if (tab === "players" || tab === "coaches") { location.replace("#/hof"); return; }
   if (false) {
     const h = await api("/api/halloffame");
@@ -1889,6 +1904,7 @@ async function routeInner(r, a, b) {
     if (r === "hofday") return await viewHofDay(a ? +a : null, b);
     if (r === "hofnation") { const q = location.hash.replace(/^#\/?/, "").split("/").map(decodeURIComponent); return await viewHofNation(a, b ? +b : null, q[3]); }
     if (r === "hofleague") { const q = location.hash.replace(/^#\/?/, "").split("/").map(decodeURIComponent); return await viewHofLeague(a, b ? +b : null, q[3], q[4]); }
+    if (r === "prestige") return await viewPrestige();
     if (r === "trophies") return a === "winners" ? await viewTrophies(b, "winners") : await viewTrophies(null, a || "winners");
     if (r === "money") return await viewMoney();
     if (r === "ledger") { MV.view = "money"; location.replace("#/moves/" + (a && a !== "all" ? a : "") + "/players"); return; }
