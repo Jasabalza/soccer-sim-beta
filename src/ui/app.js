@@ -1429,9 +1429,28 @@ async function viewTrophies(key, tab) {
   document.querySelectorAll("[data-tab]").forEach((b) => b.onclick = () => go(b.dataset.tab));
 }
 const clubOrNat = (n) => (n ? esc(n) : "");
+const NWV = { kind: "all", season: "all" };
 async function viewNews() {
   const d = await api("/api/news");
-  $("#view").innerHTML = `<h1>News</h1>${d.items.length ? d.items.map((n) => `<div class="review-line"><span><span class="tag">S${n.season}${n.date ? " &middot; " + n.date.text : ""}</span> <span class="tag">${esc(n.kind)}</span> ${esc(n.text)}</span></div>`).join("") : '<div class="empty">Nothing yet. Sim some weeks.</div>'}`;
+  const kinds = [...new Set(d.items.map((n) => n.kind))], seasons = [...new Set(d.items.map((n) => n.season))];
+  const label = (k) => ({ hof: "Hall of Fame" }[k] || k.charAt(0).toUpperCase() + k.slice(1));
+  if (NWV.kind !== "all" && !kinds.includes(NWV.kind)) NWV.kind = "all";
+  if (NWV.season !== "all" && !seasons.includes(+NWV.season)) NWV.season = "all";
+  const rows = d.items.filter((n) => (NWV.kind === "all" || n.kind === NWV.kind) && (NWV.season === "all" || n.season === +NWV.season));
+  const item = (n) => `<div class="row"><span class="l"><span class="tag">${esc(label(n.kind))}</span><span>${esc(n.text)}<div class="dim small">S${n.season}${n.date ? " &middot; " + n.date.text : ""}</div></span></span></div>`;
+  // Hall of Fame items fold into one card per season so they do not bury everything else
+  const out = []; let i = 0;
+  while (i < rows.length) {
+    const n = rows[i];
+    if (n.kind === "hof") { const g = []; while (i < rows.length && rows[i].kind === "hof" && rows[i].season === n.season) g.push(rows[i++]); out.push(`<details class="acc2 newsfold"><summary><b>Hall of Fame &middot; season ${n.season}</b><span class="dim small">${g.length} item${g.length === 1 ? "" : "s"}</span></summary>${g.map(item).join("")}</details>`); }
+    else { out.push(`<div class="card" style="padding:2px 14px">${item(n)}</div>`); i++; }
+  }
+  $("#view").innerHTML = `<div class="v2"><h1>News</h1><div class="sub">${d.items.length} stories.</div>
+    <nav class="chips" aria-label="Kind"><button data-nk="all" class="${NWV.kind === "all" ? "on" : ""}">All</button>${kinds.map((k) => `<button data-nk="${esc(k)}" class="${NWV.kind === k ? "on" : ""}">${esc(label(k))}</button>`).join("")}</nav>
+    <p><select class="sel" id="nv-s" aria-label="Season"><option value="all">All seasons</option>${seasons.map((x) => `<option value="${x}" ${NWV.season !== "all" && +NWV.season === x ? "selected" : ""}>Season ${x}</option>`).join("")}</select></p>
+    ${out.length ? out.join("") : '<div class="empty">Nothing matches.</div>'}</div>`;
+  document.querySelectorAll("[data-nk]").forEach((b) => (b.onclick = () => { NWV.kind = b.dataset.nk; viewNews(); }));
+  $("#nv-s").onchange = (e) => { NWV.season = e.target.value; viewNews(); };
 }
 function multiLine(seasons, series, w, h) {
   const names = Object.keys(series); if (seasons.length < 2 || !names.length) return '<div class="meta">The chart appears after two completed seasons.</div>';

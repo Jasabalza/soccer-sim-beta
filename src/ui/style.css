@@ -912,3 +912,6 @@ details.acc2 > summary { min-height: 52px; display: flex; align-items: center; f
 .v2 .tabs2.hof-tabs button { background: none; border: 0; border-bottom: 3px solid transparent; border-radius: 0; color: var(--dim); padding: 12px 14px; font-weight: 600; font-size: 14px; }
 .v2 .tabs2.hof-tabs button.on { background: none; color: var(--text); border-bottom-color: var(--accent); }
 @media (max-width: 760px) { #simbar button.main { font-size: 13px; padding: 0 4px; white-space: nowrap; } #simbar .sb-tog { padding: 0 10px; font-size: 13px; } }
+
+details.newsfold { margin-top: 10px; padding: 0 14px; } details.newsfold > summary { justify-content: space-between; gap: 10px; }
+details.newsfold .row { border-bottom: 1px solid #223629; } details.newsfold .row:last-child { border-bottom: 0; }
