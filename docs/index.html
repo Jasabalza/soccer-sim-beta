@@ -936,6 +936,7 @@ body.dense .v2 .pr { padding-top: 5px; padding-bottom: 5px; }
 .hof2 .hof-ctl .seg { border-radius: 99px; background: var(--panel); padding: 3px; }
 .hof2 .hof-ctl .seg button { border-radius: 99px; background: none; min-height: 34px; color: var(--dim); font-weight: 700; }
 .hof2 .hof-ctl .seg button.on { background: var(--accent); color: #06210f; }
+.v2 .lgtabs { margin: 0 0 6px; }
 
 </style>
 
@@ -11205,15 +11206,19 @@ function viewHistory() {
     ["Records", [["trophy", "Trophies", "the trophy cabinet", "#/trophies"], ["rec", "Records", "world records", "#/records"], ["acad", "Academies", "what graduates became", "#/academies"]]],
   ]);
 }
+const lgTabs = (cur) => `<nav class="tabs2 lgtabs" aria-label="Leagues and nations">${[["leagues", "Leagues"], ["nations", "Nations"], ["rivals", "Rivals"]].map(([k, t]) => `<a href="#/${k}" class="${k === cur ? "on" : ""}">${t}</a>`).join("")}</nav>`;
+function injectLgTabs(cur) { const v = $("#view"); if (v && !v.querySelector(".lgtabs")) v.insertAdjacentHTML("afterbegin", `<div class="v2">${lgTabs(cur)}</div>`); }
 async function viewLeagues() {
   const d = await api("/api/world");
+  if (location.hash === "#/leagues" && !viewLeagues.keep) LGV.c = "";
+  viewLeagues.keep = false;
   const conts = d.continents.filter((c) => c.leagues.length);
   const sel = LGV.c && conts.some((c) => c.code === LGV.c) ? LGV.c : "";
   const shown = conts.filter((c) => !sel || c.code === sel);
-  $("#view").innerHTML = `<div class="v2"><h1>Leagues</h1><div class="sub">${conts.reduce((n, c) => n + c.leagues.length, 0)} leagues across ${conts.length} continents.</div>
-    <nav class="chips" aria-label="Continent"><button data-c="" class="${sel ? "" : "on"}">All</button>${conts.map((c) => `<button data-c="${c.code}" class="${sel === c.code ? "on" : ""}">${esc(c.name)}</button>`).join("")}<a href="#/nations">Nations</a><a href="#/rivals">Rivals</a></nav>
-    ${shown.map((c) => `<div class="sep">${esc(c.name)}</div><div class="card lg">${c.leagues.map((l) => `<a class="lrow" href="#/league/${enc(l.name)}">${logoBox("leagues", l.name, 40) || '<span class="lph">${esc(l.name.split(" ").map((w) => w[0]).join("").slice(0, 3))}</span>'}<span class="mt"><b>${esc(l.name)}</b><span class="dim small">${l.done >= l.total ? "finished · champion " : "leader "}${esc(l.leader)}${l.done >= l.total ? "" : " · " + l.pts + " pts"}</span><span class="bar"><i style="width:${l.total ? Math.round(100 * l.done / l.total) : 0}%"></i></span></span><span class="dim small">${l.done}/${l.total}</span>${CHEV}</a>`).join("")}</div>`).join("")}</div>`;
-  document.querySelectorAll("#view .chips [data-c]").forEach((b) => (b.onclick = () => { LGV.c = b.dataset.c; viewLeagues(); }));
+  $("#view").innerHTML = `<div class="v2">${lgTabs("leagues")}<h1>Leagues</h1><div class="sub">${conts.reduce((n, c) => n + c.leagues.length, 0)} leagues across ${conts.length} continents.</div>
+    <nav class="chips" aria-label="Continent"><button data-c="" class="${sel ? "" : "on"}">All</button>${conts.map((c) => `<button data-c="${c.code}" class="${sel === c.code ? "on" : ""}">${esc(c.name)}</button>`).join("")}</nav>
+    ${shown.map((c) => `<div class="sep">${esc(c.name)}</div><div class="card lg">${c.leagues.map((l) => `<a class="lrow" href="#/league/${enc(l.name)}">${logoBox("leagues", l.name, 40) || `<span class="lph">${esc(l.name.split(" ").map((w) => w[0]).join("").slice(0, 3))}</span>`}<span class="mt"><b>${esc(l.name)}</b><span class="dim small">${l.done >= l.total ? "finished · champion " : "leader "}${esc(l.leader)}${l.done >= l.total ? "" : " · " + l.pts + " pts"}</span><span class="bar"><i style="width:${l.total ? Math.round(100 * l.done / l.total) : 0}%"></i></span></span><span class="dim small">${l.done}/${l.total}</span>${CHEV}</a>`).join("")}</div>`).join("")}</div>`;
+  document.querySelectorAll("#view .chips [data-c]").forEach((b) => (b.onclick = () => { LGV.c = b.dataset.c; viewLeagues.keep = true; viewLeagues(); }));
 }
 const LGV = { c: "" };
 let SBOPEN = false;
@@ -12967,10 +12972,10 @@ async function routeInner(r, a, b) {
     if (r === "league") return await viewLeague(a, b ? +b : null);
     if (r === "club") { await viewClub(a); return await clubRivals(a); }
     if (r === "matchup") return await viewMatchup(a, b, (location.hash.split("/")[4] || ""));
-    if (r === "rivals") return await viewRivals();
+    if (r === "rivals") { await viewRivals(); injectLgTabs("rivals"); return; }
     if (r === "comp") return await viewComp(a);
     if (r === "c") return await viewCompPage(a, b || "history");
-    if (r === "nations") return await viewNations(a);
+    if (r === "nations") { await viewNations(a); injectLgTabs("nations"); return; }
     if (r === "nation") return await viewNation(a);
     if (r === "news") return await viewNews();
     if (r === "players") return await viewPlayers();

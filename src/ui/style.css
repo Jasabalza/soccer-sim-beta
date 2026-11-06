@@ -933,3 +933,4 @@ body.dense .v2 .pr { padding-top: 5px; padding-bottom: 5px; }
 .hof2 .hof-ctl .seg { border-radius: 99px; background: var(--panel); padding: 3px; }
 .hof2 .hof-ctl .seg button { border-radius: 99px; background: none; min-height: 34px; color: var(--dim); font-weight: 700; }
 .hof2 .hof-ctl .seg button.on { background: var(--accent); color: #06210f; }
+.v2 .lgtabs { margin: 0 0 6px; }
