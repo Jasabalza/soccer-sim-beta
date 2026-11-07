@@ -361,12 +361,14 @@ async function hofResults(d, S) {
   };
   draw(0);
 }
+// where we are in the day: every hall in order, done ones ticked, the current one lit
+const hofHallSteps = (chain) => chain && chain.names ? `<div class="hstp" aria-label="Halls today">${chain.names.map((n, k) => `<span class="${k < chain.idx ? "done" : k === chain.idx ? "on" : ""}"${k === chain.idx ? ' aria-current="step"' : ""}>${k < chain.idx ? "&#10003; " : ""}${esc(n)}</span>`).join("")}</div>` : "";
 // play hall number idx of today's list; the last one ends on the results page
 async function hofPlay(d, S, idx) {
   const halls = hofHalls(d);
   if (idx >= halls.length) { location.replace("#/hofday/" + S + "/results"); return; }
   const h = halls[idx], nx = halls[idx + 1];
-  const chain = { S, idx, n: halls.length, name: h.name, next: nx ? `#/hofday/${S}/play/${idx + 1}` : `#/hofday/${S}/results`, label: nx ? "Next hall: " + nx.name : "Results" };
+  const chain = { S, idx, n: halls.length, name: h.name, names: halls.map((x) => x.name), next: nx ? `#/hofday/${S}/play/${idx + 1}` : `#/hofday/${S}/results`, label: nx ? "Next hall: " + nx.name : "Results" };
   if (h.k === "W") return hofDayWatch(d, chain);
   if (h.k === "L") return viewHofLeague(h.name, S, "watch", null, chain);
   return viewHofNation(h.name, S, "watch", chain);
@@ -400,6 +402,9 @@ function hofDayWatch(d, chain) {
       h = head("Fell off the ballot") + (d.fell.length ? `<div class="dim small" style="margin:8px 2px">Their time is up. They keep their other halls.</div><div class="hlist">${d.fell.map((r) => hofRow(r, { right: r.why === "time" ? "ten years" : "no support", sub: `${hofSub(Object.assign({}, r, { n: 0 }))} &middot; ${esc(r.line)}` })).join("")}</div>` : '<div class="card dim small">Nobody fell off the world ballot this year.</div>')
         + `<div class="foot"><button class="btn" id="hd-back">Back</button><a class="btn pri" href="${chain.next}">${esc(chain.label)}</a></div>`;
     }
+    // the buttons sit under the title so a whole ceremony can be clicked through without scrolling
+    const fm = /<div class="foot">[\s\S]*?<\/div>\s*$/.exec(h);
+    if (fm) { const top = fm[0].replace('class="foot"', 'class="foot top"'); h = h.slice(0, fm.index); const k = h.indexOf('<div class="stp">'); const e = k >= 0 ? h.indexOf("</div>", k) + 6 : -1; h = e > 0 ? h.slice(0, e) + hofHallSteps(chain) + top + h.slice(e) : top + h; }
     $("#view").innerHTML = `<div class="v2 hday">${h}</div>`; hofCount();
     const nx = $("#hd-next"), sk = $("#hd-skip"), bk = $("#hd-back");
     if (nx) nx.onclick = () => { if (step === 0) { step = 1; i = 0; } else if (step === 1) { if (i < ind.length) i++; else step = 2; } draw(); window.scrollTo(0, 0); };
@@ -460,8 +465,9 @@ function hofCeremony(cfg) {
         ${cfg.tail || ""}`;
       foot = `<a class="btn pri" href="${cfg.end[1]}">${esc(cfg.end[0])}</a>`;
     }
-    $("#view").innerHTML = `<div class="v2 hday"><a class="crumb" href="${cfg.back}">${esc(cfg.backLabel)}</a><div class="hd"><div><div class="dim small">${esc(cfg.title)} &middot; ${esc(cfg.sub)}${cfg.chain ? " &middot; hall " + (cfg.chain.idx + 1) + " of " + cfg.chain.n : ""}</div><h1>Hall of Fame day</h1></div></div>${body}<div class="foot">${foot}</div></div>`;
+    $("#view").innerHTML = `<div class="v2 hday"><a class="crumb" href="${cfg.back}">${esc(cfg.backLabel)}</a><div class="hd"><div><div class="dim small">${esc(cfg.title)} &middot; ${esc(cfg.sub)}${cfg.chain ? " &middot; hall " + (cfg.chain.idx + 1) + " of " + cfg.chain.n : ""}</div><h1>Hall of Fame day</h1></div></div>${hofHallSteps(cfg.chain)}<div class="foot top">${foot}</div>${body}</div>`;
     hofCount();
+    const cur = document.querySelector(".hstp .on"); if (cur && cur.scrollIntoView) cur.scrollIntoView({ inline: "center", block: "nearest" });
     const nx = $("#hc-next"); if (nx) nx.onclick = () => { i++; draw(); window.scrollTo(0, 0); };
     const sk = $("#hc-skip"); if (sk) sk.onclick = () => { i = items.length; draw(); window.scrollTo(0, 0); };
   };

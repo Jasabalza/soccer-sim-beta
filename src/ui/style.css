@@ -1106,3 +1106,8 @@ body.nosim #simbar { display: none; }
 .sh-row b{font-size:15px}
 .hintro .hi-halls{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
 #simbar button.hofgo{border-color:#d6b04a;color:#d6b04a}
+.hstp{display:flex;gap:6px;overflow-x:auto;margin:8px 0 4px;padding-bottom:2px;scrollbar-width:none}.hstp::-webkit-scrollbar{display:none}
+.hstp span{flex:none;padding:6px 12px;border-radius:99px;border:1px solid var(--line,rgba(255,255,255,.15));font-size:13px;opacity:.7}
+.hstp span.done{color:#3ddc84;opacity:1}.hstp span.on{background:#3ddc84;color:#06240f;font-weight:700;border-color:#3ddc84;opacity:1}
+.hday .foot.top{position:static;display:flex;gap:10px;margin:10px 0 14px;padding:0}
+.hday .foot.top>*{flex:1;min-height:48px;display:flex;align-items:center;justify-content:center}
