@@ -415,8 +415,19 @@ function favOf(id) {
 }
 const isFollowed = (id) => { const k = favOf(id); return FAVS === null || k === null || FAVS.includes(k); };
 const favView = () => { try { return localStorage.getItem("ssb_favview") !== "all"; } catch (e) { return true; } };
-async function loadFavs() { try { FAVS = (await api("/api/favs")).favs; } catch (e) { FAVS = null; } }
-async function saveFavs(list) { const r = await api("/api/favs", { set: list }); FAVS = r.favs; }
+// what you follow is also remembered in this browser, so a save that never had favorites (or an older save) gets them back instead of asking again
+const favMem = () => { try { return JSON.parse(localStorage.getItem("ssb_favmem") || "{}") || {}; } catch (e) { return {}; } };
+const favMemSet = (k, v) => { try { const m = favMem(); m[k] = v; localStorage.setItem("ssb_favmem", JSON.stringify(m)); } catch (e) { /* storage blocked */ } };
+async function loadFavs() {
+  try { FAVS = (await api("/api/favs")).favs; } catch (e) { FAVS = null; }
+  const m = favMem();
+  if (FAVS === null && Array.isArray(m.favs)) {            // the save has none yet: put back the ones remembered here
+    try { FAVS = (await api("/api/favs", { set: m.favs })).favs; } catch (e) { /* keep null */ }
+    try { if (Array.isArray(m.nations) && m.nations.length && !((await api("/api/favnations")).nations || []).length) await api("/api/favnations", { set: m.nations }); } catch (e) { /* ignore */ }
+    try { if (Array.isArray(m.clubs) && m.clubs.length && !((await api("/api/favclubs")).clubs || []).length) await api("/api/favclubs", { set: m.clubs }); } catch (e) { /* ignore */ }
+  }
+}
+async function saveFavs(list) { const r = await api("/api/favs", { set: list }); FAVS = r.favs; favMemSet("favs", FAVS); }
 const starSvg = (w) => `<svg width="${w}" height="${w}" viewBox="0 0 24 24" aria-hidden="true"><polygon points="12,2.5 14.9,8.9 21.8,9.6 16.6,14.2 18.1,21 12,17.5 5.9,21 7.4,14.2 2.2,9.6 9.1,8.9"/></svg>`;
 const starBtn = (key, on) => `<button class="star${on ? " on" : ""}" data-fav="${esc(key)}" aria-pressed="${on}" aria-label="${on ? "Stop following" : "Follow"} this competition" title="${on ? "Following" : "Follow"}">${starSvg(20)}</button>`;
 // every competition that can be followed, by continent (national-team ones are listed even in seasons when they are not played)

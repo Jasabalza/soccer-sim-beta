@@ -198,9 +198,9 @@ async function hallPanel(sel, halls) {
 // the countries whose Hall of Fame the player follows (the World page card and the star on a nation)
 let FAVN = null, FAVC = null;
 async function loadFavClubs() { try { FAVC = (await api("/api/favclubs")).clubs; } catch (e) { FAVC = []; } return FAVC; }
-async function saveFavClubs(list) { const r = await api("/api/favclubs", { set: list }); FAVC = r.clubs; return FAVC; }
+async function saveFavClubs(list) { const r = await api("/api/favclubs", { set: list }); FAVC = r.clubs; favMemSet("clubs", FAVC); return FAVC; }
 async function loadFavNations() { try { FAVN = (await api("/api/favnations")).nations; } catch (e) { FAVN = []; } return FAVN; }
-async function saveFavNations(list) { const r = await api("/api/favnations", { set: list }); FAVN = r.nations; return FAVN; }
+async function saveFavNations(list) { const r = await api("/api/favnations", { set: list }); FAVN = r.nations; favMemSet("nations", FAVN); return FAVN; }
 const favNatBtn = (nat, on) => `<button class="star${on ? " on" : ""}" data-favn="${esc(nat)}" aria-pressed="${on}" aria-label="${on ? "Stop following" : "Follow"} the ${esc(nat)} Hall of Fame" title="${on ? "Following this Hall of Fame" : "Follow this Hall of Fame on the World page"}">${starSvg(20)}</button>`;
 function wireFavNat(after) {
   document.querySelectorAll("[data-favn]").forEach((b) => (b.onclick = async () => {
