@@ -141,7 +141,6 @@ function renderSimBar() {
   const bar_ = $("#simbar");
   if (!STATUS || !STATUS.has_world) { bar_.innerHTML = ""; return; }
   const h = STATUS.header, ph = h.phase || (h.done ? "done" : "season"), fs = h.flow ? h.flow.season : h.season - 1;
-  bar_.classList.toggle("open", SBOPEN);
   const play = ph === "season" || ph === "summer";
   const main = play
     ? `<button class="main" id="sb-week">Next week</button><button class="main" id="sb-4">4 weeks</button><button class="pri main" id="sb-end">${ph === "summer" ? "Finish summer" : "Rest of season"}</button>`
@@ -149,7 +148,10 @@ function renderSimBar() {
     : ph === "awards" ? `<button class="main" id="sb-cer">Awards</button><button class="pri main" id="sb-tr">Continue to off-season</button>`
     : ph === "transfers" ? `<button class="main" id="sb-mk">Off-season moves</button><button class="pri main" id="sb-gr">Continue to graduates</button>`
     : `<button class="main" id="sb-pg">Graduates</button><button class="pri main" id="sb-next">Start season ${h.season}</button>`;
+  bar_.className = (SBOPEN ? "open " : "") + "ph-" + (h.flow ? (ph === "awards" ? "awards" : "off") : ph === "summer" ? "summer" : ph === "done" ? "awards" : "season");
+  const chip = h.flow ? `Season ${fs} &middot; off-season` : ph === "summer" ? `Season ${h.season} &middot; summer` : ph === "done" ? `Season ${h.season} &middot; complete` : `Season ${h.season} &middot; ${esc(h.season_label)}`;
   bar_.innerHTML = `
+    <div class="phchip"><span>${chip}</span></div>
     ${flowBar(h)}
     <span class="lbl wl">WORLD</span>
     ${main}

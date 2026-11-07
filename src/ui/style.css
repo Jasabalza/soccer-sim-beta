@@ -1017,3 +1017,13 @@ body.nosim #simbar { display: none; }
 .v2 .hero2 .hbk { width: 40px; height: 40px; border-radius: 50%; border: 0; background: rgba(0,0,0,.35); color: #fff; font-size: 26px; line-height: 1; padding: 0 0 3px; cursor: pointer; }
 .v2 .hero2 .fpill { min-height: 36px; padding: 0 14px; border-radius: 99px; border: 1px solid rgba(255,255,255,.55); background: rgba(0,0,0,.25); color: #fff; font-weight: 700; font-size: 13px; cursor: pointer; }
 .v2 .hero2 .fpill.on { background: rgba(255,255,255,.14); }
+
+/* phase banner: the sim bar takes the colour of where the season is (mock-up screens F1 to F9) */
+#simbar { --c1: #14402a; --c2: #0e2a1d; background: linear-gradient(135deg, var(--c1), var(--c2)); border-bottom: 1px solid rgba(255,255,255,.08); }
+#simbar.ph-summer { --c1: #1d3f86; --c2: #12234d; }
+#simbar.ph-awards { --c1: #7a5a14; --c2: #3b2d0b; }
+#simbar.ph-off { --c1: #4a2a86; --c2: #241448; }
+#simbar .phchip { flex: 1 0 100%; margin: 0 0 2px; }
+#simbar .phchip span { display: inline-block; padding: 5px 12px; border-radius: 99px; background: rgba(0,0,0,.4); color: #fff; font-size: 12px; font-weight: 700; }
+#simbar .stages.flow div { background: rgba(0,0,0,.28); border-color: rgba(255,255,255,.14); }
+#simbar button:not(.pri) { background: rgba(0,0,0,.3); border-color: rgba(255,255,255,.18); color: #fff; }
