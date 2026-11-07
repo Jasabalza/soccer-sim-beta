@@ -1055,6 +1055,13 @@ body.nosim #simbar { display: none; }
 .hintro .hi-b .btn{display:block;text-align:center}
 .hintro .hi-b .btn{display:flex;align-items:center;justify-content:center;min-height:48px;padding:0 16px}
 .hday{padding-bottom:110px}
+/* club page: gold small-caps card headings, folded ledger */
+.gh .card>h3{color:#d6b04a;text-transform:uppercase;letter-spacing:.07em;font-size:12px;font-weight:700}
+.gh .card>h3 small{text-transform:none;letter-spacing:0}
+.gh .card.hero{background:linear-gradient(160deg,rgba(214,176,74,.14),rgba(40,200,120,.05));border-color:rgba(214,176,74,.35)}
+.gh .card.hero .big{font-size:44px;font-weight:800}
+.fl-det{margin-top:8px}.fl-det summary{color:var(--green,#3ddc84);font-weight:600;font-size:13px;cursor:pointer;padding:6px 0}
+.v2 .hero2 .htop .fpill{margin-left:auto}
 
 </style>
 
@@ -12035,15 +12042,16 @@ function financeTab(c, sel) {
   L.forEach((r, i) => { const q = L[i - 1]; if (!q) return; if (r.acad != null && q.acad != null && r.acad - q.acad >= 0.4) surplus.push([r.season, `Academy level ${Math.round(q.acad)} to ${Math.round(r.acad)}`]); if (r.cap != null && q.cap != null && r.cap > q.cap) surplus.push([r.season, `Stadium expansion +${Math.round((r.cap - q.cap) * 10) / 10}k seats`]); });
   return `<div class="cols"><div>
     <div class="card"><h3>Cash <small>${c.finance.debt > 0 ? '<span class="tag red">in debt</span>' : ""}</small></h3>
-      <div style="display:flex;justify-content:space-between;align-items:flex-end"><span class="bigv">${money(c.funds)}</span><span class="meta">${prev ? moneyS(row.cash - prev.cash) + " vs last season" : ""}</span></div>
+      <div style="display:flex;justify-content:space-between;align-items:flex-end"><span class="bigv">${money(c.funds)}</span><span class="${prev ? (row.cash - prev.cash >= 0 ? "pts" : "neg") : "meta"} small">${prev ? moneyS(row.cash - prev.cash) + " vs last season" : ""}</span></div>
       <div class="mbar" style="margin:8px 0 4px"><i style="width:${Math.min(100, c.funds / Math.max(1e-9, f.comfort) * 100)}%"></i></div>
       <div class="meta">Comfort level: 2x yearly income = ${money(f.comfort)}. Cash above it is invested in the academy and stadium. ${f.debt > 0 ? "Debt: " + money(f.debt) + "." : ""}</div></div>
     <div class="card" style="margin-top:14px"><h3>Season ${row.season} ledger <small><select id="fin-s">${L.map((r) => `<option ${r.season === row.season ? "selected" : ""}>${r.season}</option>`).join("")}</select></small></h3>
-      ${LROWS.filter(([, k]) => row[k] || k !== "owner").map(([t, k]) => `<div class="row"><span>${t}</span><span class="pts">${moneyS(row[k])}</span></div>`).join("")}
-      <div class="row" style="font-weight:700"><span>Income</span><span>${money(row.income)}</span></div>
-      ${CROWS.map(([t, k]) => `<div class="row"><span>${t}</span><span class="${row[k] ? "neg" : ""}">${row[k] ? "-" + money(row[k]) : money(0)}</span></div>`).join("")}
-      <div class="row" style="font-weight:700"><span>Costs</span><span>-${money(costs)}</span></div>
+      <div class="row" style="font-weight:700"><span>Income</span><span class="pts">${money(row.income)}</span></div>
+      <div class="row" style="font-weight:700"><span>Costs</span><span class="neg">-${money(costs)}</span></div>
       <div class="row" style="font-weight:700"><span>Profit</span><span class="${row.profit >= 0 ? "pts" : "neg"}">${moneyS(row.profit)}</span></div>
+      <details class="fl-det"><summary>Full ledger: TV, gate, prize, sponsors, wages, running costs</summary>
+      ${LROWS.filter(([, k]) => row[k] || k !== "owner").map(([t, k]) => `<div class="row"><span>${t}</span><span class="pts">${moneyS(row[k])}</span></div>`).join("")}
+      ${CROWS.map(([t, k]) => `<div class="row"><span>${t}</span><span class="${row[k] ? "neg" : ""}">${row[k] ? "-" + money(row[k]) : money(0)}</span></div>`).join("")}</details>
       <div class="meta" style="margin-top:6px">Paid out to the transfer budget after the season: ${money(row.payout)}. Prize money from the Club World Cup arrives every fourth season; the yearly income counts a quarter of it each year.</div></div></div>
     <div><div class="card"><h3>Wage bill vs yearly income</h3>
       <div style="display:flex;justify-content:space-between"><span class="bigv" style="${over ? "color:var(--red)" : ""}">${Math.round(f.wage_ratio * 100)}%</span><span class="meta">limit ${Math.round(f.wage_cap * 100)}%</span></div>
@@ -12127,10 +12135,12 @@ async function viewClub(name) {
       <div class="cols"><span>Player</span><span>OVR</span><span>POT</span><span>Contr.</span></div>${body || `<div class="dim small" style="padding:14px 0">Nobody matches.</div>`}`;
   };
   $("#view").innerHTML = `<div class="v2">
-    ${heroBlock(c.name, crest(c.name, 220), crest(c.name, 56), esc(c.name), `${c.cwc.length ? `<div class="sub tsline">${titleStars(c.cwc.length, 13, "Club World Cup title")}<span>Club World Cup</span></div>` : ""}<div class="sub">${leagueLink(c.league)} · last finish ${c.last_finish ? ordN(c.last_finish) : "-"}</div>`)}
+    ${heroBlock(c.name, crest(c.name, 220), crest(c.name, 56), esc(c.name), `${c.cwc.length ? `<div class="sub tsline">${titleStars(c.cwc.length, 13, "Club World Cup title")}<span>Club World Cup</span></div>` : ""}<div class="sub">${leagueLink(c.league)} · last finish ${c.last_finish ? ordN(c.last_finish) : "-"}</div>`, `<button class="fpill${FAVC && FAVC.includes(c.name) ? " on" : ""}" id="cl-follow" type="button">${FAVC && FAVC.includes(c.name) ? "&#9733; Following" : "&#9734; Follow"}</button>`)}
     <div class="stat4"><div><b>${c.ovr}</b><span>TEAM OVR</span></div><div><b>${money(c.budget)}</b><span>INCOME</span></div><div><b>${money(c.funds)}</b><span>FUNDS</span></div><div><b>${c.squad_size}</b><span>SQUAD</span></div></div>
     <nav class="tabs2" id="ct-tabs" aria-label="Club sections">${tabs.map(([k, t]) => `<button data-ct="${k}" class="${k === CV.tab ? "on" : ""}">${t}</button>`).join("")}</nav></div>
-    <div class="v2" id="ct-ov">${overview}</div><div class="v2" id="ct-sq" hidden></div><div id="ct-fin" hidden></div><div id="ct-acad" hidden></div><div id="ct-stad" hidden></div><div class="v2" id="ct-hall" hidden></div><div class="v2" id="ct-hon" hidden>${trophyRoom(c.trophies, "Trophy room")}</div>`;
+    <div class="v2" id="ct-ov">${overview}</div><div class="v2" id="ct-sq" hidden></div><div id="ct-fin" class="gh" hidden></div><div id="ct-acad" class="gh" hidden></div><div id="ct-stad" class="gh" hidden></div><div class="v2" id="ct-hall" hidden></div><div class="v2" id="ct-hon" hidden>${trophyRoom(c.trophies, "Trophy room")}</div>`;
+  if (FAVC === null) loadFavClubs().then(() => { const b = $("#cl-follow"); if (b && FAVC.includes(c.name)) { b.classList.add("on"); b.innerHTML = "&#9733; Following"; } });
+  const fb = $("#cl-follow"); if (fb) fb.onclick = async () => { const cur = new Set(FAVC || []); if (cur.has(c.name)) cur.delete(c.name); else cur.add(c.name); try { await saveFavClubs([...cur]); } catch (e) { toast(e.message); return; } const on = cur.has(c.name); fb.classList.toggle("on", on); fb.innerHTML = on ? "&#9733; Following" : "&#9734; Follow"; };
   const built = {};
   const drawSquad = () => {
     $("#ct-sq").innerHTML = squad();
@@ -12971,7 +12981,7 @@ async function viewRivals() {
 async function clubRivals(name) {
   const d = await api("/api/rivalries?club=" + enc(name)).catch(() => null);
   if (!d || !d.rows.length) return;
-  $("#view").insertAdjacentHTML("beforeend", `<h2>Rivals</h2><div class="card">${d.rows.slice(0, 6).map((r) => { const o = r.a === name ? r.b : r.a, w = r.a === name ? r.wins : [r.wins[1], r.wins[0]];
+  ($("#ct-ov") || $("#view")).insertAdjacentHTML("beforeend", `<h2>Rivals</h2><div class="card">${d.rows.slice(0, 6).map((r) => { const o = r.a === name ? r.b : r.a, w = r.a === name ? r.wins : [r.wins[1], r.wins[0]];
     return `<div class="row"><span>${clubLink(o)} <a class="meta" href="#/matchup/-/${enc(name)}/${enc(o)}">${esc(r.name)}</a></span><span class="meta">${r.kind}${r.meet ? ` &middot; ${w[0]}-${r.draws}-${w[1]}` : ""}</span></div>`; }).join("")}</div>`);
 }
 

@@ -1052,3 +1052,10 @@ body.nosim #simbar { display: none; }
 .hintro .hi-b .btn{display:block;text-align:center}
 .hintro .hi-b .btn{display:flex;align-items:center;justify-content:center;min-height:48px;padding:0 16px}
 .hday{padding-bottom:110px}
+/* club page: gold small-caps card headings, folded ledger */
+.gh .card>h3{color:#d6b04a;text-transform:uppercase;letter-spacing:.07em;font-size:12px;font-weight:700}
+.gh .card>h3 small{text-transform:none;letter-spacing:0}
+.gh .card.hero{background:linear-gradient(160deg,rgba(214,176,74,.14),rgba(40,200,120,.05));border-color:rgba(214,176,74,.35)}
+.gh .card.hero .big{font-size:44px;font-weight:800}
+.fl-det{margin-top:8px}.fl-det summary{color:var(--green,#3ddc84);font-weight:600;font-size:13px;cursor:pointer;padding:6px 0}
+.v2 .hero2 .htop .fpill{margin-left:auto}
