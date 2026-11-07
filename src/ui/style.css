@@ -1139,3 +1139,8 @@ body.nosim #simbar { display: none; }
 
 /* phase banner: soccer-ball watermark and rounded bottom, like the mock-up headers */
 #simbar { position: relative; overflow: hidden; border-radius: 0 0 22px 22px; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'%3E%3Cg fill='none' stroke='white' stroke-width='5' stroke-opacity='.16'%3E%3Ccircle cx='100' cy='100' r='90'/%3E%3Cpath d='M100 60l38 28-14 44H76L62 88z'/%3E%3Cpath d='M100 60V10M138 88l48-16M124 132l30 40M76 132l-30 40M62 88L14 72'/%3E%3C/g%3E%3C/svg%3E"), linear-gradient(135deg, var(--c1), var(--c2)); background-repeat: no-repeat, no-repeat; background-position: right -40px top -50px, 0 0; background-size: 230px 230px, 100% 100%; }
+/* heroes run edge to edge like the mock-up headers; tiles under them are slimmer */
+.v2 .hero2 { margin: -4px calc(-1 * max(16px, env(safe-area-inset-left, 0px))) 0; border-radius: 0 0 26px 26px; padding: 14px 18px 20px; border: 0; }
+.v2 .hero2 + .stat4, .v2 .hero2 + .stat3 { margin-top: 12px; }
+.stat4 > div { padding: 9px 4px; border-radius: 16px; }
+.stat4 > div b { font-size: 19px; }
