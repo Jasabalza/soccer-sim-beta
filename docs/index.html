@@ -10013,6 +10013,9 @@ function wcBanner(host, year, size) {
   return `<span class="lbox wcb" style="width:${w}px;height:${h}px" title="World Cup ${esc(host)} ${y}">${wcLogo(host, y, { style: "poster", w })}</span>`;
 }
 function compEmb(name, spec, size, year, host) {
+  if (name === "World Cup" && (!host || !year)) {      // no edition given: the next one, host by the fixed rotation
+    try { host = host || hostFor(Object.keys(WC_HOSTS || {}).length); year = year || editionYear({ current: true }); } catch (e) { /* keep the plain emblem */ }
+  }
   const real = logoBox("comps", name, size, year) || logoBox("leagues", name, size);
   if (real) return real;
   if (name === "World Cup" && host && year) return wcBanner(host, year, size);      // no imported World Cup logo: the generated banner for this edition
@@ -11710,6 +11713,7 @@ function renderSimBar() {
 async function refreshStatus() {
   STATUS = await api("/api/status"); if (STATUS.has_world) await loadFavs(); else FAVS = null;
   try { HOFSEEN = STATUS.has_world && STATUS.header.flow ? (await api("/api/hofseen")).season : null; } catch (e) { HOFSEEN = null; }
+  if (STATUS.has_world) { const k = STATUS.header.season + "|" + (STATUS.header.phase || ""); if (WC_KEY !== k) { WC_KEY = k; await loadWcHosts(); } } else WC_KEY = null;
   renderShell();
 }
 
@@ -12144,7 +12148,7 @@ async function viewWorld() {
   const sumAll = d.summer.filter((x) => !x.locked.length && x.done < x.total).map((x) => x.id);
   const summerCard = summerOn ? `<div class="dim small" style="margin-bottom:2px">Season ${STATUS.header.season} &middot; summer</div><h1 style="margin-bottom:8px">Summer tournaments</h1>
       <div class="card sum"><div class="gold-lbl">Tournaments</div>${d.summer.map((x) => { const st = sumState(x);
-        return `<div class="sum-r"><a class="sum-l" href="#/comp/${enc(x.id)}">${logoBox("comps", x.title, 34) || ""}<span class="mt"><b>${esc(x.title)}</b><span class="dim small">${st === "locked" ? "locked: needs " + x.locked.map((m) => esc(m.title)).join(", ") : st === "done" ? "Finished" : x.next ? esc(x.next) : x.done + " of " + x.total + " played"}</span></span></a>${st === "done" ? `<span class="sum-b done">Done &#10003;</span>` : st === "locked" ? "" : `<button class="sum-b" data-lwk="${esc(x.id)}">${st === "going" ? "Next game" : "Play"}</button>`}</div>`; }).join("")}</div>
+        return `<div class="sum-r"><a class="sum-l" href="#/comp/${enc(x.id)}">${compEmb(x.title, null, 34) || ""}<span class="mt"><b>${esc(x.title)}</b><span class="dim small">${st === "locked" ? "locked: needs " + x.locked.map((m) => esc(m.title)).join(", ") : st === "done" ? "Finished" : x.next ? esc(x.next) : x.done + " of " + x.total + " played"}</span></span></a>${st === "done" ? `<span class="sum-b done">Done &#10003;</span>` : st === "locked" ? "" : `<button class="sum-b" data-lwk="${esc(x.id)}">${st === "going" ? "Next game" : "Play"}</button>`}</div>`; }).join("")}</div>
       <div class="card dim small">Same controls as any tournament: one game at a time, a whole group, or sim it to the end.</div>
       ${sumAll.length ? `<button class="btn wide" id="sum-all" style="width:100%;min-height:50px;margin-top:10px">Sim all summer tournaments</button>` : ""}
       <button class="btn pri wide" id="sum-next" style="width:100%;min-height:52px;font-size:15px;margin-top:10px" ${sumAll.length ? "disabled" : ""}>Continue to awards</button>` : "";
@@ -12191,7 +12195,7 @@ async function viewWorld() {
     ${bigL.map(bigCard).join("")}
     ${smallL.length ? `<div class="card srows">${smallL.slice(0, bigL.length ? 12 : 8).map(smallRow).join("")}${smallL.length > (bigL.length ? 12 : 8) ? `<a class="more" href="#/leagues"><span>All ${allLg.length} leagues</span><span>&rsaquo;</span></a>` : ""}</div>` : ""}
     ${compChips.length || favNat.length ? `<div class="sec-h">COMPETITIONS AND NATIONS</div>
-    <div class="chiprow">${compChips.map((x) => `<a class="cchip" href="#/comp/${enc(x.id)}">${logoBox("comps", x.title, 28) || ""}<span>${esc(x.title)}</span></a>`).join("")}</div>
+    <div class="chiprow">${compChips.map((x) => `<a class="cchip" href="#/comp/${enc(x.id)}">${compEmb(x.title, null, 28, null, null) || ""}<span>${esc(x.title)}</span></a>`).join("")}</div>
     ${favNat.length ? `<div class="flags">${favNat.map((n) => `<a href="#/nation/${enc(n)}"><span class="fb">${natBadge(n, 30)}</span><span>${esc(n)}</span></a>`).join("")}</div>` : ""}` : ""}`;
   const inFlow = !!STATUS.header.flow && ["awards", "transfers", "graduates"].includes(STATUS.header.phase);
   const wrapIt = inFlow || summerOn;
@@ -12383,7 +12387,7 @@ async function viewClub(name) {
 
 // ---- trophy rooms ------------------------------------------------------------------------------------
 // World Cup editions for the trophy rooms: season -> host nation (from the World Cup history), season -> the year it was played
-let WC_HOSTS = {};
+let WC_HOSTS = {}, WC_KEY = null;
 async function loadWcHosts() {
   try { const h = await api("/api/comphist?key=wc"); WC_HOSTS = {}; (h.hosts || []).forEach((x) => { WC_HOSTS[x.season] = x.host; }); } catch (e) { /* no history yet */ }
 }
