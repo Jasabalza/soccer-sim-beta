@@ -89,7 +89,7 @@ async function viewHof(tier, name) {
   $("#view").innerHTML = `<div class="v2 hof2"><h1>Hall of Fame</h1>
     ${hofSeg("data-tier", [["W", "World"], ["C", "Country"], ["L", "League"], ["K", "Club"]], tier)}
     <div class="hof-ctl">${scopeSel}${hofSeg("data-kind", [["p", "Players"], ["c", "Coaches"]], HOF.kind)}</div>
-    <div class="hof-sc">${HOF_LBL[tier]}${name ? " &middot; " + esc(name) : ""} <span class="dim small">&middot; ${d.total} ${people} inducted</span></div>
+    <div class="hof-sc">${HOF_LBL[tier]}${name ? " &middot; " + esc(name) : ""} <span class="dim small">&middot; ${d.total} ${people} inducted</span>${tier === "C" && name ? " " + favNatBtn(name, favNats.includes(name)) : ""}</div>
     <nav class="chips hof-tabs">${tabs.map(([k, t]) => `<button data-htab="${k}" class="${k === tab ? "on" : ""}">${t}</button>`).join("")}</nav>
     ${body}
 </div>`;
@@ -98,6 +98,7 @@ async function viewHof(tier, name) {
   document.querySelectorAll("[data-hexp]").forEach((b) => (b.onclick = () => { HOF.open = b.dataset.hexp; document.querySelectorAll("[data-hexp]").forEach((x) => x.classList.toggle("on", x === b)); document.querySelectorAll("details.hcls").forEach((el, i) => { el.open = HOF.open === "all" || (HOF.open === "ten" && i < 10) || (HOF.open === "one" && i < 1); }); }));
   document.querySelectorAll("[data-htab]").forEach((b) => (b.onclick = () => { HOF.tab = b.dataset.htab; route(); }));
   document.querySelectorAll("[data-hrank]").forEach((b) => (b.onclick = () => { HOF.ranked = b.dataset.hrank === "1"; route(); }));
+  wireFavNat();
   const sel = $("#hof-scope"); if (sel) sel.onchange = () => (location.hash = "#/hof/" + tier + "/" + enc(sel.value));
 }
 

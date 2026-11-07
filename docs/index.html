@@ -10603,7 +10603,7 @@ async function viewHof(tier, name) {
   $("#view").innerHTML = `<div class="v2 hof2"><h1>Hall of Fame</h1>
     ${hofSeg("data-tier", [["W", "World"], ["C", "Country"], ["L", "League"], ["K", "Club"]], tier)}
     <div class="hof-ctl">${scopeSel}${hofSeg("data-kind", [["p", "Players"], ["c", "Coaches"]], HOF.kind)}</div>
-    <div class="hof-sc">${HOF_LBL[tier]}${name ? " &middot; " + esc(name) : ""} <span class="dim small">&middot; ${d.total} ${people} inducted</span></div>
+    <div class="hof-sc">${HOF_LBL[tier]}${name ? " &middot; " + esc(name) : ""} <span class="dim small">&middot; ${d.total} ${people} inducted</span>${tier === "C" && name ? " " + favNatBtn(name, favNats.includes(name)) : ""}</div>
     <nav class="chips hof-tabs">${tabs.map(([k, t]) => `<button data-htab="${k}" class="${k === tab ? "on" : ""}">${t}</button>`).join("")}</nav>
     ${body}
 </div>`;
@@ -10612,6 +10612,7 @@ async function viewHof(tier, name) {
   document.querySelectorAll("[data-hexp]").forEach((b) => (b.onclick = () => { HOF.open = b.dataset.hexp; document.querySelectorAll("[data-hexp]").forEach((x) => x.classList.toggle("on", x === b)); document.querySelectorAll("details.hcls").forEach((el, i) => { el.open = HOF.open === "all" || (HOF.open === "ten" && i < 10) || (HOF.open === "one" && i < 1); }); }));
   document.querySelectorAll("[data-htab]").forEach((b) => (b.onclick = () => { HOF.tab = b.dataset.htab; route(); }));
   document.querySelectorAll("[data-hrank]").forEach((b) => (b.onclick = () => { HOF.ranked = b.dataset.hrank === "1"; route(); }));
+  wireFavNat();
   const sel = $("#hof-scope"); if (sel) sel.onchange = () => (location.hash = "#/hof/" + tier + "/" + enc(sel.value));
 }
 
@@ -11877,7 +11878,7 @@ async function viewWorld() {
     ${scores}
     ${hint}
     ${hidden}
-    <details class="acc2"><summary>By continent and everything else</summary>${strip}<div class="grid">${conts.map(card).join("")}</div>${info}</details><div id="w-halls"></div>${wrapIt ? "</details>" : ""}`;
+    <details class="acc2"><summary>By continent and everything else</summary>${strip}<div class="grid">${conts.map(card).join("")}</div>${info}</details>${wrapIt ? "</details>" : ""}`;
   if ($("#sum-all")) $("#sum-all").onclick = async () => {
     for (const k in HOLD) delete HOLD[k];
     let fin = [];
@@ -11892,7 +11893,7 @@ async function viewWorld() {
   };
   if ($("#sum-next")) $("#sum-next").onclick = () => rollover();
   if ($("#nu-go")) { const ph = STATUS.header.phase; $("#nu-go").onclick = () => flowStep(ph === "awards" ? "transfers" : ph === "transfers" ? "graduates" : "done"); }
-  worldCompCards().catch(() => {}); worldHallsCard("#w-halls").catch(() => {});
+  worldCompCards().catch(() => {});
   const ids = (code) => { const c = d.continents.find((x) => x.code === code); return [...c.leagues.map((l) => "L:" + l.name), ...c.comps.map((x) => x.id)]; };
   document.querySelectorAll("[data-lrev]").forEach((b) => b.onclick = async () => { try { const st = await busy("Loading...", () => api("/api/compstats?id=" + enc(b.dataset.lrev))); if (st) await showCompEnd(st, false); } catch (e) { toast(e.message); } });
   document.querySelectorAll("[data-lwk]").forEach((b) => b.onclick = () => simIds([b.dataset.lwk], { weeks: 1 }));
