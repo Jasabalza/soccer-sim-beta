@@ -1361,11 +1361,10 @@ let AWCG = "club";
 function awGate(d) {
   const S = d.season;
   $("#view").innerHTML = `<div class="v2"><div class="hd"><div><h1>Season ${S} awards</h1><div class="sub">${esc(d.season_label)}</div></div></div>
-    <div class="card" style="margin-top:16px;text-align:center;padding:22px 14px">
-      <div class="eyebrow gold">The season is over</div>
-      <div style="font-size:18px;font-weight:700;margin:8px 0 4px">Ballon d'Or, Golden Boot, Young Player, Coach and more</div>
-      <div class="dim small">Watch them revealed one at a time, or skip and see every winner on one page.</div>
-      <div style="display:grid;gap:10px;margin-top:18px"><a class="btn pri" href="#/ceremony/${S}/watch" style="min-height:52px;font-size:15px">Watch the ceremony</a><a class="btn" href="#/ceremony/${S}" style="min-height:52px;font-size:15px">Skip to results</a></div></div>
+    <div class="stage"><div style="font-size:34px;line-height:1">&#127942;</div>
+      <div style="font-size:20px;font-weight:800;margin:8px 0 12px">The season is over</div>
+      <div class="pillrow">${["Ballon d'Or", "Golden Boot", "Young player", "Coach", "Team of the Year"].map((t) => `<span>${t}</span>`).join("")}</div></div>
+    <div style="display:grid;gap:10px;margin-top:14px"><a class="btn pri" href="#/ceremony/${S}/watch" style="min-height:54px;font-size:16px;border-radius:99px">Watch the ceremony</a><a class="btn" href="#/ceremony/${S}" style="min-height:54px;font-size:16px;border-radius:99px">Skip to results</a></div>
     <a class="more" data-hgo="W||bal"><span>Hall of Fame: check the candidates</span><span>&rsaquo;</span></a></div>`;
 }
 const AWH_KINDS = [["ballon", "Ballon d'Or"], ["boot", "Golden Boot"], ["young", "Young player"], ["coach", "Coach"]];
