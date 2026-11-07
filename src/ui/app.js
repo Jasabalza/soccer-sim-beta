@@ -1352,7 +1352,7 @@ function awGate(d) {
       <div style="font-size:18px;font-weight:700;margin:8px 0 4px">Ballon d'Or, Golden Boot, Young Player, Coach and more</div>
       <div class="dim small">Watch them revealed one at a time, or skip and see every winner on one page.</div>
       <div style="display:grid;gap:10px;margin-top:18px"><a class="btn pri" href="#/ceremony/${S}/watch" style="min-height:52px;font-size:15px">Watch the ceremony</a><a class="btn" href="#/ceremony/${S}" style="min-height:52px;font-size:15px">Skip to results</a></div></div>
-    <a class="more" href="#/hofday/${S}"><span>World Hall of Fame induction day</span><span>&rsaquo;</span></a></div>`;
+    <a class="more" data-hgo="W||bal"><span>Hall of Fame: check the candidates</span><span>&rsaquo;</span></a></div>`;
 }
 function awResults(d) {
   const a = d.awards, b = a.ballon, w = b[0], bt = a.boot[0], yg = a.young[0], co = a.coach[0];
@@ -1363,8 +1363,8 @@ function awResults(d) {
   const nComps = Object.keys(a.comps || {}).length;
   return `
     <div class="hd"><div><h1>Awards</h1><div class="sub">Season ${S} (${esc(d.season_label)}) · ${a.voters} voters</div></div>${awSelect(d)}</div>
-    <section id="aw-hof" class="card hofcta" style="margin-top:4px"><h3>World Hall of Fame <small>induction day</small></h3><div class="dim small">The world votes on the players and coaches whose time has come.</div>
-      <div class="hofcta-b"><a class="btn pri" href="#/hofday/${S}/watch">Watch the vote</a><a class="btn" href="#/hofday/${S}">Results</a></div></section>
+    <section id="aw-hof" class="card hofcta" style="margin-top:4px"><h3>Hall of Fame <small>on the ballot</small></h3><div class="dim small">The ceremonies are played on Hall of Fame day, with the world.</div>
+      <div class="hofcta-b"><a class="btn" href="#/hof" data-hgo="W||bal">Check the candidates</a></div></section>
     <nav class="chips sticky" aria-label="Jump to an award"><button class="on" data-go="aw-ballon">Ballon d'Or</button><button data-go="aw-boot">Golden Boot</button><button data-go="aw-young">Young player</button><button data-go="aw-coach">Coach</button><button data-go="aw-team">Team of the Year</button><button data-go="aw-cups">Cups</button></nav>
     <section id="aw-ballon" class="card hero" style="margin-top:4px">
       <div class="eyebrow gold">Ballon d'Or</div>
@@ -1761,16 +1761,15 @@ function showCompEnd(s, more) {
     if (co) facts.push(`Coach of the competition: <b>${coachLink(co.cid, co.name)}</b> <span class="meta">${tm(co.team)}</span>`);
     const lg = s.kind === "league" ? (s.name || "") : "";
     const draw = (hof) => {
-      const hofBlock = hof ? `<div class="ce-hof"><span class="hb W" style="width:36px;height:36px;--hc:#f5c542">${hofStar(24)}</span><div><b>Hall of Fame day</b><div class="meta">${hof.nLeague} league inductee${hof.nLeague === 1 ? "" : "s"} &middot; ${hof.nClubs} club inductee${hof.nClubs === 1 ? "" : "s"}</div></div></div>` : "";
+      const hofBlock = hof ? `<div class="ce-hof"><span class="hb W" style="width:36px;height:36px;--hc:#f5c542">${hofStar(24)}</span><div><b>Hall of Fame</b><div class="meta">The candidates are on the ballot. The ceremony is played on Hall of Fame day, with the world.</div></div></div>` : "";
       openModal(`<div class="ce"><div class="ce-emb">${emblem(s.emblem, window.innerWidth < 700 ? 72 : 96)}</div><div class="ce-t">${esc(s.name)} <span class="meta">${esc(s.season_label || "")}</span></div>
         <div class="ce-w">${s.winner ? tm(s.winner) : "-"}</div><div class="ce-sub">${s.kind === "league" ? "Champions" : "Winners"}</div>${starMoment(s)}
         <div class="ce-facts">${facts.map((f, i) => `<div class="ce-f" style="animation-delay:${1.3 + i * 0.45}s">${f}</div>`).join("")}</div>${hofBlock}
-        <div class="ce-btns">${hof ? '<button class="gold" id="ce-hw">Watch the ceremony</button> <button id="ce-hr">Hall of Fame results</button> ' : ""}<button class="${hof ? "" : "pri"}" id="ce-next">${more ? "Next" : "Close"}</button>${more ? ' <button id="ce-skip">Skip all</button>' : ""}</div></div>`);
+        <div class="ce-btns">${hof ? '<button class="gold" id="ce-hc">Check the candidates</button> ' : ""}<button class="${hof ? "" : "pri"}" id="ce-next">${more ? "Next" : "Close"}</button>${more ? ' <button id="ce-skip">Skip all</button>' : ""}</div></div>`);
       const done = (skip) => { closeModal(); res(skip); };
       $("#ce-next").onclick = () => done(false);
       if ($("#ce-skip")) $("#ce-skip").onclick = () => done(true);
-      if ($("#ce-hw")) $("#ce-hw").onclick = () => { location.hash = "#/hofleague/" + enc(lg) + "/" + hof.season + "/watch"; done(true); };
-      if ($("#ce-hr")) $("#ce-hr").onclick = () => { location.hash = "#/hofleague/" + enc(lg) + "/" + hof.season; done(true); };
+      if ($("#ce-hc")) $("#ce-hc").onclick = () => { done(true); HOF.tab = "bal"; const h = "#/hof/L/" + enc(lg); if (location.hash === h) route(); else location.hash = h; };
     };
     draw(null);
     if (lg) hofLeagueBlock(lg).then((h) => {
@@ -1971,9 +1970,9 @@ async function routeInner(r, a, b) {
     if (r === "academies") return await viewAcademies(a, b);
     if (r === "hofcard") return await viewHofCard(a);
     if (r === "coach") return await viewCoach(a);
-    if (r === "hofday") return await viewHofDay(a ? +a : null, b);
-    if (r === "hofnation") { const q = location.hash.replace(/^#\/?/, "").split("/").map(decodeURIComponent); return await viewHofNation(a, b ? +b : null, q[3]); }
-    if (r === "hofleague") { const q = location.hash.replace(/^#\/?/, "").split("/").map(decodeURIComponent); return await viewHofLeague(a, b ? +b : null, q[3], q[4]); }
+    if (r === "hofday") { const q = location.hash.replace(/^#\/?/, "").split("/").map(decodeURIComponent); return await viewHofDay(a ? +a : null, b, q[3]); }
+    if (r === "hofnation") { location.replace("#/hofday/" + (b || "")); return; }
+    if (r === "hofleague") { location.replace("#/hofday/" + (b || "")); return; }
     if (r === "prestige") { location.replace("#/trophies/clubs"); return; }
     if (r === "trophies") return a === "winners" ? await viewTrophies(b, "winners") : await viewTrophies(null, a || "winners");
     if (r === "money") return await viewMoney();

@@ -1104,3 +1104,4 @@ body.nosim #simbar { display: none; }
 .sh-val{color:var(--dim,#8fa89a);font-size:14px;display:flex;align-items:center}
 .sh-sub{color:var(--dim,#8fa89a);font-size:12px;font-weight:400;margin-top:2px}
 .sh-row b{font-size:15px}
+.hintro .hi-halls{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
