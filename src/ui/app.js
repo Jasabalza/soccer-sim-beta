@@ -659,8 +659,6 @@ async function viewWorld() {
   const smallL = allLg.filter((l) => !isFavL(l) && (!onlyFav));
   const mw = (l) => (l.done >= l.total ? "Finished" : "Matchweek " + (l.done + 1) + " of " + l.total);
   const mark = (l, n) => logoBox("leagues", l.name, n) || `<span class="lph" style="width:${n}px;height:${n}px">${esc(l.name.split(" ").map((w) => w[0]).join("").slice(0, 3))}</span>`;
-  const LHUE = { "Premier League": 275, "La Liga": 355, "Bundesliga": 8, "Serie A": 215, "Ligue 1": 225, "Eredivisie": 22, "Primeira Liga": 150, "Liga MX": 140, "MLS": 215, "Saudi Pro League": 135, "J1 League": 350 };
-  const lhue = (n) => (LHUE[n] != null ? LHUE[n] : _hash(n) % 360);
   const bigCard = (l) => `<div class="lcard" style="--hh:${lhue(l.name)}"><a class="lhead" href="#/league/${enc(l.name)}">${mark(l, 38)}<span class="mt"><b>${esc(l.name)}</b><span class="dim small">${mw(l)} &middot; ${esc(l.leader)} lead</span></span>${CHEV}</a>
     <div class="bar"><i style="width:${l.total ? Math.round(100 * l.done / l.total) : 0}%"></i></div>
     ${l.done < l.total ? `<div class="lbtns"><button class="pill pri" data-lsim="L:${esc(l.name)}">Sim rest of league</button><button class="pill" data-lwk="L:${esc(l.name)}">Next matchweek</button></div>` : `<button class="pill wide" data-lrev="L:${esc(l.name)}">Season review</button>`}</div>`;
@@ -789,9 +787,11 @@ const ordN = (n) => `${n}${["th", "st", "nd", "rd"][n % 100 >= 11 && n % 100 <= 
 const POS_ORDER = ["GK", "DEF", "MID", "FWD"], POS_NAME = { GK: "Goalkeepers", DEF: "Defenders", MID: "Midfielders", FWD: "Forwards" };
 const SQ_SORTS = [["pos", "Position"], ["ovr", "Overall"], ["pot", "Potential"], ["age", "Age"], ["wage", "Wage"], ["contract", "Contract"], ["value", "Value"]];
 
+const LHUE = { "Premier League": 275, "La Liga": 355, "Bundesliga": 8, "Serie A": 215, "Ligue 1": 225, "Eredivisie": 22, "Primeira Liga": 150, "Liga MX": 140, "MLS": 215, "Saudi Pro League": 135, "J1 League": 350, "UEFA Champions League": 232, "Copa Libertadores": 45, "World Cup": 330, "Club World Cup": 40 };
+const lhue = (n) => (LHUE[n] != null ? LHUE[n] : _hash(n) % 360);
 // ---- v16.2 beta: shared hero (team-coloured gradient, faded watermark of the logo, same on club, league and nation pages)
 function heroBlock(seed, markBig, markSmall, h1, sub, right) {
-  const hue = (typeof _hash === "function" ? _hash(seed) : 120) % 360;
+  const hue = LHUE[seed] != null ? LHUE[seed] : (typeof _hash === "function" ? _hash(seed) : 120) % 360;
   return `<div class="hero2 hasbk" style="--hh:${hue}"><div class="wm" aria-hidden="true">${markBig}</div><div class="htop"><button class="hbk" type="button" onclick="history.back()" aria-label="Back">&lsaquo;</button>${right || ""}</div><div class="hrow">${markSmall}<div><h1>${h1}</h1>${sub}</div></div></div>`;
 }
 async function viewClub(name) {
