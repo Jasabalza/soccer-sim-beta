@@ -331,6 +331,7 @@ async function viewHofDay(season, sub, idx) {
     <a class="more" data-hgo="W||bal"><span>Check the candidates</span><span>&rsaquo;</span></a></div>`;
 }
 async function hofResults(d, S) {
+  if (HOFSEEN !== S) { HOFSEEN = S; if (typeof renderSimBar === "function") renderSimBar(); }
   const list = (arr, o) => arr.length ? `<div class="hlist">${arr.map((r) => hofRow(r, o(r))).join("")}</div>` : "";
   const ind = d.inducted.concat(d.coaches.inducted);
   const fav = await Promise.all((d.favs || []).map(async (f) => {

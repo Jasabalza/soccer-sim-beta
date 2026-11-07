@@ -132,9 +132,11 @@ async function viewLeagues() {
 const LGV = { c: "" };
 let SBOPEN = false;
 // the season loop: Season -> Summer tournaments -> Awards -> Transfers -> next season (the engine's header.phase says where we are)
-const FLOW_STEPS = [["season", "Season"], ["summer", "Summer"], ["awards", "Awards"], ["transfers", "Moves"], ["graduates", "Graduates"]];
+const FLOW_STEPS = [["season", "Season"], ["summer", "Summer"], ["awards", "Awards"], ["hall", "Hall"], ["transfers", "Moves"], ["graduates", "Grads"]];
+let HOFSEEN = null;                          // the season whose Hall of Fame day was played or skipped to its results (this visit)
+const hofSeenNow = (h) => !!(h.flow && HOFSEEN === h.flow.season);
 function flowBar(h) {
-  const at = { season: 0, summer: 1, done: 2, awards: 2, transfers: 3, graduates: 4 }[h.phase] ?? 0;
+  const at = { season: 0, summer: 1, done: 2, awards: hofSeenNow(h) ? 3 : 2, transfers: 4, graduates: 5 }[h.phase] ?? 0;
   const cell = (i, [k, t]) => `<div class="${i < at ? "done" : i === at ? "on" : ""}"${i === at ? ' aria-current="step"' : ""}>${i < at ? "&#10003; " : ""}${t}</div>`;
   return `<div class="stages flow" id="flowbar" aria-label="Season loop">${FLOW_STEPS.map((x, i) => cell(i, x)).join("")}</div>`;
 }
@@ -146,7 +148,7 @@ function renderSimBar() {
   const main = play
     ? `<button class="main" id="sb-week">Next week</button><button class="main" id="sb-4">4 weeks</button><button class="pri main" id="sb-end">${ph === "summer" ? "Finish summer" : "Rest of season"}</button>`
     : ph === "done" ? `<button class="pri main" id="sb-roll">Wrap up season ${h.season}</button>`
-    : ph === "awards" ? `<button class="main" id="sb-cer">Awards</button><button class="pri main" id="sb-tr">Continue to off-season</button>`
+    : ph === "awards" ? (hofSeenNow(h) ? `<button class="main" id="sb-hof">Hall of Fame</button><button class="pri main" id="sb-tr">Continue to off-season</button>` : `<button class="main" id="sb-cer">Awards</button><button class="pri main" id="sb-hof">Hall of Fame day</button>`)
     : ph === "transfers" ? `<button class="main" id="sb-mk">Off-season moves</button><button class="pri main" id="sb-gr">Continue to graduates</button>`
     : `<button class="main" id="sb-pg">Graduates</button><button class="pri main" id="sb-next">Start season ${h.season}</button>`;
   bar_.className = (SBOPEN ? "open " : "") + "ph-" + (h.flow ? (ph === "awards" ? "awards" : "off") : ph === "summer" ? "summer" : ph === "done" ? "awards" : "season");
@@ -171,6 +173,7 @@ function renderSimBar() {
   on("#sb-end", () => simWorld({ to_end: true }));
   on("#sb-roll", rollover);
   on("#sb-cer", () => (location.hash = "#/ceremony/" + fs + "/start"));
+  on("#sb-hof", () => (location.hash = "#/hofday/" + fs + (hofSeenNow(h) ? "/results" : "")));
   on("#sb-tr", () => flowStep("transfers"));
   on("#sb-mk", () => (location.hash = "#/moves/" + fs));
   on("#sb-gr", () => flowStep("graduates"));
@@ -580,13 +583,13 @@ function nextUpHTML(h) {
   const rows = [
     ["Season and summer", "Played", "", true],
     ["Awards", at > 1 ? "Ceremony done" : "The ceremony and the results", "#/ceremony/" + fs, at > 1],
-    ["Hall of Fame", "Ceremony: world, nations, leagues and clubs", "#/hofday/" + fs, at > 3],
+    ["Hall of Fame", hofSeenNow(h) ? "Ceremonies played" : "Ceremonies: world, countries and leagues", "#/hofday/" + fs, hofSeenNow(h) || at > 3],
     ["Moves", "Transfers, coaches, retirements", "#/moves/" + fs, at > 3],
     ["Graduates", "Academy prospects", "#/prospects", false],
     ["Season " + h.season + " begins", h.season_label, "", false],
   ];
-  const cur = ph === "awards" ? 1 : ph === "transfers" ? 3 : 4;
-  const btn = ph === "awards" ? ["Continue to moves", "transfers"] : ph === "transfers" ? ["Continue to graduates", "graduates"] : ["Start season " + h.season, "done"];
+  const cur = ph === "awards" ? (hofSeenNow(h) ? 3 : 2) : ph === "transfers" ? 3 : 4;
+  const btn = ph === "awards" ? (hofSeenNow(h) ? ["Continue to moves", "transfers"] : ["Hall of Fame day", "hof"]) : ph === "transfers" ? ["Continue to graduates", "graduates"] : ["Start season " + h.season, "done"];
   return `<div class="dim small" style="margin-bottom:2px">Season ${fs} &middot; off-season</div><h1>Next up</h1>
     <div class="card nu">${rows.map(([t, sub, href, done], i) => {
       const on = i === cur, mark = done ? "&#10003;" : String(i + 1);
@@ -683,7 +686,7 @@ async function viewWorld() {
     await afterSim(); await playFinished(fin);
   };
   if ($("#sum-next")) $("#sum-next").onclick = () => rollover();
-  if ($("#nu-go")) { const ph = STATUS.header.phase; $("#nu-go").onclick = () => flowStep(ph === "awards" ? "transfers" : ph === "transfers" ? "graduates" : "done"); }
+  if ($("#nu-go")) { const ph = STATUS.header.phase; $("#nu-go").onclick = () => ph === "awards" && !hofSeenNow(STATUS.header) ? (location.hash = "#/hofday/" + STATUS.header.flow.season) : flowStep(ph === "awards" ? "transfers" : ph === "transfers" ? "graduates" : "done"); }
   worldCompCards().catch(() => {});
   const ids = (code) => { const c = d.continents.find((x) => x.code === code); return [...c.leagues.map((l) => "L:" + l.name), ...c.comps.map((x) => x.id)]; };
   document.querySelectorAll("[data-lrev]").forEach((b) => b.onclick = async () => { try { const st = await busy("Loading...", () => api("/api/compstats?id=" + enc(b.dataset.lrev))); if (st) await showCompEnd(st, false); } catch (e) { toast(e.message); } });
@@ -1364,7 +1367,7 @@ function awResults(d) {
   return `
     <div class="hd"><div><h1>Awards</h1><div class="sub">Season ${S} (${esc(d.season_label)}) · ${a.voters} voters</div></div>${awSelect(d)}</div>
     <section id="aw-hof" class="card hofcta" style="margin-top:4px"><h3>Hall of Fame <small>on the ballot</small></h3><div class="dim small">The ceremonies are played on Hall of Fame day, with the world.</div>
-      <div class="hofcta-b"><a class="btn" href="#/hof" data-hgo="W||bal">Check the candidates</a></div></section>
+      <div class="hofcta-b"><a class="btn pri" href="#/hofday/${S}">Hall of Fame day</a><a class="btn" href="#/hof" data-hgo="W||bal">Check the candidates</a></div></section>
     <nav class="chips sticky" aria-label="Jump to an award"><button class="on" data-go="aw-ballon">Ballon d'Or</button><button data-go="aw-boot">Golden Boot</button><button data-go="aw-young">Young player</button><button data-go="aw-coach">Coach</button><button data-go="aw-team">Team of the Year</button><button data-go="aw-cups">Cups</button></nav>
     <section id="aw-ballon" class="card hero" style="margin-top:4px">
       <div class="eyebrow gold">Ballon d'Or</div>
