@@ -1127,6 +1127,9 @@ body.nosim #simbar { display: none; }
 .mvp .mvR .tag.red { color: #f0746e; }
 .mvp .mvR .tag.blue { color: #6fb2ff; }
 .mvp .mvR b { font-size: 17px; }
+.mvb.mvo { width: 40px; } .mvp .mvb.mvo { width: 38px; }
+.mvb.mvo .ovr, .mvb.mvo > span { font-size: 15px; min-width: 34px; height: 34px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; }
+.mvp .hr-m .dim .crest, .mvp .hr-m .dim svg { vertical-align: -3px; }
 
 </style>
 
@@ -11230,7 +11233,7 @@ function mvLine(r) {
   const age = r.age ? `age ${r.age}` : "";
   const who = r.k === "t" || r.k === "f" || r.k === "r" || r.k === "p" ? [mvPos(r), age].filter(Boolean).join(" &middot; ") : "Coach &middot; " + age;
   let mid = "";
-  if (r.k === "t") mid = `${esc(r.from)} &rarr; ${esc(r.to)}`;
+  if (r.k === "t") mid = `${esc(r.from)} &rarr; ${crest(r.to, 14)} ${esc(r.to)}`;
   else if (r.k === "f") mid = r.first ? `first pro contract &rarr; ${esc(r.to)}` : r.from ? `${esc(r.from)} &rarr; ${esc(r.to)}` : `free agent &rarr; ${esc(r.to)}`;
   else if (r.k === "r") mid = `released by ${esc(r.from)}`;
   else if (r.k === "p") mid = `${r.club ? "last at " + esc(r.club) : "no club"} &middot; peak ${r.pk || r.ovr}`;
@@ -11269,9 +11272,10 @@ function mvBid(r) {
 }
 function mvRow(r, i, attrs) {
   const star = (r.k === "t" || r.k === "f" || r.k === "r" || r.k === "p") && r.ovr ? " " + ovr(r.k === "p" ? (r.pk || r.ovr) : r.ovr) : "";
+  const plr = (r.k === "t" || r.k === "f" || r.k === "r" || r.k === "p") && r.ovr;
   const hot = r.hot >= 70 ? `<span class="mvhot" title="hot move">&#128293;</span>` : "";
   const nb = r.bid ? r.bid.bids.length : 0, war = nb > 1 ? ` &middot; <span class="mvwar">${nb} clubs bid</span>` : "";
-  const inner = `<div class="hr-a"><span class="mvb">${mvBadge(r)}</span><div class="hr-m"><b>${r.nat ? flag(r.nat, 16) + " " : ""}${mvWho(r)}${star}${hot}</b><span class="dim small">${mvLine(r)}${war}${r.k === "p" && r.hofFrom ? ` &middot; Hall of Fame from ${esc(r.hofFrom)}` : ""}</span></div><span class="hr-r mvR">${mvRight(r)}</span></div>`;
+  const inner = `<div class="hr-a"><span class="mvb${plr ? " mvo" : ""}">${plr ? ovr(r.k === "p" ? (r.pk || r.ovr) : r.ovr) : mvBadge(r)}</span><div class="hr-m"><b>${r.nat ? flag(r.nat, 16) + " " : ""}${mvWho(r)}${plr ? "" : star}${hot}</b><span class="dim small">${mvLine(r)}${war}${r.k === "p" && r.hofFrom ? ` &middot; Hall of Fame from ${esc(r.hofFrom)}` : ""}</span></div><span class="hr-r mvR">${mvRight(r)}</span></div>`;
   if (r.bid || r.why) return `<details class="hr mvr mvd" ${attrs || ""}><summary>${inner}</summary>${mvBid(r)}</details>`;
   return `<div class="hr mvr" ${attrs || ""}>${inner}</div>`;
 }

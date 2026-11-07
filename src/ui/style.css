@@ -1124,3 +1124,6 @@ body.nosim #simbar { display: none; }
 .mvp .mvR .tag.red { color: #f0746e; }
 .mvp .mvR .tag.blue { color: #6fb2ff; }
 .mvp .mvR b { font-size: 17px; }
+.mvb.mvo { width: 40px; } .mvp .mvb.mvo { width: 38px; }
+.mvb.mvo .ovr, .mvb.mvo > span { font-size: 15px; min-width: 34px; height: 34px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; }
+.mvp .hr-m .dim .crest, .mvp .hr-m .dim svg { vertical-align: -3px; }
