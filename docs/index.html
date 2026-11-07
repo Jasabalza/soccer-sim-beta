@@ -12188,7 +12188,7 @@ async function viewWorld() {
   const bigCard = (l) => `<div class="lcard" style="--hh:${lhue(l.name)}"><a class="lhead" href="#/league/${enc(l.name)}">${mark(l, 38)}<span class="mt"><b>${esc(l.name)}</b><span class="dim small">${mw(l)} &middot; ${esc(l.leader)} lead</span></span>${CHEV}</a>
     <div class="bar"><i style="width:${l.total ? Math.round(100 * l.done / l.total) : 0}%"></i></div>
     ${l.done < l.total ? `<div class="lbtns"><button class="pill pri" data-lsim="L:${esc(l.name)}">Sim rest of league</button><button class="pill" data-lwk="L:${esc(l.name)}">Next matchweek</button></div>` : `<button class="pill wide" data-lrev="L:${esc(l.name)}">Season review</button>`}</div>`;
-  const smallRow = (l) => `<div class="srow"><a class="sl" href="#/league/${enc(l.name)}">${mark(l, 30)}<b>${esc(l.name)}</b></a><span class="dim small">${l.done >= l.total ? "Finished" : "MW " + (l.done + 1)}</span>${l.done < l.total ? `<button class="mini pri" data-lsim="L:${esc(l.name)}">Sim &#9656;</button>` : `<a class="mini" href="#/league/${enc(l.name)}">Table</a>`}</div>`;
+  const smallRow = (l) => `<div class="srow"><a class="sl" href="#/league/${enc(l.name)}">${mark(l, 30)}<b>${esc(l.name)}</b></a><span class="dim small">${l.done >= l.total ? "Finished" : "MW " + (l.done + 1)}</span>${l.done < l.total ? `<button class="mini pri" data-lsim="L:${esc(l.name)}">Sim &#9656;</button>` : `<button class="mini" data-lrev="L:${esc(l.name)}">Review</button>`}</div>`;
   const compChips = d.continents.flatMap((c) => c.comps.map((x) => ({ ...x, c }))).filter((x) => !onlyFav || FAVS.includes(x.kind + ":" + x.c.code));
   const favNat = chosen ? FAVS.filter((k) => k.startsWith("nation:")).map((k) => k.slice(7)) : [];
   const scores = `<div class="sec-h">LEAGUES${chosen ? `<button class="link" id="edit-favs2">Edit</button>` : ""}</div>
@@ -12220,7 +12220,6 @@ async function viewWorld() {
   if ($("#nu-go")) { const ph = STATUS.header.phase; $("#nu-go").onclick = () => flowStep(ph === "awards" ? "graduates" : ph === "graduates" ? "transfers" : "done"); }
   worldCompCards().catch(() => {});
   const ids = (code) => { const c = d.continents.find((x) => x.code === code); return [...c.leagues.map((l) => "L:" + l.name), ...c.comps.map((x) => x.id)]; };
-  document.querySelectorAll("[data-lrev]").forEach((b) => b.onclick = async () => { try { const st = await busy("Loading...", () => api("/api/compstats?id=" + enc(b.dataset.lrev))); if (st) await showCompEnd(st, false); } catch (e) { toast(e.message); } });
   document.querySelectorAll("[data-lwk]").forEach((b) => b.onclick = () => simIds([b.dataset.lwk], { weeks: 1 }));
   document.querySelectorAll("[data-lsim]").forEach((b) => b.onclick = () => simIds([b.dataset.lsim], { to_end: true }));
   document.querySelectorAll("[data-sim]").forEach((b) => b.onclick = () => simIds(ids(b.dataset.sim), { weeks: 1 }));
@@ -12631,7 +12630,7 @@ async function viewComp(id) {
       <div id="tab-fld" hidden><div class="scroll"><table><thead><tr><th class="l">Club</th><th class="l">League</th><th>OVR</th></tr></thead><tbody>${x.field.map((f) => `<tr><td class="l">${clubLink(f.club)}</td><td class="l meta">${esc(f.league)}</td><td>${ovr(f.ovr)}</td></tr>`).join("")}</tbody></table></div></div>` : ""}`;
   }
   const finished = p.done >= p.total;
-  $("#view").innerHTML = `<div class="v2">${heroBlock(x.title, compEmb(x.title, x.emblem, 220), compEmb(x.title, x.emblem, 52, editionYear({ current: true }), x.host), esc(x.title), `<div class="sub">${p.done}/${p.total} played${p.next ? " · next: " + esc(p.next) : finished0 ? " · finished" : ""}</div>`)}</div>${liveTabs(id)}
+  $("#view").innerHTML = `<div class="v2">${heroBlock(x.title, compEmb(x.title, x.emblem, 220), compEmb(x.title, x.emblem, 52, editionYear({ current: true }), x.host), esc(x.title), `<div class="sub">${p.done}/${p.total} played${p.next ? " · next: " + esc(p.next) : finished0 ? " · finished" : ""}</div>`)}${finished ? `<div style="margin:12px 0 0"><button class="pill" data-lrev="${esc(id)}">Season review</button></div>` : ""}</div>${liveTabs(id)}
     ${locked ? `<div class="card" style="margin-bottom:14px"><span class="tag red">LOCKED</span> needs ${p.locked.map((m) => `<a href="#/comp/${enc(m.id)}">${esc(m.title)}</a>`).join(", ")} to finish first.
       <p style="margin:10px 0 0"><button id="k-up" class="pri">Sim up to here</button> <span class="meta">plays only what it needs, then stops so you can play it your way.</span></p>
       <p style="margin:8px 0 0"><button id="k-pre">Sim everything it needs, then this to the end</button></p></div>`
@@ -13272,6 +13271,11 @@ async function loadStats(el, id, season) {
 // ---------------------------------------------------------------- competition-end overview (optional animation)
 const denseOn = () => { try { return localStorage.getItem("ssb_dense") === "1"; } catch (e) { return false; } };
 const applyDense = () => document.body.classList.toggle("dense", denseOn());
+// the season review of a finished league or cup, whether or not the winner animation is on (data-lrev = competition id)
+document.addEventListener("click", async (e) => {
+  const b = e.target.closest && e.target.closest("[data-lrev]"); if (!b) return;
+  try { const st = await busy("Loading...", () => api("/api/compstats?id=" + enc(b.dataset.lrev))); if (st) await showCompEnd(st, false); } catch (err) { toast(err.message); }
+});
 const animOn = () => { try { return localStorage.getItem("ssb_anim") === "1"; } catch (e) { return false; } };
 async function playFinished(list) {
   if (!list || !list.length || !animOn()) return;
