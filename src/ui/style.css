@@ -1033,3 +1033,12 @@ body.nosim #simbar { display: none; }
 .hof2 .chips.hof-tabs.five button { padding: 0 2px; min-height: 40px; font-size: 12.5px; min-width: 0; justify-content: center; }
 .hof2 .seg button { white-space: nowrap; }
 .hof2 .hof-ctl #hexp-sel { flex: 1; min-width: 0; min-height: 40px; }
+
+/* Hall of Fame: my halls row + browse sheet */
+.hof-mine { margin: 10px 0 0; } .hof-mine .chips { padding: 6px 0 2px; }
+.hof-mine .chips button.hadd { border-style: dashed; color: var(--accent); }
+.hb-list { max-height: 52vh; overflow-y: auto; margin-top: 4px; }
+.hb-r { display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--line); }
+.hb-n { flex: 1; display: flex; align-items: center; gap: 10px; min-height: 46px; background: none; border: 0; color: var(--text); text-align: left; font-size: 15px; cursor: pointer; }
+.hof2 .hof-ctl { flex-wrap: wrap; } .hof2 .hof-mine { flex: 1 0 100%; margin: 0; }
+.hof-mine .chips { flex-wrap: nowrap; overflow-x: auto; }
