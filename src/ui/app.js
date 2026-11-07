@@ -170,7 +170,7 @@ function renderSimBar() {
   const on = (id, f) => { const e = $(id); if (e) e.onclick = f; };
   on("#sb-week", () => simWorld({ weeks: 1 }));
   on("#sb-4", () => simWorld({ weeks: 4 }));
-  on("#sb-end", () => simWorld({ to_end: true }));
+  on("#sb-end", () => simWorld(ph === "season" ? { to_end: true, until: "summer" } : { to_end: true }));
   on("#sb-roll", rollover);
   on("#sb-cer", () => (location.hash = "#/ceremony/" + fs + "/start"));
   on("#sb-hof", () => (location.hash = "#/hofday/" + fs + (hofSeenNow(h) ? "/results" : "")));

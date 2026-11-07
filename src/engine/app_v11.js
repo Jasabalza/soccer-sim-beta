@@ -778,6 +778,8 @@ function _a_sim(body) {
       break;
     }
     n = n + 1;
+    // "Rest of season" from the season phase stops when only the summer tournaments are left, so they can be played (or skipped) on purpose
+    if (scope === "world" && $M.get(body, "until", null) === "summer" && phase_of(w) === "summer") break;
   }
   return $dict($kw({"ok": true, "weeks": n}));
 }
