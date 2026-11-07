@@ -1014,6 +1014,13 @@ body.nosim #simbar { display: none; }
 .sum-b { flex: none; min-height: 38px; padding: 0 16px; border-radius: 99px; border: 0; background: var(--accent); color: #06210f; font-weight: 800; font-size: 13px; cursor: pointer; }
 .sum-b.done { background: none; color: var(--accent); font-weight: 700; }
 
+/* hero top row: back button (and an optional action pill), as in the mock-up */
+.v2 .hero2.hasbk { padding-top: 12px; }
+.v2 .hero2 .htop { position: relative; display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; min-height: 40px; }
+.v2 .hero2 .hbk { width: 40px; height: 40px; border-radius: 50%; border: 0; background: rgba(0,0,0,.35); color: #fff; font-size: 26px; line-height: 1; padding: 0 0 3px; cursor: pointer; }
+.v2 .hero2 .fpill { min-height: 36px; padding: 0 14px; border-radius: 99px; border: 1px solid rgba(255,255,255,.55); background: rgba(0,0,0,.25); color: #fff; font-weight: 700; font-size: 13px; cursor: pointer; }
+.v2 .hero2 .fpill.on { background: rgba(255,255,255,.14); }
+
 </style>
 
 <div id="top">
@@ -10463,8 +10470,8 @@ async function viewLeague(name, season) {
     ${d.last.length ? `<div class="card"><h3>Last matchweek <small>${d.last_date ? esc(d.last_date.text) : ""}</small></h3>${d.last.map((f) => `<div class="fix"><span class="h">${clubLink(f.h)}</span><span class="s">${f.hg}-${f.ag}</span><span>${clubLink(f.a)}</span></div>`).join("")}</div>` : ""}
     ${!inProg && d.next.length ? `<div class="card"><h3>Next matchweek <small>${d.next_date ? esc(d.next_date.text) : ""}</small></h3>${d.next.map((f) => `<div class="fix"><span class="h">${clubLink(f.h)}</span><span class="s">v</span><span>${clubLink(f.a)}</span></div>`).join("")}</div>` : ""}`;
   const subBits = [esc(d.confed), d.games + " games", "top " + d.slots + " reach the " + esc(d.cup)];
-  $("#view").innerHTML = `<div class="v2">${crumbHTML([`<a href="#/world">World</a>`, `<a href="#/continent/${d.confed}">${esc(d.confed)}</a>`, esc(d.name)])}
-    ${heroBlock(d.name, compEmb(d.name, d.emblem, 220), `<span class="cem big-e">${compEmb(d.name, d.emblem, 48)}</span>`, esc(d.name), `<div class="sub">${subBits.join(" · ")}${past ? ` · <span class="tag gold">season ${past.season} final table</span>` : ""}</div>`)}
+  $("#view").innerHTML = `<div class="v2">
+    ${heroBlock(d.name, compEmb(d.name, d.emblem, 220), `<span class="cem big-e">${compEmb(d.name, d.emblem, 48)}</span>`, esc(d.name), `<div class="sub">${subBits.join(" · ")}${past ? ` · <span class="tag gold">season ${past.season} final table</span>` : ""}</div>`, `<button class="fpill ${FAVS && FAVS.includes("L:" + d.name) ? "on" : ""}" id="lg-follow">${FAVS && FAVS.includes("L:" + d.name) ? "&#9733; Following" : "&#9734; Follow"}</button>`)}
     <div class="stat4"><div><b>${d.avg}</b><span>AVG OVR</span></div><div><b>${mon && mon.season ? money(mon.avg_income) : "-"}</b><span>CLUB INCOME</span></div><div><b>x${(+d.tv).toFixed(2)}</b><span>TV MONEY</span></div><div><b>${mon && mon.season ? "#" + mon.rank : "-"}</b><span>${mon && mon.season ? "RICHEST OF " + mon.of : "RICHEST"}</span></div></div>
     <nav class="tabs2" id="lg-tabs" aria-label="League sections">${LTABS.map(([k, t]) => `<button data-lt="${k}" class="${k === S.tab ? "on" : ""}">${t}</button>`).join("")}</nav>
     <div id="lg-table">${tablePane}</div><div id="lg-money" hidden>${leagueMoneyHTML(mon, d)}</div><div id="lg-hof" hidden>${leagueHofHTML(hof, d)}</div><div id="lg-fix" hidden>${fixPane}</div><div id="lg-halls" hidden></div><div id="lg-stats" hidden></div></div>`;
@@ -10491,6 +10498,7 @@ async function viewLeague(name, season) {
     }
   };
   document.querySelectorAll("#lg-tabs [data-lt]").forEach((b) => (b.onclick = () => show(b.dataset.lt)));
+  const fl = $("#lg-follow"); if (fl) fl.onclick = async () => { const cur = new Set(FAVS || []), k = "L:" + name; if (cur.has(k)) cur.delete(k); else cur.add(k); try { await saveFavs([...cur]); } catch (e) { toast(e.message); return; } route(); };
   document.querySelectorAll("[data-lgo]").forEach((b) => (b.onclick = () => { show(b.dataset.lgo); window.scrollTo(0, 0); }));
   document.querySelectorAll("#lg-money [data-fin]").forEach((a) => (a.onclick = () => { CV_OPEN = "fin"; }));
   document.querySelectorAll("[data-m]").forEach((b) => (b.onclick = () => simComp(d.id, { matches: +b.dataset.m })));
@@ -11979,9 +11987,9 @@ const POS_ORDER = ["GK", "DEF", "MID", "FWD"], POS_NAME = { GK: "Goalkeepers", D
 const SQ_SORTS = [["pos", "Position"], ["ovr", "Overall"], ["pot", "Potential"], ["age", "Age"], ["wage", "Wage"], ["contract", "Contract"], ["value", "Value"]];
 
 // ---- v16.2 beta: shared hero (team-coloured gradient, faded watermark of the logo, same on club, league and nation pages)
-function heroBlock(seed, markBig, markSmall, h1, sub) {
+function heroBlock(seed, markBig, markSmall, h1, sub, right) {
   const hue = (typeof _hash === "function" ? _hash(seed) : 120) % 360;
-  return `<div class="hero2" style="--hh:${hue}"><div class="wm" aria-hidden="true">${markBig}</div><div class="hrow">${markSmall}<div><h1>${h1}</h1>${sub}</div></div></div>`;
+  return `<div class="hero2 hasbk" style="--hh:${hue}"><div class="wm" aria-hidden="true">${markBig}</div><div class="htop"><button class="hbk" type="button" onclick="history.back()" aria-label="Back">&lsaquo;</button>${right || ""}</div><div class="hrow">${markSmall}<div><h1>${h1}</h1>${sub}</div></div></div>`;
 }
 async function viewClub(name) {
   const [c] = await Promise.all([api("/api/club?name=" + enc(name)), loadWcHosts()]);
@@ -12017,7 +12025,7 @@ async function viewClub(name) {
       <select class="sel" id="sq-u" aria-label="Age filter"><option value="0" ${CV.u23 ? "" : "selected"}>All ages</option><option value="1" ${CV.u23 ? "selected" : ""}>Under 23 only</option></select></div>
       <div class="cols"><span>Player</span><span>OVR</span><span>POT</span><span>Contr.</span></div>${body || `<div class="dim small" style="padding:14px 0">Nobody matches.</div>`}`;
   };
-  $("#view").innerHTML = `<div class="v2"><div class="crumbs dim small" style="min-height:30px;display:flex;align-items:center;flex-wrap:wrap"><a href="#/world">World</a>&nbsp;›&nbsp;<a href="#/continent/${c.confed}">${esc(c.confed)}</a>&nbsp;›&nbsp;${leagueLink(c.league)}</div>
+  $("#view").innerHTML = `<div class="v2">
     ${heroBlock(c.name, crest(c.name, 220), crest(c.name, 56), esc(c.name), `${c.cwc.length ? `<div class="sub tsline">${titleStars(c.cwc.length, 13, "Club World Cup title")}<span>Club World Cup</span></div>` : ""}<div class="sub">${leagueLink(c.league)} · last finish ${c.last_finish ? ordN(c.last_finish) : "-"}</div>`)}
     <div class="stat4"><div><b>${c.ovr}</b><span>TEAM OVR</span></div><div><b>${money(c.budget)}</b><span>INCOME</span></div><div><b>${money(c.funds)}</b><span>FUNDS</span></div><div><b>${c.squad_size}</b><span>SQUAD</span></div></div>
     <nav class="tabs2" id="ct-tabs" aria-label="Club sections">${tabs.map(([k, t]) => `<button data-ct="${k}" class="${k === CV.tab ? "on" : ""}">${t}</button>`).join("")}</nav></div>
@@ -12426,7 +12434,7 @@ async function viewNation(name) {
       <div class="card"><h3>National coach</h3><div class="row"><span>${coachLink(c.cid, c.name)}</span><span class="dim">prestige ${c.prestige} · ${esc(c.personality)} / ${esc(c.skill)}</span></div></div>`;
   };
   const draw = () => {
-    $("#view").innerHTML = `<div class="v2"><a class="crumb" href="#/nations">‹ Nations</a>
+    $("#view").innerHTML = `<div class="v2">
       ${heroBlock(n.name, natBadge(n.name, 200), `<span class="sbox">${titleStars(n.titles, 13, "World Cup title")}${natBadge(n.name, 52)}</span>`, esc(n.name), `<div class="sub">${esc(n.confed)}${rk ? " · ranked " + rk + sfx(rk) + " in the world" : ""}</div>`)}
       <div class="stat4"><div><b class="pos">${n.rating}</b><span>RATING</span></div><div><b>${n.talent}</b><span>TALENT</span></div><div><b>${n.pros}</b><span>PROS</span></div><div><b>${n.titles}</b><span>WC TITLES</span></div></div>
       <nav class="tabs2" aria-label="Nation sections">${tabs.map(([k, t]) => `<button data-nt="${k}" class="${NV.tab === k ? "on" : ""}">${t}</button>`).join("")}</nav>

@@ -275,8 +275,8 @@ async function viewLeague(name, season) {
     ${d.last.length ? `<div class="card"><h3>Last matchweek <small>${d.last_date ? esc(d.last_date.text) : ""}</small></h3>${d.last.map((f) => `<div class="fix"><span class="h">${clubLink(f.h)}</span><span class="s">${f.hg}-${f.ag}</span><span>${clubLink(f.a)}</span></div>`).join("")}</div>` : ""}
     ${!inProg && d.next.length ? `<div class="card"><h3>Next matchweek <small>${d.next_date ? esc(d.next_date.text) : ""}</small></h3>${d.next.map((f) => `<div class="fix"><span class="h">${clubLink(f.h)}</span><span class="s">v</span><span>${clubLink(f.a)}</span></div>`).join("")}</div>` : ""}`;
   const subBits = [esc(d.confed), d.games + " games", "top " + d.slots + " reach the " + esc(d.cup)];
-  $("#view").innerHTML = `<div class="v2">${crumbHTML([`<a href="#/world">World</a>`, `<a href="#/continent/${d.confed}">${esc(d.confed)}</a>`, esc(d.name)])}
-    ${heroBlock(d.name, compEmb(d.name, d.emblem, 220), `<span class="cem big-e">${compEmb(d.name, d.emblem, 48)}</span>`, esc(d.name), `<div class="sub">${subBits.join(" · ")}${past ? ` · <span class="tag gold">season ${past.season} final table</span>` : ""}</div>`)}
+  $("#view").innerHTML = `<div class="v2">
+    ${heroBlock(d.name, compEmb(d.name, d.emblem, 220), `<span class="cem big-e">${compEmb(d.name, d.emblem, 48)}</span>`, esc(d.name), `<div class="sub">${subBits.join(" · ")}${past ? ` · <span class="tag gold">season ${past.season} final table</span>` : ""}</div>`, `<button class="fpill ${FAVS && FAVS.includes("L:" + d.name) ? "on" : ""}" id="lg-follow">${FAVS && FAVS.includes("L:" + d.name) ? "&#9733; Following" : "&#9734; Follow"}</button>`)}
     <div class="stat4"><div><b>${d.avg}</b><span>AVG OVR</span></div><div><b>${mon && mon.season ? money(mon.avg_income) : "-"}</b><span>CLUB INCOME</span></div><div><b>x${(+d.tv).toFixed(2)}</b><span>TV MONEY</span></div><div><b>${mon && mon.season ? "#" + mon.rank : "-"}</b><span>${mon && mon.season ? "RICHEST OF " + mon.of : "RICHEST"}</span></div></div>
     <nav class="tabs2" id="lg-tabs" aria-label="League sections">${LTABS.map(([k, t]) => `<button data-lt="${k}" class="${k === S.tab ? "on" : ""}">${t}</button>`).join("")}</nav>
     <div id="lg-table">${tablePane}</div><div id="lg-money" hidden>${leagueMoneyHTML(mon, d)}</div><div id="lg-hof" hidden>${leagueHofHTML(hof, d)}</div><div id="lg-fix" hidden>${fixPane}</div><div id="lg-halls" hidden></div><div id="lg-stats" hidden></div></div>`;
@@ -303,6 +303,7 @@ async function viewLeague(name, season) {
     }
   };
   document.querySelectorAll("#lg-tabs [data-lt]").forEach((b) => (b.onclick = () => show(b.dataset.lt)));
+  const fl = $("#lg-follow"); if (fl) fl.onclick = async () => { const cur = new Set(FAVS || []), k = "L:" + name; if (cur.has(k)) cur.delete(k); else cur.add(k); try { await saveFavs([...cur]); } catch (e) { toast(e.message); return; } route(); };
   document.querySelectorAll("[data-lgo]").forEach((b) => (b.onclick = () => { show(b.dataset.lgo); window.scrollTo(0, 0); }));
   document.querySelectorAll("#lg-money [data-fin]").forEach((a) => (a.onclick = () => { CV_OPEN = "fin"; }));
   document.querySelectorAll("[data-m]").forEach((b) => (b.onclick = () => simComp(d.id, { matches: +b.dataset.m })));

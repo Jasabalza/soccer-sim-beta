@@ -776,9 +776,9 @@ const POS_ORDER = ["GK", "DEF", "MID", "FWD"], POS_NAME = { GK: "Goalkeepers", D
 const SQ_SORTS = [["pos", "Position"], ["ovr", "Overall"], ["pot", "Potential"], ["age", "Age"], ["wage", "Wage"], ["contract", "Contract"], ["value", "Value"]];
 
 // ---- v16.2 beta: shared hero (team-coloured gradient, faded watermark of the logo, same on club, league and nation pages)
-function heroBlock(seed, markBig, markSmall, h1, sub) {
+function heroBlock(seed, markBig, markSmall, h1, sub, right) {
   const hue = (typeof _hash === "function" ? _hash(seed) : 120) % 360;
-  return `<div class="hero2" style="--hh:${hue}"><div class="wm" aria-hidden="true">${markBig}</div><div class="hrow">${markSmall}<div><h1>${h1}</h1>${sub}</div></div></div>`;
+  return `<div class="hero2 hasbk" style="--hh:${hue}"><div class="wm" aria-hidden="true">${markBig}</div><div class="htop"><button class="hbk" type="button" onclick="history.back()" aria-label="Back">&lsaquo;</button>${right || ""}</div><div class="hrow">${markSmall}<div><h1>${h1}</h1>${sub}</div></div></div>`;
 }
 async function viewClub(name) {
   const [c] = await Promise.all([api("/api/club?name=" + enc(name)), loadWcHosts()]);
@@ -814,7 +814,7 @@ async function viewClub(name) {
       <select class="sel" id="sq-u" aria-label="Age filter"><option value="0" ${CV.u23 ? "" : "selected"}>All ages</option><option value="1" ${CV.u23 ? "selected" : ""}>Under 23 only</option></select></div>
       <div class="cols"><span>Player</span><span>OVR</span><span>POT</span><span>Contr.</span></div>${body || `<div class="dim small" style="padding:14px 0">Nobody matches.</div>`}`;
   };
-  $("#view").innerHTML = `<div class="v2"><div class="crumbs dim small" style="min-height:30px;display:flex;align-items:center;flex-wrap:wrap"><a href="#/world">World</a>&nbsp;›&nbsp;<a href="#/continent/${c.confed}">${esc(c.confed)}</a>&nbsp;›&nbsp;${leagueLink(c.league)}</div>
+  $("#view").innerHTML = `<div class="v2">
     ${heroBlock(c.name, crest(c.name, 220), crest(c.name, 56), esc(c.name), `${c.cwc.length ? `<div class="sub tsline">${titleStars(c.cwc.length, 13, "Club World Cup title")}<span>Club World Cup</span></div>` : ""}<div class="sub">${leagueLink(c.league)} · last finish ${c.last_finish ? ordN(c.last_finish) : "-"}</div>`)}
     <div class="stat4"><div><b>${c.ovr}</b><span>TEAM OVR</span></div><div><b>${money(c.budget)}</b><span>INCOME</span></div><div><b>${money(c.funds)}</b><span>FUNDS</span></div><div><b>${c.squad_size}</b><span>SQUAD</span></div></div>
     <nav class="tabs2" id="ct-tabs" aria-label="Club sections">${tabs.map(([k, t]) => `<button data-ct="${k}" class="${k === CV.tab ? "on" : ""}">${t}</button>`).join("")}</nav></div>
@@ -1223,7 +1223,7 @@ async function viewNation(name) {
       <div class="card"><h3>National coach</h3><div class="row"><span>${coachLink(c.cid, c.name)}</span><span class="dim">prestige ${c.prestige} · ${esc(c.personality)} / ${esc(c.skill)}</span></div></div>`;
   };
   const draw = () => {
-    $("#view").innerHTML = `<div class="v2"><a class="crumb" href="#/nations">‹ Nations</a>
+    $("#view").innerHTML = `<div class="v2">
       ${heroBlock(n.name, natBadge(n.name, 200), `<span class="sbox">${titleStars(n.titles, 13, "World Cup title")}${natBadge(n.name, 52)}</span>`, esc(n.name), `<div class="sub">${esc(n.confed)}${rk ? " · ranked " + rk + sfx(rk) + " in the world" : ""}</div>`)}
       <div class="stat4"><div><b class="pos">${n.rating}</b><span>RATING</span></div><div><b>${n.talent}</b><span>TALENT</span></div><div><b>${n.pros}</b><span>PROS</span></div><div><b>${n.titles}</b><span>WC TITLES</span></div></div>
       <nav class="tabs2" aria-label="Nation sections">${tabs.map(([k, t]) => `<button data-nt="${k}" class="${NV.tab === k ? "on" : ""}">${t}</button>`).join("")}</nav>

@@ -1010,3 +1010,10 @@ body.nosim #simbar { display: none; }
 .sum-l .mt { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
 .sum-b { flex: none; min-height: 38px; padding: 0 16px; border-radius: 99px; border: 0; background: var(--accent); color: #06210f; font-weight: 800; font-size: 13px; cursor: pointer; }
 .sum-b.done { background: none; color: var(--accent); font-weight: 700; }
+
+/* hero top row: back button (and an optional action pill), as in the mock-up */
+.v2 .hero2.hasbk { padding-top: 12px; }
+.v2 .hero2 .htop { position: relative; display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; min-height: 40px; }
+.v2 .hero2 .hbk { width: 40px; height: 40px; border-radius: 50%; border: 0; background: rgba(0,0,0,.35); color: #fff; font-size: 26px; line-height: 1; padding: 0 0 3px; cursor: pointer; }
+.v2 .hero2 .fpill { min-height: 36px; padding: 0 14px; border-radius: 99px; border: 1px solid rgba(255,255,255,.55); background: rgba(0,0,0,.25); color: #fff; font-weight: 700; font-size: 13px; cursor: pointer; }
+.v2 .hero2 .fpill.on { background: rgba(255,255,255,.14); }
