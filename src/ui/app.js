@@ -1292,16 +1292,19 @@ const PV = { scope: "grads", league: "" };
 async function viewProspects() {
   const q = "scope=" + PV.scope + (PV.league ? "&league=" + enc(PV.league) : "");
   const d = await api("/api/prospects?" + q);
-  const row = (p, i) => `<div class="pr"><span class="rk ${["g", "s", "b"][i] || ""}">${i + 1}</span><span class="p ${esc(p.pos)}">${esc(p.pos)}</span><div class="nm"><b>${playerLink(p)}</b><span>${p.age} \u00b7 ${p.club ? clubLink(p.club) : "no club yet"}${p.grad ? " \u00b7 academy" : ""}</span></div><span class="ovr m">${p.ovr}</span><span class="pt">${p.pot}</span></div>`;
-  const h = STATUS && STATUS.header, off = h && h.flow;
-  $("#view").innerHTML = `<div class="v2"><div class="hd"><div><h1>Top graduates</h1><div class="sub">${PV.scope === "grads" ? "Latest academy graduates" : "Every player aged 19 or under"}, best potential first</div></div></div>
-    <nav class="chips" aria-label="Which players">${[["grads", "Academy graduates"], ["all", "All young talent"]].map(([k, t]) => `<button data-ps="${k}" class="${PV.scope === k ? "on" : ""}">${t}</button>`).join("")}</nav>
-    <select class="sel" id="pv-l" aria-label="League" style="width:100%"><option value="">All leagues</option>${leagueOpts(d.leagues, PV.league)}</select>
-    <div class="cols"><span>Player</span><span>OVR</span><span>POT</span></div>
-    <div class="card" style="margin-top:6px;padding-top:2px;padding-bottom:2px">${d.rows.length ? d.rows.map(row).join("") : `<div class="dim small" style="padding:14px 0">Nobody here yet. Graduates appear after the first season.</div>`}</div>
-    <div class="dim small" style="margin-top:8px">${d.total} players match. POT is the most a player can reach.</div>${off ? `<div style="margin-top:12px"><button class="btn pri" id="pv-next" style="width:100%">${h.phase === "graduates" ? "Start season " + h.season : "Continue"}</button></div>` : ""}</div>`;
-  document.querySelectorAll("[data-ps]").forEach((b) => (b.onclick = () => { PV.scope = b.dataset.ps; viewProspects(); }));
-  $("#pv-l").onchange = (e) => { PV.league = e.target.value; viewProspects(); };
+  const h = STATUS && STATUS.header, off = h && h.flow, SHOW = PV.all ? 40 : 10;
+  const row = (p, i) => `<div class="gr-r"><span class="gr-n">${i + 1}</span><span class="p ${esc(p.pos)}">${esc(p.pos)}</span><div class="nm"><b>${playerLink(p)}</b><span>${p.age} &middot; ${p.club ? clubLink(p.club) : "no club yet"}${p.grad && PV.scope !== "grads" ? " &middot; academy" : ""}</span></div><span class="gr-o">${p.ovr} / <b>${p.pot}</b></span></div>`;
+  const hi = d.rows.filter((p) => p.pot >= 80).length;
+  $("#view").innerHTML = `<div class="v2 gh"><div class="hd"><div><h1>Graduates</h1><div class="sub">${PV.scope === "grads" ? "Latest academy graduates" : "Every player aged 19 or under"}</div></div></div>
+    <div class="stat3"><div><b>${d.total}</b><span>${PV.scope === "grads" ? "GRADUATES" : "YOUNG PLAYERS"}</span></div><div><b>${hi}${hi >= 40 ? "+" : ""}</b><span>80+ POTENTIAL</span></div><div><b>${d.rows.length ? d.rows[0].pot : "-"}</b><span>BEST POTENTIAL</span></div></div>
+    <nav class="chips gr-chips" aria-label="Which players">${[["grads", "Academy graduates"], ["all", "All 19 and under"]].map(([k, t]) => `<button data-ps="${k}" class="${PV.scope === k ? "on" : ""}">${t}</button>`).join("")}
+      <select class="sel" id="pv-l" aria-label="League"><option value="">All</option>${leagueOpts(d.leagues, PV.league)}</select></nav>
+    <div class="card gr-card"><h3>Top by potential &middot; OVR / potential</h3>${d.rows.length ? d.rows.slice(0, SHOW).map(row).join("") : `<div class="dim small" style="padding:14px 0">Nobody here yet. Graduates appear after the first season.</div>`}
+      ${d.rows.length > 10 && !PV.all ? `<button class="linkbtn gr-more" id="pv-more">Show ${Math.min(40, d.rows.length) - 10} more</button>` : ""}</div>
+    ${off ? `<div style="margin-top:12px"><button class="btn pri" id="pv-next" style="width:100%">${h.phase === "graduates" ? "Start season " + h.season : "Continue"}</button></div>` : ""}</div>`;
+  document.querySelectorAll("[data-ps]").forEach((b) => (b.onclick = () => { PV.scope = b.dataset.ps; PV.all = false; viewProspects(); }));
+  $("#pv-l").onchange = (e) => { PV.league = e.target.value; PV.all = false; viewProspects(); };
+  const mo = $("#pv-more"); if (mo) mo.onclick = () => { PV.all = true; viewProspects(); };
   const nx = $("#pv-next"); if (nx) nx.onclick = () => flowStep(h.phase === "graduates" ? "done" : "graduates");
 }
 // ---------------------------------------------------------------- awards (v15.1)

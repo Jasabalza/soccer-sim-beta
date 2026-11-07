@@ -1059,3 +1059,14 @@ body.nosim #simbar { display: none; }
 .gh .card.hero .big{font-size:44px;font-weight:800}
 .fl-det{margin-top:8px}.fl-det summary{color:var(--green,#3ddc84);font-weight:600;font-size:13px;cursor:pointer;padding:6px 0}
 .v2 .hero2 .htop .fpill{margin-left:auto}
+.v2 .stat3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:10px 0}
+.v2 .stat3>div{text-align:center;border:1px solid var(--line,rgba(255,255,255,.12));border-radius:14px;padding:10px 4px;background:rgba(255,255,255,.03)}
+.v2 .stat3 b{display:block;font-size:22px}.v2 .stat3 span{font-size:10px;letter-spacing:.06em;opacity:.65}
+.gr-chips{display:flex;gap:8px;align-items:center;margin:6px 0 10px}
+.gr-chips select{margin-left:auto;min-height:36px;border-radius:99px;max-width:110px}
+.gr-r{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.07)}
+.gr-r:last-of-type{border-bottom:0}
+.gr-n{width:16px;opacity:.55;font-size:13px}
+.gr-r .nm{flex:1;min-width:0}.gr-r .nm b{display:block}.gr-r .nm span{font-size:12px;opacity:.7}
+.gr-o{white-space:nowrap;opacity:.85}.gr-o b{font-size:20px;opacity:1}
+.gr-more{display:block;margin:6px auto 0;color:var(--green,#3ddc84);font-weight:700}
