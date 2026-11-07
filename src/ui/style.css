@@ -1113,3 +1113,14 @@ body.nosim #simbar { display: none; }
 .hday .foot.top>*{flex:1;min-height:48px;display:flex;align-items:center;justify-content:center}
 .v2 .foot.top{position:static;display:flex;gap:10px;margin:10px 0 14px;padding:0}
 .v2 .foot.top>*{flex:1;min-height:48px;display:flex;align-items:center;justify-content:center}
+/* v16.2 Moves: bubbly tabs, pill select, plain coloured move label under the fee */
+.mvp .seg { border-radius: 99px; background: var(--panel); padding: 3px; border-color: var(--line); }
+.mvp .seg button { border-radius: 99px; background: none; color: var(--dim); font-weight: 700; }
+.mvp .seg button.on { background: #e9f3ee; color: #0b1a12; }
+.mvp .mvsub.seg button.on, .mvp .seg.mvsub button.on { background: var(--accent); color: #06210f; }
+.mvp .sel, .mvp select { border-radius: 99px; background: var(--panel); border: 1px solid var(--line); color: var(--text); font-weight: 700; padding: 0 14px; }
+.mvp .mvR .tag { background: none; border: 0; padding: 0; font-size: 11px; font-weight: 700; color: var(--dim); }
+.mvp .mvR .tag.green { color: var(--accent); }
+.mvp .mvR .tag.red { color: #f0746e; }
+.mvp .mvR .tag.blue { color: #6fb2ff; }
+.mvp .mvR b { font-size: 17px; }
