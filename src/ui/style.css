@@ -1154,3 +1154,4 @@ body.nosim #simbar { display: none; }
 .fx3 span { white-space: normal; line-height: 1.15; }
 .pillrow { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
 .pillrow span { padding: 6px 12px; border-radius: 99px; background: rgba(0,0,0,.35); border: 1px solid rgba(255,255,255,.12); font-size: 12.5px; font-weight: 700; }
+.hday .btn, .hday button.pri, .v2 .stage .btn { border-radius: 99px; }
