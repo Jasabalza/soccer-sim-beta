@@ -1105,7 +1105,7 @@ async function viewComp(id) {
       <div id="tab-fld" hidden><div class="scroll"><table><thead><tr><th class="l">Club</th><th class="l">League</th><th>OVR</th></tr></thead><tbody>${x.field.map((f) => `<tr><td class="l">${clubLink(f.club)}</td><td class="l meta">${esc(f.league)}</td><td>${ovr(f.ovr)}</td></tr>`).join("")}</tbody></table></div></div>` : ""}`;
   }
   const finished = p.done >= p.total;
-  $("#view").innerHTML = `<div class="v2"><div class="crumbs dim small" style="min-height:30px;display:flex;align-items:center"><a href="#/world">World</a>&nbsp;›&nbsp;${esc(x.title)}</div>${heroBlock(x.title, compEmb(x.title, x.emblem, 220), compEmb(x.title, x.emblem, 52, editionYear({ current: true }), x.host), esc(x.title), `<div class="sub">${p.done}/${p.total} played${p.next ? " · next: " + esc(p.next) : finished0 ? " · finished" : ""}</div>`)}</div>${liveTabs(id)}
+  $("#view").innerHTML = `<div class="v2">${heroBlock(x.title, compEmb(x.title, x.emblem, 220), compEmb(x.title, x.emblem, 52, editionYear({ current: true }), x.host), esc(x.title), `<div class="sub">${p.done}/${p.total} played${p.next ? " · next: " + esc(p.next) : finished0 ? " · finished" : ""}</div>`)}</div>${liveTabs(id)}
     ${locked ? `<div class="card" style="margin-bottom:14px"><span class="tag red">LOCKED</span> needs ${p.locked.map((m) => `<a href="#/comp/${enc(m.id)}">${esc(m.title)}</a>`).join(", ")} to finish first.
       <p style="margin:10px 0 0"><button id="k-up" class="pri">Sim up to here</button> <span class="meta">plays only what it needs, then stops so you can play it your way.</span></p>
       <p style="margin:8px 0 0"><button id="k-pre">Sim everything it needs, then this to the end</button></p></div>`
@@ -1620,9 +1620,9 @@ async function viewRecords() {
   const d = await api("/api/records");
   $("#view").innerHTML = `<h1>Records</h1>
     <a class="more" href="#/hof"><span>Coaches and players: Hall of Fame, ranked, with snubs</span><span>&rsaquo;</span></a>
-    <div class="cols3"><div><h2>World Cup winners</h2>${d.wc.length ? d.wc.map((r) => `<div class="row"><span>S${r.season} ${natLink(r.winner)}</span><span class="meta">beat ${esc(r.runner_up)}, host ${esc(r.host)}</span></div>`).join("") : '<div class="meta">None yet.</div>'}
-    <h2>Club World Cup winners</h2>${d.cwc.length ? d.cwc.map((r) => `<div class="row"><span>S${r.season} ${clubLink(r.winner)}</span><span class="meta">beat ${esc(r.runner_up)}</span></div>`).join("") : '<div class="meta">None yet.</div>'}</div>
-    <div><h2>League records</h2>${d.records.map((r) => `<div class="row"><span>${leagueLink(r.league)}</span><span class="meta">${r.pts} pts (${esc(r.pts_club)})</span></div>`).join("") || '<div class="meta">None yet.</div>'}</div></div>`;
+    <div class="cols3 recs"><div class="card"><h2>World Cup winners</h2>${d.wc.length ? d.wc.map((r) => `<div class="row"><span>S${r.season} ${natLink(r.winner)}</span><span class="meta">beat ${esc(r.runner_up)}, host ${esc(r.host)}</span></div>`).join("") : '<div class="meta">None yet.</div>'}
+    </div><div class="card"><h2>Club World Cup winners</h2>${d.cwc.length ? d.cwc.map((r) => `<div class="row"><span>S${r.season} ${clubLink(r.winner)}</span><span class="meta">beat ${esc(r.runner_up)}</span></div>`).join("") : '<div class="meta">None yet.</div>'}</div>
+    <div class="card"><h2>League records</h2>${d.records.map((r) => `<div class="row"><span>${leagueLink(r.league)}</span><span class="meta">${r.pts} pts (${esc(r.pts_club)})</span></div>`).join("") || '<div class="meta">None yet.</div>'}</div></div>`;
 }
 
 
@@ -1871,12 +1871,10 @@ async function viewPlayer(uid) {
   p.honours.forEach((h) => { (grp[h.title] = grp[h.title] || []).push(h.season); });
   const hon = Object.entries(grp).sort((a, b) => b[1].length - a[1].length);
   const tot = p.totals;
-  $("#view").innerHTML = `<div class="crumbs"><a href="#/players">Players</a> / ${esc(p.name)}</div>
-    <h1>${flag(p.nat, 34)} ${esc(p.name)} ${p.retired ? '<span class="tag">retired</span>' : ""}</h1>
-    <div class="sub">${esc(p.pos)} &middot; age ${p.age} &middot; ${natLink(p.nat)} &middot; ${p.club ? clubLink(p.club) : "free agent"}${p.contract && p.club ? " &middot; contract " + p.contract + " yr" : ""}</div>
-    <div class="cols3"><div class="stat"><div class="k">OVR</div><div class="v">${ovr(p.ovr)}</div></div><div class="stat"><div class="k">Potential / peak</div><div class="v">${p.pot} / ${p.peak}</div></div>
-      <div class="stat"><div class="k">Value</div><div class="v">${money(p.value)}</div></div><div class="stat"><div class="k">Wage per year</div><div class="v">${money(p.wage)}</div></div>
-      <div class="stat"><div class="k">Career goals</div><div class="v">${tot.goals}</div></div><div class="stat"><div class="k">Career assists</div><div class="v">${tot.assists}</div></div></div>
+  const tile = (v, k) => `<div><b>${v}</b><span>${k}</span></div>`;
+  $("#view").innerHTML = `<div class="v2">${heroBlock(p.club || p.nat, p.club ? crest(p.club, 220) : natBadge(p.nat, 200), `<span class="sbox">${flag(p.nat, 56)}</span>`, `${esc(p.name)} ${p.retired ? '<span class="tag">retired</span>' : ""}`, `<div class="sub">${esc(p.pos)} &middot; age ${p.age} &middot; ${natLink(p.nat)} &middot; ${p.club ? clubLink(p.club) : "free agent"}${p.contract && p.club ? " &middot; contract " + p.contract + " yr" : ""}</div>`)}
+    <div class="stat3" style="margin-top:12px">${tile(ovr(p.ovr), "OVR")}${tile(p.pot + " / " + p.peak, "POTENTIAL / PEAK")}${tile(money(p.value), "VALUE")}</div>
+    <div class="stat3" style="margin-top:8px">${tile(money(p.wage), "WAGE / YEAR")}${tile(tot.goals, "CAREER GOALS")}${tile(tot.assists, "CAREER ASSISTS")}</div></div>
     ${STATUS && STATUS.god ? `<p><button id="g-edit-p" class="gold">God mode: edit player</button></p>` : ""}
     <div class="cols" style="margin-top:14px"><div>
       <div class="card"><h3>Rating by season</h3>${lineChart(p.career.map((c) => [c.season, c.ovr]), 520, 170)}</div>

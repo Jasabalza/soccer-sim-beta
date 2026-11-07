@@ -1179,6 +1179,18 @@ body.nosim #simbar { display: none; }
 .bk-head { color: var(--accent2); font-weight: 800; letter-spacing: .08em; }
 .bk-line { stroke: #2a3a31; }
 .bk-tools button { border-radius: 99px; }
+/* v16.2 one theme everywhere: pill fields, white names, round cards */
+input, select, textarea { background: var(--panel); border: 1px solid var(--line); }
+select, input[type=text], input[type=search], input:not([type]) { border-radius: 99px; padding-left: 14px; padding-right: 14px; min-height: 40px; font-weight: 600; }
+select { padding-right: 30px; }
+.card { border-radius: 20px; }
+.v2 .card a:not(.more):not(.btn):not(.mini):not(.tag):not(.linkbtn):not(.crumb):not(.nu-r), .v2 .hlist a:not(.btn), .v2 table a, .v2 .row a, .v2 .nm a, .v2 .pr a, .v2 .hr a { color: var(--text); font-weight: 650; }
+.v2 .card a:hover { color: var(--accent); text-decoration: none; }
+.recs { display: grid; gap: 12px; margin-top: 10px; } .recs h2 { margin: 0 0 8px; font-size: 13px; letter-spacing: .1em; text-transform: uppercase; color: var(--accent2); }
+.recs .row { padding: 9px 0; border-top: 1px solid rgba(255,255,255,.06); }
+#view .card a:not(.more):not(.btn):not(.mini):not(.tag):not(.linkbtn):not(.crumb):not(.nu-r):not(.pill), #view table a, #view .row a, #view .nm a, #view .pr a, #view .hr a, #view .rrow a, #view .hlist a:not(.btn), #view .fix a, #view .p-name a { color: var(--text); font-weight: 650; }
+#view .more, #view .more span { color: var(--blue); }
+#view .card a:hover, #view table a:hover { color: var(--accent); text-decoration: none; }
 
 </style>
 
@@ -10933,8 +10945,7 @@ async function viewCoach(id) {
   const job = j.kind === "club" ? `Head coach, ${clubLink(j.team)}` : j.kind === "acad" ? `Academy manager, ${clubLink(j.team)}` : j.kind === "nation" ? `National team coach, ${natLink(j.team)}` : j.kind === "retired" ? `Retired${j.team ? ", last at " + clubLink(j.team) : ""}` : "Without a job";
   const grp = {}; c.honours.forEach((h) => { (grp[h.title] = grp[h.title] || []).push(h.label); });
   const hon = Object.entries(grp);
-  $("#view").innerHTML = `<div class="v2"><a class="crumb" href="#" id="co-back">&lsaquo; Back</a>
-    <div class="hd"><div><h1>${flag(c.nat, 26)} ${esc(c.name)}</h1><div class="sub">${job} &middot; ${natLink(c.nat)} &middot; age ${c.age}</div></div></div>
+  $("#view").innerHTML = `<div class="v2">${heroBlock(c.nat, natBadge(c.nat, 200), `<span class="sbox">${flag(c.nat, 56)}</span>`, esc(c.name), `<div class="sub">${job} &middot; ${natLink(c.nat)} &middot; age ${c.age}</div>`)}
     <div class="stat4"><div><b>${s.seasons}</b><span>SEASONS</span></div><div><b>${s.win}%</b><span>WIN RATE</span></div><div><b>${s.titles}</b><span>LEAGUE TITLES</span></div><div><b>${s.cups + s.cwc}</b><span>CUPS</span></div></div>
     <div class="card"><h3>Profile</h3><div class="row"><span>Record</span><span class="dim">${s.w} W &middot; ${s.d} D &middot; ${s.l} L</span></div>
       <div class="row"><span>Prestige</span><span class="dim">${c.prestige}</span></div><div class="row"><span>Style</span><span class="dim">${esc(c.personality)}${c.skill && c.skill !== "none" ? " / " + esc(c.skill) : ""}</span></div>
@@ -10942,7 +10953,6 @@ async function viewCoach(id) {
     <div class="card"><h3>Coaching career <small>${s.seasons} seasons &middot; ${s.titles} league titles &middot; ${s.cups} continental cups</small></h3>${coachStintsHTML(c.stints)}</div>
     ${hon.length ? `<div class="card"><h3>Honours</h3>${hon.map(([t, ys]) => `<div class="row"><span>${esc(t)}${ys.length > 1 ? " x" + ys.length : ""}</span><span class="meta">${ys.join(", ")}</span></div>`).join("")}</div>` : ""}
     ${c.hid ? `<a class="more" href="#/hofcard/${esc(c.hid)}"><span>Hall of Fame page</span><span>&rsaquo;</span></a>` : ""}</div>`;
-  $("#co-back").onclick = (e) => { e.preventDefault(); if (history.length > 1) history.back(); else location.hash = "#/hof"; };
 }
 async function viewHofCard(id) {
   const c = await api("/api/hofcard?id=" + enc(id)), ch = c.chain;
@@ -10962,8 +10972,7 @@ async function viewHofCard(id) {
     tail = `<div class="card"><h3>Coaching career <small>${s.seasons} seasons &middot; ${s.titles} league titles &middot; ${s.cups} continental cups</small></h3>
       ${coachStintsHTML(c.stints)}</div></div>`;
   }
-  $("#view").innerHTML = `<div class="v2"><a class="crumb" href="#/hof">&lsaquo; Hall of Fame</a>
-    <div class="hd"><div><h1>${flag(c.nat, 26)} ${esc(c.name)}</h1><div class="sub">${c.k === "c" ? "Coach" : esc(c.pos || "")} &middot; ${natLink(c.nat)} &middot; retired ${esc(c.retired)}</div></div>${hofBadge(c.badge, 38)}</div>
+  $("#view").innerHTML = `<div class="v2">${heroBlock(c.nat, natBadge(c.nat, 200), `<span class="sbox">${flag(c.nat, 56)}</span>`, esc(c.name), `<div class="sub">${c.k === "c" ? "Coach" : esc(c.pos || "")} &middot; ${natLink(c.nat)} &middot; retired ${esc(c.retired)}</div>`)}
     <div class="dim small" style="margin-bottom:8px">${esc(c.line)}</div>
     <div class="card"><h3>The four halls</h3><div class="hchain">${rows}</div>${veto}</div>${tail}
     ${c.uid && c.has_page ? `<a class="more" href="#/player/${c.uid}"><span>Full player page</span><span>&rsaquo;</span></a>` : ""}</div>`;
@@ -12618,7 +12627,7 @@ async function viewComp(id) {
       <div id="tab-fld" hidden><div class="scroll"><table><thead><tr><th class="l">Club</th><th class="l">League</th><th>OVR</th></tr></thead><tbody>${x.field.map((f) => `<tr><td class="l">${clubLink(f.club)}</td><td class="l meta">${esc(f.league)}</td><td>${ovr(f.ovr)}</td></tr>`).join("")}</tbody></table></div></div>` : ""}`;
   }
   const finished = p.done >= p.total;
-  $("#view").innerHTML = `<div class="v2"><div class="crumbs dim small" style="min-height:30px;display:flex;align-items:center"><a href="#/world">World</a>&nbsp;›&nbsp;${esc(x.title)}</div>${heroBlock(x.title, compEmb(x.title, x.emblem, 220), compEmb(x.title, x.emblem, 52, editionYear({ current: true }), x.host), esc(x.title), `<div class="sub">${p.done}/${p.total} played${p.next ? " · next: " + esc(p.next) : finished0 ? " · finished" : ""}</div>`)}</div>${liveTabs(id)}
+  $("#view").innerHTML = `<div class="v2">${heroBlock(x.title, compEmb(x.title, x.emblem, 220), compEmb(x.title, x.emblem, 52, editionYear({ current: true }), x.host), esc(x.title), `<div class="sub">${p.done}/${p.total} played${p.next ? " · next: " + esc(p.next) : finished0 ? " · finished" : ""}</div>`)}</div>${liveTabs(id)}
     ${locked ? `<div class="card" style="margin-bottom:14px"><span class="tag red">LOCKED</span> needs ${p.locked.map((m) => `<a href="#/comp/${enc(m.id)}">${esc(m.title)}</a>`).join(", ")} to finish first.
       <p style="margin:10px 0 0"><button id="k-up" class="pri">Sim up to here</button> <span class="meta">plays only what it needs, then stops so you can play it your way.</span></p>
       <p style="margin:8px 0 0"><button id="k-pre">Sim everything it needs, then this to the end</button></p></div>`
@@ -13133,9 +13142,9 @@ async function viewRecords() {
   const d = await api("/api/records");
   $("#view").innerHTML = `<h1>Records</h1>
     <a class="more" href="#/hof"><span>Coaches and players: Hall of Fame, ranked, with snubs</span><span>&rsaquo;</span></a>
-    <div class="cols3"><div><h2>World Cup winners</h2>${d.wc.length ? d.wc.map((r) => `<div class="row"><span>S${r.season} ${natLink(r.winner)}</span><span class="meta">beat ${esc(r.runner_up)}, host ${esc(r.host)}</span></div>`).join("") : '<div class="meta">None yet.</div>'}
-    <h2>Club World Cup winners</h2>${d.cwc.length ? d.cwc.map((r) => `<div class="row"><span>S${r.season} ${clubLink(r.winner)}</span><span class="meta">beat ${esc(r.runner_up)}</span></div>`).join("") : '<div class="meta">None yet.</div>'}</div>
-    <div><h2>League records</h2>${d.records.map((r) => `<div class="row"><span>${leagueLink(r.league)}</span><span class="meta">${r.pts} pts (${esc(r.pts_club)})</span></div>`).join("") || '<div class="meta">None yet.</div>'}</div></div>`;
+    <div class="cols3 recs"><div class="card"><h2>World Cup winners</h2>${d.wc.length ? d.wc.map((r) => `<div class="row"><span>S${r.season} ${natLink(r.winner)}</span><span class="meta">beat ${esc(r.runner_up)}, host ${esc(r.host)}</span></div>`).join("") : '<div class="meta">None yet.</div>'}
+    </div><div class="card"><h2>Club World Cup winners</h2>${d.cwc.length ? d.cwc.map((r) => `<div class="row"><span>S${r.season} ${clubLink(r.winner)}</span><span class="meta">beat ${esc(r.runner_up)}</span></div>`).join("") : '<div class="meta">None yet.</div>'}</div>
+    <div class="card"><h2>League records</h2>${d.records.map((r) => `<div class="row"><span>${leagueLink(r.league)}</span><span class="meta">${r.pts} pts (${esc(r.pts_club)})</span></div>`).join("") || '<div class="meta">None yet.</div>'}</div></div>`;
 }
 
 
@@ -13384,12 +13393,10 @@ async function viewPlayer(uid) {
   p.honours.forEach((h) => { (grp[h.title] = grp[h.title] || []).push(h.season); });
   const hon = Object.entries(grp).sort((a, b) => b[1].length - a[1].length);
   const tot = p.totals;
-  $("#view").innerHTML = `<div class="crumbs"><a href="#/players">Players</a> / ${esc(p.name)}</div>
-    <h1>${flag(p.nat, 34)} ${esc(p.name)} ${p.retired ? '<span class="tag">retired</span>' : ""}</h1>
-    <div class="sub">${esc(p.pos)} &middot; age ${p.age} &middot; ${natLink(p.nat)} &middot; ${p.club ? clubLink(p.club) : "free agent"}${p.contract && p.club ? " &middot; contract " + p.contract + " yr" : ""}</div>
-    <div class="cols3"><div class="stat"><div class="k">OVR</div><div class="v">${ovr(p.ovr)}</div></div><div class="stat"><div class="k">Potential / peak</div><div class="v">${p.pot} / ${p.peak}</div></div>
-      <div class="stat"><div class="k">Value</div><div class="v">${money(p.value)}</div></div><div class="stat"><div class="k">Wage per year</div><div class="v">${money(p.wage)}</div></div>
-      <div class="stat"><div class="k">Career goals</div><div class="v">${tot.goals}</div></div><div class="stat"><div class="k">Career assists</div><div class="v">${tot.assists}</div></div></div>
+  const tile = (v, k) => `<div><b>${v}</b><span>${k}</span></div>`;
+  $("#view").innerHTML = `<div class="v2">${heroBlock(p.club || p.nat, p.club ? crest(p.club, 220) : natBadge(p.nat, 200), `<span class="sbox">${flag(p.nat, 56)}</span>`, `${esc(p.name)} ${p.retired ? '<span class="tag">retired</span>' : ""}`, `<div class="sub">${esc(p.pos)} &middot; age ${p.age} &middot; ${natLink(p.nat)} &middot; ${p.club ? clubLink(p.club) : "free agent"}${p.contract && p.club ? " &middot; contract " + p.contract + " yr" : ""}</div>`)}
+    <div class="stat3" style="margin-top:12px">${tile(ovr(p.ovr), "OVR")}${tile(p.pot + " / " + p.peak, "POTENTIAL / PEAK")}${tile(money(p.value), "VALUE")}</div>
+    <div class="stat3" style="margin-top:8px">${tile(money(p.wage), "WAGE / YEAR")}${tile(tot.goals, "CAREER GOALS")}${tile(tot.assists, "CAREER ASSISTS")}</div></div>
     ${STATUS && STATUS.god ? `<p><button id="g-edit-p" class="gold">God mode: edit player</button></p>` : ""}
     <div class="cols" style="margin-top:14px"><div>
       <div class="card"><h3>Rating by season</h3>${lineChart(p.career.map((c) => [c.season, c.ovr]), 520, 170)}</div>

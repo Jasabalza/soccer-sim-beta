@@ -1176,3 +1176,15 @@ body.nosim #simbar { display: none; }
 .bk-head { color: var(--accent2); font-weight: 800; letter-spacing: .08em; }
 .bk-line { stroke: #2a3a31; }
 .bk-tools button { border-radius: 99px; }
+/* v16.2 one theme everywhere: pill fields, white names, round cards */
+input, select, textarea { background: var(--panel); border: 1px solid var(--line); }
+select, input[type=text], input[type=search], input:not([type]) { border-radius: 99px; padding-left: 14px; padding-right: 14px; min-height: 40px; font-weight: 600; }
+select { padding-right: 30px; }
+.card { border-radius: 20px; }
+.v2 .card a:not(.more):not(.btn):not(.mini):not(.tag):not(.linkbtn):not(.crumb):not(.nu-r), .v2 .hlist a:not(.btn), .v2 table a, .v2 .row a, .v2 .nm a, .v2 .pr a, .v2 .hr a { color: var(--text); font-weight: 650; }
+.v2 .card a:hover { color: var(--accent); text-decoration: none; }
+.recs { display: grid; gap: 12px; margin-top: 10px; } .recs h2 { margin: 0 0 8px; font-size: 13px; letter-spacing: .1em; text-transform: uppercase; color: var(--accent2); }
+.recs .row { padding: 9px 0; border-top: 1px solid rgba(255,255,255,.06); }
+#view .card a:not(.more):not(.btn):not(.mini):not(.tag):not(.linkbtn):not(.crumb):not(.nu-r):not(.pill), #view table a, #view .row a, #view .nm a, #view .pr a, #view .hr a, #view .rrow a, #view .hlist a:not(.btn), #view .fix a, #view .p-name a { color: var(--text); font-weight: 650; }
+#view .more, #view .more span { color: var(--blue); }
+#view .card a:hover, #view table a:hover { color: var(--accent); text-decoration: none; }
