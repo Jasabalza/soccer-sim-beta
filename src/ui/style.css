@@ -1188,3 +1188,13 @@ select { padding-right: 30px; }
 #view .card a:not(.more):not(.btn):not(.mini):not(.tag):not(.linkbtn):not(.crumb):not(.nu-r):not(.pill), #view table a, #view .row a, #view .nm a, #view .pr a, #view .hr a, #view .rrow a, #view .hlist a:not(.btn), #view .fix a, #view .p-name a { color: var(--text); font-weight: 650; }
 #view .more, #view .more span { color: var(--blue); }
 #view .card a:hover, #view table a:hover { color: var(--accent); text-decoration: none; }
+.fx3 { grid-template-columns: minmax(0,1fr) auto minmax(0,1fr) 54px; column-gap: 8px; }
+.fx3-s, .fx3-v { white-space: nowrap; text-align: center; min-width: 30px; font-weight: 800; }
+.fx3-pv { grid-column: 1 / -1; justify-self: start; font-size: 12px; font-weight: 700; color: var(--blue); text-decoration: none; padding: 2px 0; }
+.fx3-t { grid-column: 1 / -1; justify-self: start; }
+.fx3 a span { overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
+.fx3-pv { margin-top: -4px; padding: 3px 12px; border-radius: 99px; background: rgba(255,255,255,.07); color: var(--text); }
+.fx3 a span { overflow-wrap: normal; word-break: normal; hyphens: manual; }
+.fx3 a { font-size: 13px; gap: 5px; }
+.fx3 svg, .fx3 img, .fx3 .lbox { width: 20px !important; height: 20px !important; }
+.fx3 { grid-template-columns: minmax(0,1fr) auto minmax(0,1fr) 50px; column-gap: 6px; }

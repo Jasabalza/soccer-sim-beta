@@ -1191,6 +1191,16 @@ select { padding-right: 30px; }
 #view .card a:not(.more):not(.btn):not(.mini):not(.tag):not(.linkbtn):not(.crumb):not(.nu-r):not(.pill), #view table a, #view .row a, #view .nm a, #view .pr a, #view .hr a, #view .rrow a, #view .hlist a:not(.btn), #view .fix a, #view .p-name a { color: var(--text); font-weight: 650; }
 #view .more, #view .more span { color: var(--blue); }
 #view .card a:hover, #view table a:hover { color: var(--accent); text-decoration: none; }
+.fx3 { grid-template-columns: minmax(0,1fr) auto minmax(0,1fr) 54px; column-gap: 8px; }
+.fx3-s, .fx3-v { white-space: nowrap; text-align: center; min-width: 30px; font-weight: 800; }
+.fx3-pv { grid-column: 1 / -1; justify-self: start; font-size: 12px; font-weight: 700; color: var(--blue); text-decoration: none; padding: 2px 0; }
+.fx3-t { grid-column: 1 / -1; justify-self: start; }
+.fx3 a span { overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
+.fx3-pv { margin-top: -4px; padding: 3px 12px; border-radius: 99px; background: rgba(255,255,255,.07); color: var(--text); }
+.fx3 a span { overflow-wrap: normal; word-break: normal; hyphens: manual; }
+.fx3 a { font-size: 13px; gap: 5px; }
+.fx3 svg, .fx3 img, .fx3 .lbox { width: 20px !important; height: 20px !important; }
+.fx3 { grid-template-columns: minmax(0,1fr) auto minmax(0,1fr) 50px; column-gap: 6px; }
 
 </style>
 
@@ -10657,7 +10667,7 @@ async function viewLeague(name, season) {
   const fut = fx && fx.rows.length && fx.week > fx.cur;
   const fixPane = `${simCard}${fx && fx.rows.length ? `<div class="card fxc"><div class="fx-step"><button id="fx-prev" aria-label="Previous matchweek" ${fut ? "" : "disabled"}>&lsaquo;</button><div><b>Matchweek ${fx.week}</b><span class="dim small">${fut ? "Coming up" : "Next matchweek"} &middot; ${fx.rows.length} games${fut ? "" : " &middot; " + fx.rows.filter((f) => f.done).length + " played"}</span></div><button id="fx-next" aria-label="Next matchweek" ${fx.week < fx.weeks ? "" : "disabled"}>&rsaquo;</button></div>
       ${fx.rows.map((f, i) => `<div class="fx3"><a class="fx3-h" href="#/club/${enc(f.h)}">${crest(f.h, 22)}<span>${esc(f.h)}</span></a>${f.done ? `<b class="fx3-s">${f.hg}-${f.ag}</b>` : `<i class="fx3-v">v</i>`}<a class="fx3-a" href="#/club/${enc(f.a)}"><span>${esc(f.a)}</span>${crest(f.a, 22)}</a>
-        ${f.done || fut ? `<a class="fx3-go" href="#/matchup/${enc(d.id)}/${enc(f.h)}/${enc(f.a)}">${f.done ? "Info" : "View"}</a>` : `<button class="fx3-go sim" data-fx="${i}">Sim</button>`}${f.rivalry ? `<span class="tag red fx3-t">${esc(f.rivalry.name)}</span>` : ""}</div>`).join("")}</div>` : `<div class="card"><h3>Fixtures</h3><div class="dim small">${past ? "Past seasons keep the final table only." : "No fixtures left this season."}</div></div>`}
+        ${f.done || fut ? `<a class="fx3-go" href="#/matchup/${enc(d.id)}/${enc(f.h)}/${enc(f.a)}">${f.done ? "Info" : "View"}</a>` : `<button class="fx3-go sim" data-fx="${i}">Sim</button><a class="fx3-pv" href="#/matchup/${enc(d.id)}/${enc(f.h)}/${enc(f.a)}">Preview</a>`}${f.rivalry ? `<span class="tag red fx3-t">${esc(f.rivalry.name)}</span>` : ""}</div>`).join("")}</div>` : `<div class="card"><h3>Fixtures</h3><div class="dim small">${past ? "Past seasons keep the final table only." : "No fixtures left this season."}</div></div>`}
     ${d.last.length ? `<div class="card"><h3>Last matchweek <small>${d.last_date ? esc(d.last_date.text) : ""}</small></h3>${d.last.map((f) => `<div class="fix"><span class="h">${clubLink(f.h)}</span><span class="s">${f.hg}-${f.ag}</span><span>${clubLink(f.a)}</span></div>`).join("")}</div>` : ""}
     ${!inProg && d.next.length ? `<div class="card"><h3>Next matchweek <small>${d.next_date ? esc(d.next_date.text) : ""}</small></h3>${d.next.map((f) => `<div class="fix"><span class="h">${clubLink(f.h)}</span><span class="s">v</span><span>${clubLink(f.a)}</span></div>`).join("")}</div>` : ""}`;
   const subBits = [esc(d.confed), d.games + " games", "top " + d.slots + " reach the " + esc(d.cup)];
