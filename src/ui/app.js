@@ -659,7 +659,9 @@ async function viewWorld() {
   const smallL = allLg.filter((l) => !isFavL(l) && (!onlyFav));
   const mw = (l) => (l.done >= l.total ? "Finished" : "Matchweek " + (l.done + 1) + " of " + l.total);
   const mark = (l, n) => logoBox("leagues", l.name, n) || `<span class="lph" style="width:${n}px;height:${n}px">${esc(l.name.split(" ").map((w) => w[0]).join("").slice(0, 3))}</span>`;
-  const bigCard = (l) => `<div class="lcard" style="--hh:${_hash(l.name) % 360}"><a class="lhead" href="#/league/${enc(l.name)}">${mark(l, 38)}<span class="mt"><b>${esc(l.name)}</b><span class="dim small">${mw(l)} &middot; ${esc(l.leader)} lead</span></span>${CHEV}</a>
+  const LHUE = { "Premier League": 275, "La Liga": 355, "Bundesliga": 8, "Serie A": 215, "Ligue 1": 225, "Eredivisie": 22, "Primeira Liga": 150, "Liga MX": 140, "MLS": 215, "Saudi Pro League": 135, "J1 League": 350 };
+  const lhue = (n) => (LHUE[n] != null ? LHUE[n] : _hash(n) % 360);
+  const bigCard = (l) => `<div class="lcard" style="--hh:${lhue(l.name)}"><a class="lhead" href="#/league/${enc(l.name)}">${mark(l, 38)}<span class="mt"><b>${esc(l.name)}</b><span class="dim small">${mw(l)} &middot; ${esc(l.leader)} lead</span></span>${CHEV}</a>
     <div class="bar"><i style="width:${l.total ? Math.round(100 * l.done / l.total) : 0}%"></i></div>
     ${l.done < l.total ? `<div class="lbtns"><button class="pill pri" data-lsim="L:${esc(l.name)}">Sim rest of league</button><button class="pill" data-lwk="L:${esc(l.name)}">Next matchweek</button></div>` : `<button class="pill wide" data-lrev="L:${esc(l.name)}">Season review</button>`}</div>`;
   const smallRow = (l) => `<div class="srow"><a class="sl" href="#/league/${enc(l.name)}">${mark(l, 30)}<b>${esc(l.name)}</b></a><span class="dim small">${l.done >= l.total ? "Finished" : "MW " + (l.done + 1)}</span>${l.done < l.total ? `<button class="mini pri" data-lsim="L:${esc(l.name)}">Sim &#9656;</button>` : `<a class="mini" href="#/league/${enc(l.name)}">Table</a>`}</div>`;

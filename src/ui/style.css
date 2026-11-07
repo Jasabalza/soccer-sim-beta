@@ -1,5 +1,5 @@
 :root {
-  --bg: #0f1a14; --panel: #17261d; --panel2: #1d3025; --line: #2a4235; --text: #e8f1ea;
+  --bg: #0a0f0c; --panel: #121a15; --panel2: #18221c; --line: #202c25; --text: #e8f1ea;
   --dim: #8fa89a; --accent: #3ddc84; --accent2: #f5c542; --blue: #4aa8ff; --red: #ff6b6b;
   --champ: rgba(61,220,132,.16); --cup: rgba(74,168,255,.14);
 }
@@ -9,7 +9,7 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
 a { color: var(--blue); text-decoration: none; cursor: pointer; }
 a:hover { text-decoration: underline; }
 #top { display: flex; align-items: center; gap: 18px; padding: 0 18px; height: 46px;
-  background: #0a120d; border-bottom: 1px solid var(--line); }
+  background: #070b09; border-bottom: 1px solid var(--line); }
 .brand { font-weight: 800; letter-spacing: 2px; color: var(--accent); cursor: pointer; }
 #nav { display: flex; gap: 4px; flex: 1; }
 #nav a { color: var(--dim); padding: 6px 12px; border-radius: 6px; white-space: nowrap; }
@@ -250,7 +250,7 @@ details summary { cursor: pointer; padding: 8px 0; color: var(--blue); }
 /* awards ceremony: Next/Back stay on screen */
 #aw-bar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
   padding: 10px max(16px, env(safe-area-inset-right, 0px)) calc(10px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
-  background: #0a120d; border-top: 1px solid var(--line); }
+  background: #070b09; border-top: 1px solid var(--line); }
 #aw-bar .pri { flex: 1 1 120px; min-height: 44px; }
 #aw-pad { height: 84px; }
 
@@ -323,7 +323,7 @@ details summary { cursor: pointer; padding: 8px 0; color: var(--blue); }
 /* competition pages: the sim buttons stay on screen while you scroll the bracket */
 #comp-bar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; display: flex; align-items: center; gap: 6px;
   padding: 5px max(12px, env(safe-area-inset-right, 0px)) calc(5px + env(safe-area-inset-bottom, 0px)) max(12px, env(safe-area-inset-left, 0px));
-  background: #0a120d; border-top: 1px solid var(--line); }
+  background: #070b09; border-top: 1px solid var(--line); }
 #comp-bar[hidden] { display: none; }
 #comp-bar .pri { flex: 1 1 90px; }
 #comp-bar button { min-height: 34px; padding: 3px 12px; font-size: 14px; }
@@ -555,7 +555,7 @@ button.wide { width: 100%; min-height: 44px; margin-top: 10px; }
 .v2 .eyebrow { font-size: 11px; letter-spacing: 1.4px; font-weight: 700; text-transform: uppercase; }
 .v2 .gold { color: var(--accent2); } .v2 .pos { color: var(--accent); } .v2 .neg { color: var(--red); } .v2 .dim { color: var(--dim); } .v2 .small { font-size: 12px; }
 .v2 .big { font-size: 26px; font-weight: 800; line-height: 1.1; margin: 4px 0 2px; overflow-wrap: anywhere; }
-.v2 .hero { border-color: #8a7424; background: linear-gradient(180deg, #1f2a1b 0, var(--panel) 60%); }
+.v2 .hero { border-color: #8a7424; background: linear-gradient(180deg, #1c2415 0, var(--panel) 60%); }
 .v2 .statrow { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 12px 0 6px; }
 .v2 .statrow div { background: var(--bg); border: 1px solid var(--line); border-radius: 9px; padding: 8px 10px; }
 .v2 .statrow b { display: block; font-size: 20px; } .v2 .statrow span { font-size: 11px; color: var(--dim); }
@@ -590,7 +590,7 @@ button.wide { width: 100%; min-height: 44px; margin-top: 10px; }
 .v2 .vr { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid #223629; }
 .v2 .vr:last-child { border-bottom: 0; } .v2 .vr .n { flex: 1; min-width: 0; } .v2 .vr .n b { display: block; font-size: 15px; } .v2 .vr .n span { font-size: 12px; color: var(--dim); }
 .v2 .vr .v { flex: none; width: 84px; text-align: right; } .v2 .vr .v b { font-size: 15px; } .v2 .vr .v .bar { margin-top: 5px; }
-.v2 .stage { margin-top: 14px; border: 1px solid #8a7424; border-radius: 16px; background: linear-gradient(180deg, #242b17 0, #17261d 70%); padding: 22px 16px 18px; text-align: center; }
+.v2 .stage { margin-top: 14px; border: 1px solid #8a7424; border-radius: 16px; background: linear-gradient(180deg, #202514 0, #121a15 70%); padding: 22px 16px 18px; text-align: center; }
 .v2 .stage .big { font-size: 30px; margin: 10px 0 4px; }
 .v2 .stage .medal { width: 64px; height: 64px; border-radius: 50%; margin: 0 auto; background: var(--accent2); color: #2b2200; display: flex; align-items: center; justify-content: center; font-size: 26px; font-weight: 800; }
 .v2 .stage .runners { margin-top: 16px; border-top: 1px solid #3a4a2a; padding-top: 6px; text-align: left; }
@@ -1127,3 +1127,13 @@ body.nosim #simbar { display: none; }
 .mvb.mvo { width: 40px; } .mvp .mvb.mvo { width: 38px; }
 .mvb.mvo .ovr, .mvb.mvo > span { font-size: 15px; min-width: 34px; height: 34px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; }
 .mvp .hr-m .dim .crest, .mvp .hr-m .dim svg { vertical-align: -3px; }
+
+/* v16.2 look: near-black base, richer team-colour heroes */
+.v2 .hero2 { background: linear-gradient(160deg, hsl(var(--hh) 55% 30%) 0%, hsl(var(--hh) 40% 14%) 55%, var(--bg) 100%); border-color: transparent; border-radius: 22px; }
+.lcard { background: linear-gradient(135deg, hsl(var(--hh) 50% 22% / .75) 0%, var(--panel) 65%); border-color: transparent; border-radius: 22px; }
+.card { border-color: #1b2620; }
+
+/* flow chips: one row of six, no green wash behind the bar */
+#simbar .stages.flow { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 4px; }
+#simbar .stages.flow div { font-size: 10.5px; padding: 5px 0; letter-spacing: -.01em; }
+#simbar, #top { background-image: none; }
