@@ -1027,3 +1027,9 @@ body.nosim #simbar { display: none; }
 #simbar .phchip span { display: inline-block; padding: 5px 12px; border-radius: 99px; background: rgba(0,0,0,.4); color: #fff; font-size: 12px; font-weight: 700; }
 #simbar .stages.flow div { background: rgba(0,0,0,.28); border-color: rgba(255,255,255,.14); }
 #simbar button:not(.pri) { background: rgba(0,0,0,.3); border-color: rgba(255,255,255,.18); color: #fff; }
+
+/* Hall of Fame: fewer rows, nothing cut off */
+.hof2 .chips.hof-tabs.five { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; overflow: visible; }
+.hof2 .chips.hof-tabs.five button { padding: 0 2px; min-height: 40px; font-size: 12.5px; min-width: 0; justify-content: center; }
+.hof2 .seg button { white-space: nowrap; }
+.hof2 .hof-ctl #hexp-sel { flex: 1; min-width: 0; min-height: 40px; }

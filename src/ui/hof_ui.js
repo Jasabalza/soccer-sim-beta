@@ -67,9 +67,10 @@ async function viewHof(tier, name) {
   let body = "";
   const people = HOF.kind === "c" ? "coaches" : "players";
   if (tab === "ind") {
-    const ctl = d.classes.length > 1 ? `<div class="hexp"><span class="dim small">Classes</span>${[["ten", "Last 10"], ["one", "Latest"], ["all", "All"], ["none", "Collapse"]].map(([k, t]) => `<button data-hexp="${k}" class="${(HOF.open || "ten") === k ? "on" : ""}">${t}</button>`).join("")}</div>` : "";
+    const ctl = "";
     const rankedOn = !!HOF.ranked && d.classes.length;
-    const viewSw = d.classes.length ? `<div class="hof-ctl">${hofSeg("data-hrank", [["0", "By class"], ["1", "Ranked"]], rankedOn ? "1" : "0")}</div>` : "";
+    const showSel = d.classes.length > 1 && !rankedOn ? `<select id="hexp-sel" aria-label="Classes shown">${[["ten", "Show last 10"], ["one", "Latest only"], ["all", "Show all"], ["none", "Collapse all"]].map(([k, t]) => `<option value="${k}" ${(HOF.open || "ten") === k ? "selected" : ""}>${t}</option>`).join("")}</select>` : "";
+    const viewSw = d.classes.length ? `<div class="hof-ctl">${hofSeg("data-hrank", [["0", "By class"], ["1", "Ranked"]], rankedOn ? "1" : "0")}${showSel}</div>` : "";
     const ranked = rankedOn ? `<div class="dim small" style="margin:8px 2px">Everyone in this hall, ranked by their score for it: awards, titles and peak rating.</div><div class="hlist">${d.classes.flatMap((c) => c.rows.map((r) => Object.assign({ cl: c.label }, r))).sort((a, b) => (b.score || 0) - (a.score || 0)).map((r, i) => hofRow(r, { right: (r.score != null ? r.score + " pts" : ""), sub: "#" + (i + 1) + " &middot; class of " + esc(r.cl) + " &middot; " + hofSub(Object.assign({}, r, { n: 0 })) })).join("")}</div>` : "";
     body = rankedOn ? viewSw + ranked : d.classes.length ? viewSw + ctl + d.classes.map((c, i) => `<details class="hcls" ${i < (HOF.open === "all" ? 999 : HOF.open === "none" ? 0 : HOF.open === "one" ? 1 : 10) ? "open" : ""}><summary><b>Class of ${esc(c.label)}</b><span class="dim small">${c.rows.length} inducted</span></summary>${c.rows.map((r) => hofRow(r, { right: r.n === 1 ? "first ballot" : "year " + r.n, sub: hofSub(Object.assign({}, r, { n: 0 })) })).join("")}</details>`).join("")
       : `<div class="card dim small">No ${people} in this hall yet. People become eligible ${d.cfg.wait} years after they retire.</div>`;
@@ -89,16 +90,17 @@ async function viewHof(tier, name) {
   $("#view").innerHTML = `<div class="v2 hof2"><h1>Hall of Fame</h1>
     ${hofSeg("data-tier", [["W", "World"], ["C", "Country"], ["L", "League"], ["K", "Club"]], tier)}
     <div class="hof-ctl">${scopeSel}${hofSeg("data-kind", [["p", "Players"], ["c", "Coaches"]], HOF.kind)}</div>
-    <div class="hof-sc">${HOF_LBL[tier]}${name ? " &middot; " + esc(name) : ""} <span class="dim small">&middot; ${d.total} ${people} inducted</span>${tier === "C" && name ? " " + favNatBtn(name, favNats.includes(name)) : ""}</div>
-    <nav class="chips hof-tabs">${tabs.map(([k, t]) => `<button data-htab="${k}" class="${k === tab ? "on" : ""}">${t}</button>`).join("")}</nav>
+    <div class="hof-sc">${HOF_LBL[tier]}${name ? " &middot; " + esc(name) : ""} <span class="dim small">&middot; ${d.total} ${people} inducted</span>${tier === "C" && name ? " " + favNatBtn(name, favNats.includes(name)) : tier === "L" && name ? ` <button class="star${favLeagues.includes(name) ? " on" : ""}" id="hof-favl" aria-pressed="${favLeagues.includes(name)}" aria-label="Follow ${esc(name)}">${starSvg(20)}</button>` : ""}</div>
+    <nav class="chips hof-tabs five">${tabs.map(([k, t]) => `<button data-htab="${k}" class="${k === tab ? "on" : ""}">${t}</button>`).join("")}</nav>
     ${body}
 </div>`;
   document.querySelectorAll("[data-tier]").forEach((b) => (b.onclick = () => (location.hash = "#/hof/" + b.dataset.tier)));
   document.querySelectorAll("[data-kind]").forEach((b) => (b.onclick = () => { HOF.kind = b.dataset.kind; route(); }));
-  document.querySelectorAll("[data-hexp]").forEach((b) => (b.onclick = () => { HOF.open = b.dataset.hexp; document.querySelectorAll("[data-hexp]").forEach((x) => x.classList.toggle("on", x === b)); document.querySelectorAll("details.hcls").forEach((el, i) => { el.open = HOF.open === "all" || (HOF.open === "ten" && i < 10) || (HOF.open === "one" && i < 1); }); }));
+  const hs = $("#hexp-sel"); if (hs) hs.onchange = () => { HOF.open = hs.value; document.querySelectorAll("details.hcls").forEach((el, i) => { el.open = HOF.open === "all" || (HOF.open === "ten" && i < 10) || (HOF.open === "one" && i < 1); }); };
   document.querySelectorAll("[data-htab]").forEach((b) => (b.onclick = () => { HOF.tab = b.dataset.htab; route(); }));
   document.querySelectorAll("[data-hrank]").forEach((b) => (b.onclick = () => { HOF.ranked = b.dataset.hrank === "1"; route(); }));
   wireFavNat();
+  const fl = $("#hof-favl"); if (fl) fl.onclick = async () => { const cur = new Set(FAVS || []), k = "L:" + name; if (cur.has(k)) cur.delete(k); else cur.add(k); try { await saveFavs([...cur]); } catch (e) { toast(e.message); return; } route(); };
   const sel = $("#hof-scope"); if (sel) sel.onchange = () => (location.hash = "#/hof/" + tier + "/" + enc(sel.value));
 }
 
