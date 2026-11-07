@@ -331,7 +331,7 @@ async function viewHofDay(season, sub, idx) {
     <a class="more" data-hgo="W||bal"><span>Check the candidates</span><span>&rsaquo;</span></a></div>`;
 }
 async function hofResults(d, S) {
-  if (HOFSEEN !== S) { HOFSEEN = S; if (typeof renderSimBar === "function") renderSimBar(); }
+  if (HOFSEEN !== S) { HOFSEEN = S; api("/api/hofseen", { season: S }).then(() => refreshStatus()).catch(() => {}); }
   const list = (arr, o) => arr.length ? `<div class="hlist">${arr.map((r) => hofRow(r, o(r))).join("")}</div>` : "";
   const ind = d.inducted.concat(d.coaches.inducted);
   const fav = await Promise.all((d.favs || []).map(async (f) => {
@@ -340,17 +340,26 @@ async function hofResults(d, S) {
       const x = await api("/api/hofnation?nation=" + enc(f.name) + "&season=" + S); return { f, rows: x.inducted };
     } catch (e) { return { f, rows: [], none: "" }; }
   }));
-  const favHTML = fav.map(({ f, rows, none }) => `<h2 class="lbl2">${esc(f.name)} Hall of Fame</h2>${rows.length ? list(rows.slice(0, 8), (r) => ({ right: r.via === "world" ? "with the world" : hofPct(r.pct), bar: r.via === "world" ? null : r.pct, gold: true, sub: hofSub(Object.assign({}, r, { n: 0 })) + (r.club ? " &middot; " + esc(r.club) : "") })) + (rows.length > 8 ? `<div class="dim small" style="margin:6px 2px">and ${rows.length - 8} more</div>` : "") : `<div class="card dim small">${esc(none || "Nobody inducted this year.")}</div>`}
-    <a class="more" data-hgo="${f.kind === "league" ? "L" : "C"}|${esc(f.name)}|bal"><span>Check the ${esc(f.name)} candidates</span><span>&rsaquo;</span></a>`).join("");
-  $("#view").innerHTML = `<div class="v2"><a class="crumb" href="#/ceremony/${S}">&lsaquo; Awards &middot; Season ${S}</a>
-    <div class="hd"><div><h1>Hall of Fame results</h1><div class="sub">Class of ${esc(d.label)}</div></div></div>
-    <div class="hintro"><div class="hi-k">World Hall of Fame</div><div class="hi-n"><div><b>${d.inducted.length}</b><span>players in</span></div><div><b>${d.coaches.inducted.length}</b><span>coaches in</span></div><div><b>${d.fell.length + d.coaches.fell.length}</b><span>fell off</span></div></div></div>
+  const favHTML = (f, rows, none) => `<h2 class="lbl2">${esc(f.name)} Hall of Fame</h2>${rows.length ? list(rows.slice(0, 8), (r) => ({ right: r.via === "world" ? "with the world" : hofPct(r.pct), bar: r.via === "world" ? null : r.pct, gold: true, sub: hofSub(Object.assign({}, r, { n: 0 })) + (r.club ? " &middot; " + esc(r.club) : "") })) + (rows.length > 8 ? `<div class="dim small" style="margin:6px 2px">and ${rows.length - 8} more</div>` : "") : `<div class="card dim small">${esc(none || "Nobody inducted this year.")}</div>`}
+    <a class="more" data-hgo="${f.kind === "league" ? "L" : "C"}|${esc(f.name)}|bal"><span>Check the ${esc(f.name)} candidates</span><span>&rsaquo;</span></a>`;
+  const worldHTML = `<div class="hintro"><div class="hi-k">World Hall of Fame</div><div class="hi-n"><div><b>${d.inducted.length}</b><span>players in</span></div><div><b>${d.coaches.inducted.length}</b><span>coaches in</span></div><div><b>${d.fell.length + d.coaches.fell.length}</b><span>fell off</span></div></div></div>
     <h2 class="lbl2">World: inducted</h2>${ind.length ? list(ind, (r) => ({ right: hofPct(r.pct), bar: r.pct, gold: true })) : `<div class="card dim small">Nobody reached ${Math.round(d.cfg.pass * 100)}% this year.</div>`}
     ${d.vetoes.map((v) => `<div class="hveto"><b>${esc(v.nat)} did not honour ${esc(v.name)}.</b> ${esc(v.text.replace(/^.*?Federation veto: /, "Federation veto: "))}</div>`).join("")}
     ${d.missed.length ? `<h2 class="lbl2">World: missed out</h2>${list(d.missed, (r) => ({ right: hofPct(r.pct), bar: r.pct, tag: r.left === 0 ? "last year" : r.left === 1 ? "1 year left" : "", tagc: "red" }))}` : ""}
     ${d.fell.length ? `<h2 class="lbl2">World: fell off the ballot</h2>${list(d.fell, (r) => ({ right: r.why === "time" ? "ten years" : "no support" }))}` : ""}
-    ${favHTML}
-    <a class="more" data-hgo="W||ind"><span>Open the Hall of Fame</span><span>&rsaquo;</span></a></div>`;
+    <a class="more" data-hgo="W||ind"><span>Open the Hall of Fame</span><span>&rsaquo;</span></a>`;
+  const panes = [{ name: "World", html: worldHTML }].concat(fav.map(({ f, rows, none }) => ({ name: f.name, html: favHTML(f, rows, none) })));
+  const inFlow = !!(STATUS.header.flow && STATUS.header.phase === "awards");
+  const draw = (cur) => {
+    $("#view").innerHTML = `<div class="v2"><a class="crumb" href="#/ceremony/${S}">&lsaquo; Awards &middot; Season ${S}</a>
+      <div class="hd"><div><h1>Hall of Fame results</h1><div class="sub">Class of ${esc(d.label)}</div></div></div>
+      ${panes.length > 1 ? `<nav class="chips hof-mine" aria-label="My halls">${panes.map((x, i) => `<button data-hp="${i}" class="${i === cur ? "on" : ""}">${esc(x.name)}</button>`).join("")}</nav>` : ""}
+      ${panes[cur].html}
+      ${inFlow ? `<div class="foot"><button class="btn pri" id="hr-go" style="width:100%">Continue to off-season</button></div>` : ""}</div>`;
+    document.querySelectorAll("[data-hp]").forEach((b) => (b.onclick = () => { draw(+b.dataset.hp); window.scrollTo(0, 0); }));
+    const go = $("#hr-go"); if (go) go.onclick = () => flowStep("transfers");
+  };
+  draw(0);
 }
 // play hall number idx of today's list; the last one ends on the results page
 async function hofPlay(d, S, idx) {

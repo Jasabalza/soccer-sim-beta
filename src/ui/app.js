@@ -185,7 +185,11 @@ function renderSimBar() {
   $("#sb-save").onclick = saveDialog;
   $("#sb-set").onclick = settingsDialog;
 }
-async function refreshStatus() { STATUS = await api("/api/status"); if (STATUS.has_world) await loadFavs(); else FAVS = null; renderShell(); }
+async function refreshStatus() {
+  STATUS = await api("/api/status"); if (STATUS.has_world) await loadFavs(); else FAVS = null;
+  try { HOFSEEN = STATUS.has_world && STATUS.header.flow ? (await api("/api/hofseen")).season : null; } catch (e) { HOFSEEN = null; }
+  renderShell();
+}
 
 // ---------------------------------------------------------------- actions
 async function afterSim() {
@@ -582,7 +586,7 @@ function nextUpHTML(h) {
   const fs = h.flow.season, ph = h.phase, at = { awards: 1, transfers: 3, graduates: 4 }[ph] ?? 1;
   const rows = [
     ["Season and summer", "Played", "", true],
-    ["Awards", at > 1 ? "Ceremony done" : "The ceremony and the results", "#/ceremony/" + fs, at > 1],
+    ["Awards", at > 1 || hofSeenNow(h) ? "Ceremony done" : "The ceremony and the results", "#/ceremony/" + fs, at > 1 || hofSeenNow(h)],
     ["Hall of Fame", hofSeenNow(h) ? "Ceremonies played" : "Ceremonies: world, countries and leagues", "#/hofday/" + fs, hofSeenNow(h) || at > 3],
     ["Moves", "Transfers, coaches, retirements", "#/moves/" + fs, at > 3],
     ["Graduates", "Academy prospects", "#/prospects", false],
