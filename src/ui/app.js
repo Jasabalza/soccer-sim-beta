@@ -26,8 +26,9 @@ async function busy(text, fn) {
   $("#busy-text").textContent = text; $("#busy").hidden = false;
   try { return await fn(); } catch (e) { toast(e.message); } finally { $("#busy").hidden = true; }
 }
-function openModal(html) { $("#modal-box").innerHTML = html; $("#modal").hidden = false; }
-function closeModal() { $("#modal").hidden = true; }
+function openModal(html) { $("#modal-box").innerHTML = html; $("#modal").classList.remove("sh"); $("#modal").hidden = false; }
+function openSheet(html) { openModal(html); $("#modal").classList.add("sh"); }
+function closeModal() { $("#modal").hidden = true; $("#modal").classList.remove("sh"); }
 $("#modal").addEventListener("pointerdown", (e) => { if (e.target.id === "modal") closeModal(); });
 document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeModal(); });
 
@@ -1849,22 +1850,27 @@ async function viewPlayer(uid) {
 // ---------------------------------------------------------------- settings
 async function settingsDialog() {
   const s = await api("/api/settings");
-  openModal(`<h2>Settings</h2>
-    <label class="check"><input type="checkbox" id="st-anim" ${animOn() ? "checked" : ""}> Show a winner animation and overview when a league or cup finishes</label>
-    <label class="check"><input type="checkbox" id="st-dense" ${denseOn() ? "checked" : ""}> Full density: tighter rows so more fits on screen</label>
-    <label class="check"><input type="checkbox" id="st-god" ${s.god ? "checked" : ""}> God mode (commissioner editor: edit players, clubs, nations and money)</label>
-    <p class="meta">Money is shown in euros (1 engine unit = ${s.money_x} million).</p>
-    ${logoPanel()}
-    <p class="meta">This is the beta. Its saves are kept separate from the original game. <a href="https://jasabalza.github.io/soccer-sim/" target="_blank" rel="noopener">Open the original game</a></p>
-    <p><button class="pri" id="st-ok">Done</button> <button id="st-log">Commissioner edit log</button></p>`);
+  let nEdits = 0; try { nEdits = (await api("/api/edits")).edits.length; } catch (e) { /* no world yet */ }
+  const sw = (id, on) => `<label class="sw"><input type="checkbox" id="${id}" ${on ? "checked" : ""}><i></i></label>`;
+  openSheet(`<div class="sh-grab"></div><div class="sh-hd"><h2>Settings</h2><button class="sh-x" id="st-ok" aria-label="Close">&times;</button></div>
+    <div class="sh-card">
+      <button class="sh-row" id="st-save"><b>Save and load</b><span class="sh-ch">&rsaquo;</span></button>
+      <button class="sh-row" id="st-logos"><b>Logo pack</b><span class="sh-val">Import <span class="sh-ch">&rsaquo;</span></span></button>
+      <button class="sh-row" id="st-log"><b>Commissioner edit log</b><span class="sh-val">${nEdits} edit${nEdits === 1 ? "" : "s"} <span class="sh-ch">&rsaquo;</span></span></button>
+    </div>
+    <div class="sh-card"><div class="gold-lbl">Game</div>
+      <div class="sh-row"><div><b>Winner animation</b><div class="sh-sub">Overview when a league or cup finishes</div></div>${sw("st-anim", animOn())}</div>
+      <div class="sh-row"><div><b>Full density</b><div class="sh-sub">Tighter rows so more fits on screen</div></div>${sw("st-dense", denseOn())}</div>
+      <div class="sh-row"><div><b>God mode</b><div class="sh-sub">Edit players, clubs, nations and money</div></div>${sw("st-god", s.god)}</div>
+    </div>
+    <div class="sh-note"><b>Beta.</b> Its saves are kept apart from the original game. Money is in euros (1 engine unit = ${s.money_x} million). <a href="https://jasabalza.github.io/soccer-sim/" target="_blank" rel="noopener">Open the original game</a></div>`);
+  $("#st-save").onclick = saveDialog;
   $("#st-log").onclick = editLogDialog;
-  wireLogoPanel();
-  $("#st-ok").onclick = async () => {
-    try { localStorage.setItem("ssb_anim", $("#st-anim").checked ? "1" : "0"); localStorage.setItem("ssb_dense", $("#st-dense").checked ? "1" : "0"); } catch (e) {}
-    applyDense();
-    await api("/api/settings_set", { god: $("#st-god").checked });
-    closeModal(); await refreshStatus(); await route();
-  };
+  $("#st-logos").onclick = () => { openModal(`${logoPanel()}<p><button class="pri" id="lg-back">Back</button></p>`); wireLogoPanel(); $("#lg-back").onclick = settingsDialog; };
+  $("#st-anim").onchange = (e) => { try { localStorage.setItem("ssb_anim", e.target.checked ? "1" : "0"); } catch (err) {} };
+  $("#st-dense").onchange = (e) => { try { localStorage.setItem("ssb_dense", e.target.checked ? "1" : "0"); } catch (err) {} applyDense(); };
+  $("#st-god").onchange = async (e) => { try { await api("/api/settings_set", { god: e.target.checked }); await refreshStatus(); } catch (err) { toast(err.message); } };
+  $("#st-ok").onclick = async () => { closeModal(); await refreshStatus(); await route(); };
 }
 
 

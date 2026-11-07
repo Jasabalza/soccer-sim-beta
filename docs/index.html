@@ -1088,6 +1088,25 @@ body.nosim #simbar { display: none; }
 .fx3-t{grid-column:1/-1;justify-self:start}
 .fx3{grid-template-columns:minmax(0,1fr) 16px minmax(0,1fr) 48px;gap:6px}
 .fx3 a{font-size:13px}.fx3-go{min-width:0;padding:6px 0;width:48px}
+/* settings as a bottom sheet */
+#modal.sh{align-items:flex-end;padding:0}
+#modal.sh #modal-box{width:100% !important;max-width:none !important;border-radius:26px 26px 0 0;max-height:90vh;padding:10px 16px 28px;background:var(--bg,#0f1a15)}
+.sh-grab{width:44px;height:5px;border-radius:3px;background:rgba(255,255,255,.18);margin:2px auto 12px}
+.sh-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}.sh-hd h2{margin:0;font-size:26px}
+.sh-x{width:40px;height:40px;border-radius:50%;border:0;background:rgba(255,255,255,.08);color:inherit;font-size:24px}
+.sh-card{border:1px solid var(--line,rgba(255,255,255,.12));border-radius:18px;padding:2px 16px;margin-bottom:12px;background:rgba(255,255,255,.03)}
+.sh-card .gold-lbl{padding-top:12px}
+.sh-row{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;min-height:52px;padding:8px 0;background:none;border:0;border-bottom:1px solid rgba(255,255,255,.07);color:inherit;font:inherit;text-align:left}
+.sh-row:last-child{border-bottom:0}.sh-row .chev{color:var(--accent,#3ddc84);font-weight:800}
+.sh-note{font-size:12px;opacity:.7;padding:12px 14px;border:1px dashed rgba(255,255,255,.2);border-radius:14px}
+.sw{position:relative;width:50px;height:30px;flex:none}.sw input{opacity:0;position:absolute;inset:0;width:100%;height:100%;margin:0;z-index:1}
+.sw i{position:absolute;inset:0;border-radius:15px;background:rgba(255,255,255,.18);transition:.15s}
+.sw i::after{content:"";position:absolute;left:3px;top:3px;width:24px;height:24px;border-radius:50%;background:#fff;transition:.15s}
+.sw input:checked+i{background:#3ddc84}.sw input:checked+i::after{left:23px}
+.sh-ch{color:#3ddc84;font-size:22px;font-weight:700;margin-left:4px;line-height:1}
+.sh-val{color:var(--dim,#8fa89a);font-size:14px;display:flex;align-items:center}
+.sh-sub{color:var(--dim,#8fa89a);font-size:12px;font-weight:400;margin-top:2px}
+.sh-row b{font-size:15px}
 
 </style>
 
@@ -11387,8 +11406,9 @@ async function busy(text, fn) {
   $("#busy-text").textContent = text; $("#busy").hidden = false;
   try { return await fn(); } catch (e) { toast(e.message); } finally { $("#busy").hidden = true; }
 }
-function openModal(html) { $("#modal-box").innerHTML = html; $("#modal").hidden = false; }
-function closeModal() { $("#modal").hidden = true; }
+function openModal(html) { $("#modal-box").innerHTML = html; $("#modal").classList.remove("sh"); $("#modal").hidden = false; }
+function openSheet(html) { openModal(html); $("#modal").classList.add("sh"); }
+function closeModal() { $("#modal").hidden = true; $("#modal").classList.remove("sh"); }
 $("#modal").addEventListener("pointerdown", (e) => { if (e.target.id === "modal") closeModal(); });
 document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeModal(); });
 
@@ -13210,22 +13230,27 @@ async function viewPlayer(uid) {
 // ---------------------------------------------------------------- settings
 async function settingsDialog() {
   const s = await api("/api/settings");
-  openModal(`<h2>Settings</h2>
-    <label class="check"><input type="checkbox" id="st-anim" ${animOn() ? "checked" : ""}> Show a winner animation and overview when a league or cup finishes</label>
-    <label class="check"><input type="checkbox" id="st-dense" ${denseOn() ? "checked" : ""}> Full density: tighter rows so more fits on screen</label>
-    <label class="check"><input type="checkbox" id="st-god" ${s.god ? "checked" : ""}> God mode (commissioner editor: edit players, clubs, nations and money)</label>
-    <p class="meta">Money is shown in euros (1 engine unit = ${s.money_x} million).</p>
-    ${logoPanel()}
-    <p class="meta">This is the beta. Its saves are kept separate from the original game. <a href="https://jasabalza.github.io/soccer-sim/" target="_blank" rel="noopener">Open the original game</a></p>
-    <p><button class="pri" id="st-ok">Done</button> <button id="st-log">Commissioner edit log</button></p>`);
+  let nEdits = 0; try { nEdits = (await api("/api/edits")).edits.length; } catch (e) { /* no world yet */ }
+  const sw = (id, on) => `<label class="sw"><input type="checkbox" id="${id}" ${on ? "checked" : ""}><i></i></label>`;
+  openSheet(`<div class="sh-grab"></div><div class="sh-hd"><h2>Settings</h2><button class="sh-x" id="st-ok" aria-label="Close">&times;</button></div>
+    <div class="sh-card">
+      <button class="sh-row" id="st-save"><b>Save and load</b><span class="sh-ch">&rsaquo;</span></button>
+      <button class="sh-row" id="st-logos"><b>Logo pack</b><span class="sh-val">Import <span class="sh-ch">&rsaquo;</span></span></button>
+      <button class="sh-row" id="st-log"><b>Commissioner edit log</b><span class="sh-val">${nEdits} edit${nEdits === 1 ? "" : "s"} <span class="sh-ch">&rsaquo;</span></span></button>
+    </div>
+    <div class="sh-card"><div class="gold-lbl">Game</div>
+      <div class="sh-row"><div><b>Winner animation</b><div class="sh-sub">Overview when a league or cup finishes</div></div>${sw("st-anim", animOn())}</div>
+      <div class="sh-row"><div><b>Full density</b><div class="sh-sub">Tighter rows so more fits on screen</div></div>${sw("st-dense", denseOn())}</div>
+      <div class="sh-row"><div><b>God mode</b><div class="sh-sub">Edit players, clubs, nations and money</div></div>${sw("st-god", s.god)}</div>
+    </div>
+    <div class="sh-note"><b>Beta.</b> Its saves are kept apart from the original game. Money is in euros (1 engine unit = ${s.money_x} million). <a href="https://jasabalza.github.io/soccer-sim/" target="_blank" rel="noopener">Open the original game</a></div>`);
+  $("#st-save").onclick = saveDialog;
   $("#st-log").onclick = editLogDialog;
-  wireLogoPanel();
-  $("#st-ok").onclick = async () => {
-    try { localStorage.setItem("ssb_anim", $("#st-anim").checked ? "1" : "0"); localStorage.setItem("ssb_dense", $("#st-dense").checked ? "1" : "0"); } catch (e) {}
-    applyDense();
-    await api("/api/settings_set", { god: $("#st-god").checked });
-    closeModal(); await refreshStatus(); await route();
-  };
+  $("#st-logos").onclick = () => { openModal(`${logoPanel()}<p><button class="pri" id="lg-back">Back</button></p>`); wireLogoPanel(); $("#lg-back").onclick = settingsDialog; };
+  $("#st-anim").onchange = (e) => { try { localStorage.setItem("ssb_anim", e.target.checked ? "1" : "0"); } catch (err) {} };
+  $("#st-dense").onchange = (e) => { try { localStorage.setItem("ssb_dense", e.target.checked ? "1" : "0"); } catch (err) {} applyDense(); };
+  $("#st-god").onchange = async (e) => { try { await api("/api/settings_set", { god: e.target.checked }); await refreshStatus(); } catch (err) { toast(err.message); } };
+  $("#st-ok").onclick = async () => { closeModal(); await refreshStatus(); await route(); };
 }
 
 
