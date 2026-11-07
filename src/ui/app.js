@@ -880,7 +880,7 @@ function titleStrip(t) {
 function trophyRoom(list, title) {
   if (!list || !list.length) return `<div class="card"><h3>${title || "Trophy room"}</h3><div class="meta">No trophies yet.</div></div>`;
   const groups = [["world", "World"], ["continental", "Continental"], ["domestic", "Domestic"], ["individual", "Individual awards"]];
-  const tile = (t) => { const strip = titleStrip(t); return `<div class="tro ${t.count ? "" : "none"}${strip ? " wide" : ""}">${emblem(t.emblem, 54)}<div class="tro-info"><b>${esc(t.title)}</b>
+  const tile = (t) => { const strip = titleStrip(t); return `<div class="tro ${t.count ? "" : "none"}${strip ? " wide" : ""}">${compEmb(t.title, t.emblem, 54)}<div class="tro-info"><b>${esc(t.title)}</b>
     <div class="tro-n">${t.count ? "&times;" + t.count : "<span class='meta'>runner-up only</span>"}</div>
     <div class="meta">${t.count ? "S" + t.seasons.join(", S") : ""}${t.runner_up.length ? (t.count ? " &middot; " : "") + "2nd: S" + t.runner_up.join(", S") : ""}</div></div>${strip}</div>`; };
   return `<div class="card"><h3>${title || "Trophy room"}</h3>${groups.map(([g, name]) => {
@@ -1800,7 +1800,7 @@ function showCompEnd(s, more) {
     const lg = s.kind === "league" ? (s.name || "") : "";
     const draw = (hof) => {
       const hofBlock = hof ? `<div class="ce-hof"><span class="hb W" style="width:36px;height:36px;--hc:#f5c542">${hofStar(24)}</span><div><b>Hall of Fame</b><div class="meta">The candidates are on the ballot. The ceremony is played on Hall of Fame day, with the world.</div></div></div>` : "";
-      openModal(`<div class="ce"><div class="ce-emb">${emblem(s.emblem, window.innerWidth < 700 ? 72 : 96)}</div><div class="ce-t">${esc(s.name)} <span class="meta">${esc(s.season_label || "")}</span></div>
+      openModal(`<div class="ce"><div class="ce-emb">${compEmb(s.name, s.emblem, window.innerWidth < 700 ? 72 : 96)}</div><div class="ce-t">${esc(s.name)} <span class="meta">${esc(s.season_label || "")}</span></div>
         <div class="ce-w">${s.winner ? tm(s.winner) : "-"}</div><div class="ce-sub">${s.kind === "league" ? "Champions" : "Winners"}</div>${starMoment(s)}
         <div class="ce-facts">${facts.map((f, i) => `<div class="ce-f" style="animation-delay:${1.3 + i * 0.45}s">${f}</div>`).join("")}</div>${hofBlock}
         <div class="ce-btns">${hof ? '<button class="gold" id="ce-hc">Check the candidates</button> ' : ""}<button class="${hof ? "" : "pri"}" id="ce-next">${more ? "Next" : "Close"}</button>${more ? ' <button id="ce-skip">Skip all</button>' : ""}</div></div>`);
