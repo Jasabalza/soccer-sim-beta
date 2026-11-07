@@ -992,3 +992,12 @@ body.nosim #simbar { display: none; }
 .mv-st a.off { opacity: .3; pointer-events: none; }
 .mv-st b { min-width: 36px; text-align: center; font-size: 14px; }
 .mvp .filters { display: flex; gap: 8px; } .mvp .filters select { flex: 1; min-width: 0; }
+
+/* off-season "Next up" */
+.nu { padding: 4px 12px; margin-top: 10px; }
+.nu-r { display: flex; align-items: center; gap: 12px; padding: 12px 2px; border-bottom: 1px solid var(--line); color: var(--text); text-decoration: none; }
+.nu-r:last-child { border-bottom: 0; }
+.nu-m { flex: none; width: 28px; height: 28px; border-radius: 50%; border: 1px solid var(--line); display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 13px; color: var(--dim); }
+.nu-m.done { background: #123d28; border-color: #1f6b43; color: var(--accent); }
+.nu-m.on { background: var(--accent); border-color: var(--accent); color: #06210f; }
+.nu-t { flex: 1; display: flex; flex-direction: column; gap: 1px; }

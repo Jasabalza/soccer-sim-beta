@@ -996,6 +996,15 @@ body.nosim #simbar { display: none; }
 .mv-st b { min-width: 36px; text-align: center; font-size: 14px; }
 .mvp .filters { display: flex; gap: 8px; } .mvp .filters select { flex: 1; min-width: 0; }
 
+/* off-season "Next up" */
+.nu { padding: 4px 12px; margin-top: 10px; }
+.nu-r { display: flex; align-items: center; gap: 12px; padding: 12px 2px; border-bottom: 1px solid var(--line); color: var(--text); text-decoration: none; }
+.nu-r:last-child { border-bottom: 0; }
+.nu-m { flex: none; width: 28px; height: 28px; border-radius: 50%; border: 1px solid var(--line); display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 13px; color: var(--dim); }
+.nu-m.done { background: #123d28; border-color: #1f6b43; color: var(--accent); }
+.nu-m.on { background: var(--accent); border-color: var(--accent); color: #06210f; }
+.nu-t { flex: 1; display: flex; flex-direction: column; gap: 1px; }
+
 </style>
 
 <div id="top">
@@ -11756,6 +11765,27 @@ function progressRow(c) {
   const mark = c.kind === "league" ? (logoBox("leagues", c.name, 34) || `<span class="lph">${esc(c.name.split(" ").map((w) => w[0]).join("").slice(0, 3))}</span>`) : "";
   return `<div class="row prg"><span class="rl">${c.key ? starBtn(c.key, !!c.fav) : ""}${mark}<span class="rt">${c.link}<div class="meta">${c.sub || ""}</div></span></span><span class="prow"><span style="flex:1;min-width:60px">${bar(c.done, c.total)}<div class="meta" style="text-align:right">${c.done}/${c.total}</div></span>${btn}</span></div>`;
 }
+// the off-season "Next up" page (mock-up F5): the stages in order, where you are, one big button for the next one
+function nextUpHTML(h) {
+  const fs = h.flow.season, ph = h.phase, at = { awards: 1, transfers: 3, graduates: 4 }[ph] ?? 1;
+  const rows = [
+    ["Season and summer", "Played", "", true],
+    ["Awards", at > 1 ? "Ceremony done" : "The ceremony and the results", "#/ceremony/" + fs, at > 1],
+    ["Hall of Fame", "Ceremony: world, nations, leagues and clubs", "#/hofday/" + fs, at > 3],
+    ["Moves", "Transfers, coaches, retirements", "#/moves/" + fs, at > 3],
+    ["Graduates", "Academy prospects", "#/prospects", false],
+    ["Season " + h.season + " begins", h.season_label, "", false],
+  ];
+  const cur = ph === "awards" ? 1 : ph === "transfers" ? 3 : 4;
+  const btn = ph === "awards" ? ["Continue to moves", "transfers"] : ph === "transfers" ? ["Continue to graduates", "graduates"] : ["Start season " + h.season, "done"];
+  return `<div class="dim small" style="margin-bottom:2px">Season ${fs} &middot; off-season</div><h1>Next up</h1>
+    <div class="card nu">${rows.map(([t, sub, href, done], i) => {
+      const on = i === cur, mark = done ? "&#10003;" : String(i + 1);
+      const inner = `<span class="nu-m${done ? " done" : on ? " on" : ""}">${mark}</span><span class="nu-t"><b>${t}</b><span class="dim small">${esc(sub)}</span></span>${href ? CHEV : ""}`;
+      return href ? `<a class="nu-r" href="${href}">${inner}</a>` : `<div class="nu-r">${inner}</div>`;
+    }).join("")}</div>
+    <button class="btn pri wide" id="nu-go" style="width:100%;min-height:52px;font-size:15px;margin-top:12px">${btn[0]}</button>`;
+}
 async function viewWorld() {
   const d = await api("/api/world");
   d.summer = d.summer.filter((x) => x.total > 0);        // a summer tournament with no games this season (e.g. the play-off waiting for its year) is not shown
@@ -11818,11 +11848,13 @@ async function viewWorld() {
     ${compChips.length || favNat.length ? `<div class="sec-h">COMPETITIONS AND NATIONS</div>
     <div class="chiprow">${compChips.map((x) => `<a class="cchip" href="#/comp/${enc(x.id)}">${logoBox("comps", x.title, 28) || ""}<span>${esc(x.title)}</span></a>`).join("")}</div>
     ${favNat.length ? `<div class="flags">${favNat.map((n) => `<a href="#/nation/${enc(n)}"><span class="fb">${natBadge(n, 30)}</span><span>${esc(n)}</span></a>`).join("")}</div>` : ""}` : ""}`;
-  $("#view").innerHTML = `<div class="dim small" style="margin-bottom:2px">${seasonLine(STATUS.header)}</div><div class="whead whero"><h1>Scores</h1>${chosen ? `<div class="seg" role="group"><button data-fv="all" class="${onlyFav ? "" : "on"}">All</button><button data-fv="fav" class="${onlyFav ? "on" : ""}">Favorites ${FAVS.filter((k) => !k.startsWith("nation:")).length}</button></div>` : ""}</div>
+  const inFlow = !!STATUS.header.flow && ["awards", "transfers", "graduates"].includes(STATUS.header.phase);
+  $("#view").innerHTML = (inFlow ? nextUpHTML(STATUS.header) + `<details class="acc2" style="margin-top:14px"><summary><b>Season ${STATUS.header.season} scores</b></summary>` : "") + `<div class="dim small" style="margin-bottom:2px">${seasonLine(STATUS.header)}</div><div class="whead whero"><h1>Scores</h1>${chosen ? `<div class="seg" role="group"><button data-fv="all" class="${onlyFav ? "" : "on"}">All</button><button data-fv="fav" class="${onlyFav ? "on" : ""}">Favorites ${FAVS.filter((k) => !k.startsWith("nation:")).length}</button></div>` : ""}</div>
     ${scores}
     ${summerOn ? `<div class="grid" style="margin-top:12px">${summerCard}</div>` : ""}${hint}
     ${hidden}
-    <details class="acc2"><summary>By continent and everything else</summary>${strip}<div class="grid">${conts.map(card).join("")}</div>${info}</details><div id="w-halls"></div>`;
+    <details class="acc2"><summary>By continent and everything else</summary>${strip}<div class="grid">${conts.map(card).join("")}</div>${info}</details><div id="w-halls"></div>${inFlow ? "</details>" : ""}`;
+  if ($("#nu-go")) { const ph = STATUS.header.phase; $("#nu-go").onclick = () => flowStep(ph === "awards" ? "transfers" : ph === "transfers" ? "graduates" : "done"); }
   worldCompCards().catch(() => {}); worldHallsCard("#w-halls").catch(() => {});
   const ids = (code) => { const c = d.continents.find((x) => x.code === code); return [...c.leagues.map((l) => "L:" + l.name), ...c.comps.map((x) => x.id)]; };
   document.querySelectorAll("[data-lrev]").forEach((b) => b.onclick = async () => { try { const st = await busy("Loading...", () => api("/api/compstats?id=" + enc(b.dataset.lrev))); if (st) await showCompEnd(st, false); } catch (e) { toast(e.message); } });
