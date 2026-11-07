@@ -1042,3 +1042,5 @@ body.nosim #simbar { display: none; }
 .hb-n { flex: 1; display: flex; align-items: center; gap: 10px; min-height: 46px; background: none; border: 0; color: var(--text); text-align: left; font-size: 15px; cursor: pointer; }
 .hof2 .hof-ctl { flex-wrap: wrap; } .hof2 .hof-mine { flex: 1 0 100%; margin: 0; }
 .hof-mine .chips { flex-wrap: nowrap; overflow-x: auto; }
+.hr.attn .tag{white-space:nowrap}
+.hof2 .seg button{padding-left:10px;padding-right:10px}

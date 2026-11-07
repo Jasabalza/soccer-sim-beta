@@ -1045,6 +1045,8 @@ body.nosim #simbar { display: none; }
 .hb-n { flex: 1; display: flex; align-items: center; gap: 10px; min-height: 46px; background: none; border: 0; color: var(--text); text-align: left; font-size: 15px; cursor: pointer; }
 .hof2 .hof-ctl { flex-wrap: wrap; } .hof2 .hof-mine { flex: 1 0 100%; margin: 0; }
 .hof-mine .chips { flex-wrap: nowrap; overflow-x: auto; }
+.hr.attn .tag{white-space:nowrap}
+.hof2 .seg button{padding-left:10px;padding-right:10px}
 
 </style>
 
@@ -10589,6 +10591,12 @@ function hofRow(r, o) {
 }
 const hofSeg = (attr, list, cur) => `<div class="seg" role="group">${list.map(([k, t]) => `<button ${attr}="${esc(k)}" class="${k === cur ? "on" : ""}">${t}</button>`).join("")}</div>`;
 
+// needs attention: last chance first, then the closest to the pass mark. Time left and odds on every row.
+const attnSort = (a, b) => (a.left - b.left) || (Math.abs(0.75 - a.pct) - Math.abs(0.75 - b.pct));
+function attnRow(r, hall) {
+  const tag = r.left === 0 ? "last chance" : r.left + (r.left === 1 ? " year left" : " years left");
+  return `<div class="hr attn"><div class="hr-a">${r.nat ? flag(r.nat, 18) : ""}<div class="hr-m"><b>${hofLink(r)}</b><span class="dim small">${hofSub(Object.assign({}, r, { n: 0 }))}${hall ? " &middot; " + esc(hall) : ""}</span></div><span class="tag red">${tag}</span><span class="hr-r">${r.pct != null ? hofPct(r.pct) : ""}</span></div>${r.pct != null ? `<div class="hbar"><i style="width:${Math.round(r.pct * 100)}%"></i><u style="left:75%"></u></div>` : ""}</div>`;
+}
 function hofRankedList(d) {
   return `<div class="hlist">${d.classes.flatMap((c) => c.rows.map((r) => Object.assign({ cl: c.label }, r))).sort((a, b) => (b.score || 0) - (a.score || 0)).map((r, i) => hofRow(r, { right: (r.score != null ? r.score + " pts" : ""), sub: "#" + (i + 1) + " &middot; class of " + esc(r.cl) + " &middot; " + hofSub(Object.assign({}, r, { n: 0 })) })).join("")}</div>`;
 }
@@ -10611,7 +10619,27 @@ function hofBrowse(tier, scopes, favS, current) {
   draw();
 }
 // ---------------------------------------------------------------- the Hall of Fame tab
+// every followed hall in one list: the World plus your countries, leagues and clubs, players and coaches, ranked by urgency
+async function viewHofAttention() {
+  if (FAVN === null) await loadFavNations();
+  if (FAVC === null) await loadFavClubs();
+  const halls = [["W", "", "World"]];
+  (FAVN || []).forEach((n) => halls.push(["C", n, n]));
+  (FAVS || []).filter((k) => k.startsWith("L:")).forEach((k) => halls.push(["L", k.slice(2), k.slice(2)]));
+  (FAVC || []).forEach((n) => halls.push(["K", n, n]));
+  const jobs = [];
+  halls.forEach(([t, n, lbl]) => ["p", "c"].forEach((kind) => jobs.push(api("/api/hof?tier=" + t + "&kind=" + kind + (n ? "&name=" + enc(n) : "")).then((d) => d.watch.map((r) => Object.assign({}, r, { k: kind, hall: lbl + (kind === "c" ? " coaches" : "")}))).catch(() => []))));
+  const all = (await Promise.all(jobs)).flat().sort(attnSort);
+  const last = all.filter((r) => r.left === 0).length;
+  $("#view").innerHTML = `<div class="v2 hof2"><h1>Hall of Fame</h1>
+    ${hofSeg("data-tier", [["A", "Watch"], ["W", "World"], ["C", "Country"], ["L", "League"], ["K", "Club"]], "A")}
+    <div class="dim small" style="margin:10px 2px">Needs attention: two years or fewer left on a ballot, across the World and the ${halls.length - 1} ${halls.length === 2 ? "hall" : "halls"} you follow. ${last ? `${last} on their last chance.` : ""} The line marks the 75% needed.</div>
+    ${all.length ? `<div class="hlist">${all.map((r) => attnRow(r, r.hall)).join("")}</div>` : `<div class="card dim small">Nobody is running out of time right now.</div>`}
+    <div class="dim small" style="margin:12px 2px">Follow more countries, leagues and clubs in their own tabs to watch their halls here.</div></div>`;
+  document.querySelectorAll("[data-tier]").forEach((b) => (b.onclick = () => (location.hash = "#/hof/" + b.dataset.tier)));
+}
 async function viewHof(tier, name) {
+  if (tier === "A") return viewHofAttention();
   tier = ["W", "C", "L", "K"].includes(tier) ? tier : "W";
   const d = await api("/api/hof?tier=" + tier + "&kind=" + HOF.kind + (name ? "&name=" + enc(name) : ""));
   const opts = d.options;
@@ -10657,7 +10685,7 @@ async function viewHof(tier, name) {
   }
   if (noScope) body = `<div class="card dim small">No club followed yet. There are hundreds of club Halls of Fame, so pick the ones you care about: tap <b>Browse</b>, search a club and star it.</div>`;
   $("#view").innerHTML = `<div class="v2 hof2"><h1>Hall of Fame</h1>
-    ${hofSeg("data-tier", [["W", "World"], ["C", "Country"], ["L", "League"], ["K", "Club"]], tier)}
+    ${hofSeg("data-tier", [["A", "Watch"], ["W", "World"], ["C", "Country"], ["L", "League"], ["K", "Club"]], tier)}
     <div class="hof-ctl">${scopeSel}${hofSeg("data-kind", [["p", "Players"], ["c", "Coaches"]], HOF.kind)}</div>
     <div class="hof-sc">${HOF_LBL[tier]}${name ? " &middot; " + esc(name) : ""} <span class="dim small">&middot; ${d.total} ${people} inducted</span>${tier === "K" && name ? ` <button class="star${favClubs.includes(name) ? " on" : ""}" id="hof-favc" aria-pressed="${favClubs.includes(name)}" aria-label="Follow ${esc(name)}">${starSvg(20)}</button>` : tier === "C" && name ? " " + favNatBtn(name, favNats.includes(name)) : tier === "L" && name ? ` <button class="star${favLeagues.includes(name) ? " on" : ""}" id="hof-favl" aria-pressed="${favLeagues.includes(name)}" aria-label="Follow ${esc(name)}">${starSvg(20)}</button>` : ""}</div>
     <nav class="chips hof-tabs five">${tabs.map(([k, t]) => `<button data-htab="${k}" class="${k === tab ? "on" : ""}">${t}</button>`).join("")}</nav>
@@ -10833,11 +10861,8 @@ function hofDayWatch(d) {
   const draw = () => {
     let h;
     if (step === 0) {
-      h = head("Final-year watch") + `<div class="dim small" style="margin:8px 2px">They are running out of time. Swipe to see who is on the edge before the vote.</div>
-        <div class="hswipe">${d.watch.map((r) => `<div class="hsw"><div class="hrv-n">${flag(r.nat, 30)}<div><div class="hrv-name">${esc(r.name)}</div><div class="dim small">${hofSub(Object.assign({}, r, { n: 0 }))}</div></div></div>
-          <div class="hrv-p"><span class="dim small">Year ${r.n} of 10</span>${r.left === 0 ? '<span class="tag red">last chance</span>' : `<span class="tag red">${r.left} left</span>`}</div>
-          ${r.last != null ? `<div class="hbar"><i style="width:${Math.round(r.last * 100)}%"></i><u style="left:75%"></u></div><div class="dim small">Last year ${hofPct(r.last)}</div>` : ""}
-          <div class="dim small" style="margin-top:6px">${esc(r.line)}</div></div>`).join("")}</div>
+      h = head("Final-year watch") + `<div class="dim small" style="margin:8px 2px">Running out of time, most urgent first. The line marks the 75% needed.</div>
+        <div class="hlist">${d.watch.slice().sort(attnSort).map((r) => attnRow(r, "")).join("")}</div>
         <div class="foot"><button class="btn" id="hd-skip">Skip</button><button class="btn pri" id="hd-next">The vote</button></div>`;
     } else if (step === 1) {
       if (i < ind.length) {
