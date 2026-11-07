@@ -1348,6 +1348,10 @@ async function viewCeremony(season, sub) {
   $("#view").innerHTML = `<div class="v2">${html}</div>`;
   const sel = $("#aw-season"); if (sel) sel.onchange = (e) => (location.hash = "#/ceremony/" + e.target.value + (sub ? "/" + sub : ""));
   document.querySelectorAll("#view [data-go]").forEach((b) => (b.onclick = () => { document.getElementById(b.dataset.go).scrollIntoView({ behavior: "smooth", block: "start" }); document.querySelectorAll("#view .chips [data-go]").forEach((x) => x.classList.toggle("on", x === b)); }));
+  if (!sub && $("#aw-prev")) {
+    awPrevious(d);
+    document.querySelectorAll("#view [data-awh]").forEach((b) => (b.onclick = () => { AWH = b.dataset.awh; document.querySelectorAll("#view [data-awh]").forEach((x) => x.classList.toggle("on", x === b)); awPrevious(d); }));
+  }
   document.querySelectorAll("#view [data-cg]").forEach((b) => (b.onclick = () => { AWCG = b.dataset.cg; viewCeremony(season, sub); }));
 }
 let AWCG = "club";
@@ -1361,6 +1365,24 @@ function awGate(d) {
       <div class="dim small">Watch them revealed one at a time, or skip and see every winner on one page.</div>
       <div style="display:grid;gap:10px;margin-top:18px"><a class="btn pri" href="#/ceremony/${S}/watch" style="min-height:52px;font-size:15px">Watch the ceremony</a><a class="btn" href="#/ceremony/${S}" style="min-height:52px;font-size:15px">Skip to results</a></div></div>
     <a class="more" data-hgo="W||bal"><span>Hall of Fame: check the candidates</span><span>&rsaquo;</span></a></div>`;
+}
+const AWH_KINDS = [["ballon", "Ballon d'Or"], ["boot", "Golden Boot"], ["young", "Young player"], ["coach", "Coach"]];
+let AWH = "ballon", AWH_CACHE = {};
+async function awPrevious(d) {
+  const box = $("#aw-prev-b"); if (!box) return;
+  const seasons = d.seasons.slice().reverse().slice(0, 15);
+  const rows = await Promise.all(seasons.map(async (S) => {
+    if (!AWH_CACHE[S]) { try { AWH_CACHE[S] = (await api("/api/awards?season=" + S)).awards; } catch (e) { AWH_CACHE[S] = null; } }
+    return [S, AWH_CACHE[S]];
+  }));
+  if (!$("#aw-prev-b")) return;
+  const line = ([S, a]) => {
+    const x = a && a[AWH] && a[AWH][0]; if (!x) return "";
+    const who = AWH === "coach" ? coachLink(x.cid, x.name) : playerLink(x);
+    const extra = AWH === "boot" ? `${x.goals} goals` : AWH === "coach" ? esc(x.club || x.nation || "") : esc(x.club || "");
+    return `<div class="row"><span class="l"><span class="rk b">S${S}</span><span>${who}</span></span><span class="dim small">${extra}</span></div>`;
+  };
+  box.className = ""; box.innerHTML = rows.map(line).join("") || `<div class="dim small">No winners yet.</div>`;
 }
 function awResults(d) {
   const a = d.awards, b = a.ballon, w = b[0], bt = a.boot[0], yg = a.young[0], co = a.coach[0];
@@ -1394,6 +1416,9 @@ function awResults(d) {
       ${["FWD", "MID", "DEF", "GK"].map((pos) => `<div class="row"><span class="l"><span class="p ${pos}">${pos}</span><span>${line(pos).map((p) => playerLink(p, surname(p.name))).join(" · ")}</span></span></div>`).join("")}
       <a class="more" href="#/ceremony/${S}/team"><span>See it on the pitch</span><span>&rsaquo;</span></a>
     </section>
+    <section id="aw-prev" class="card"><h3>Previous winners <small>every season</small></h3>
+      <nav class="chips" aria-label="Award">${AWH_KINDS.map(([k, t]) => `<button data-awh="${k}" class="${k === AWH ? "on" : ""}">${t}</button>`).join("")}</nav>
+      <div id="aw-prev-b" class="dim small" style="padding:8px 0">Loading...</div></section>
     <section id="aw-cups" class="card"><h3>Cup awards <small>MVPs feed the Ballon d'Or</small></h3>
       ${cupsShow.map((c) => `<details class="acc"><summary><span>${esc(c.name)}</span><span class="dim">${c.winner ? esc(c.winner) : ""}</span></summary><div class="b">${awCompBlock(c)}</div></details>`).join("")}
       <a class="more" href="#/ceremony/${S}/team"><span>All ${nComps} competitions</span><span>&rsaquo;</span></a>
