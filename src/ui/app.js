@@ -1382,7 +1382,12 @@ async function awPrevious(d) {
     const extra = AWH === "boot" ? `${x.goals} goals` : AWH === "coach" ? esc(x.club || x.nation || "") : esc(x.club || "");
     return `<div class="row"><span class="l"><span class="rk b">S${S}</span><span>${who}</span></span><span class="dim small">${extra}</span></div>`;
   };
-  box.className = ""; box.innerHTML = rows.map(line).join("") || `<div class="dim small">No winners yet.</div>`;
+  // most successful: award wins per name across every season loaded
+  const cnt = {};
+  rows.forEach(([S, a]) => { const x = a && a[AWH] && a[AWH][0]; if (x) { const k = x.name; (cnt[k] = cnt[k] || { x, n: 0 }).n++; } });
+  const top = Object.values(cnt).sort((p, q) => q.n - p.n).filter((e) => e.n > 1).slice(0, 3);
+  const most = top.length ? `<div class="eyebrow gold" style="margin:6px 0 2px">Most wins</div>${top.map((e) => `<div class="row"><span>${AWH === "coach" ? coachLink(e.x.cid, e.x.name) : playerLink(e.x)}</span><b class="gold">${e.n}</b></div>`).join("")}<div class="eyebrow" style="margin:10px 0 2px">By season</div>` : "";
+  box.className = ""; box.innerHTML = most + (rows.map(line).join("") || `<div class="dim small">No winners yet.</div>`);
 }
 function awResults(d) {
   const a = d.awards, b = a.ballon, w = b[0], bt = a.boot[0], yg = a.young[0], co = a.coach[0];
