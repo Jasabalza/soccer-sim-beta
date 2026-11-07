@@ -1111,3 +1111,5 @@ body.nosim #simbar { display: none; }
 .hstp span.done{color:#3ddc84;opacity:1}.hstp span.on{background:#3ddc84;color:#06240f;font-weight:700;border-color:#3ddc84;opacity:1}
 .hday .foot.top{position:static;display:flex;gap:10px;margin:10px 0 14px;padding:0}
 .hday .foot.top>*{flex:1;min-height:48px;display:flex;align-items:center;justify-content:center}
+.v2 .foot.top{position:static;display:flex;gap:10px;margin:10px 0 14px;padding:0}
+.v2 .foot.top>*{flex:1;min-height:48px;display:flex;align-items:center;justify-content:center}

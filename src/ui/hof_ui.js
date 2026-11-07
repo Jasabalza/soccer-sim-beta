@@ -353,9 +353,10 @@ async function hofResults(d, S) {
   const draw = (cur) => {
     $("#view").innerHTML = `<div class="v2"><a class="crumb" href="#/ceremony/${S}">&lsaquo; Awards &middot; Season ${S}</a>
       <div class="hd"><div><h1>Hall of Fame results</h1><div class="sub">Class of ${esc(d.label)}</div></div></div>
+      ${inFlow ? `<div class="foot top"><button class="btn pri" id="hr-go">Continue to off-season</button></div>` : ""}
       ${panes.length > 1 ? `<nav class="chips hof-mine" aria-label="My halls">${panes.map((x, i) => `<button data-hp="${i}" class="${i === cur ? "on" : ""}">${esc(x.name)}</button>`).join("")}</nav>` : ""}
       ${panes[cur].html}
-      ${inFlow ? `<div class="foot"><button class="btn pri" id="hr-go" style="width:100%">Continue to off-season</button></div>` : ""}</div>`;
+</div>`;
     document.querySelectorAll("[data-hp]").forEach((b) => (b.onclick = () => { draw(+b.dataset.hp); window.scrollTo(0, 0); }));
     const go = $("#hr-go"); if (go) go.onclick = () => flowStep("transfers");
   };
@@ -385,12 +386,12 @@ function hofDayWatch(d, chain) {
     if (step === 0) {
       h = head("Final-year watch") + `<div class="dim small" style="margin:8px 2px">Running out of time, most urgent first. The line marks the 75% needed.</div>
         <div class="hlist">${d.watch.slice().sort(attnSort).map((r) => attnRow(r, "")).join("")}</div>
-        <div class="foot"><button class="btn" id="hd-skip">Skip</button><button class="btn pri" id="hd-next">The vote</button></div>`;
+        <div class="foot"><button class="btn" id="hd-skip">Skip this hall</button><button class="btn pri" id="hd-next">The vote</button></div>`;
     } else if (step === 1) {
       if (i < ind.length) {
         const e = ind[i];
         h = head("The vote") + `<div class="dim small" style="margin:8px 2px">${ind.length} inducted, revealed from the lowest vote up.</div>${hofReveal(Object.assign({}, e, { tier: "W" }), (e.k === "c" ? "World Hall of Fame · coach" : "World Hall of Fame"), i, ind.length, hofBadge({ tier: "W" }, 30))}
-          <div class="foot"><button class="btn" id="hd-skip">Skip to summary</button><button class="btn pri" id="hd-next">${i === ind.length - 1 ? "Summary" : "Next"}</button></div>`;
+          <div class="foot"><button class="btn" id="hd-skip">Skip this hall</button><button class="btn pri" id="hd-next">${i === ind.length - 1 ? "Summary" : "Next"}</button></div>`;
       } else {
         h = head("The vote: summary") + `<h2 class="lbl2">Inducted</h2>${ind.length ? `<div class="hlist">${ind.slice().reverse().map((r) => hofRow(r, { right: hofPct(r.pct), bar: r.pct, gold: true })).join("")}</div>` : '<div class="card dim small">Nobody reached 75% this year.</div>'}
           ${d.vetoes.map((v) => `<div class="hveto"><b>${esc(v.nat)} did not honour ${esc(v.name)}.</b> ${esc(v.text.replace(/^.*?Federation veto: /, "Federation veto: "))}</div>`).join("")}
@@ -408,7 +409,7 @@ function hofDayWatch(d, chain) {
     $("#view").innerHTML = `<div class="v2 hday">${h}</div>`; hofCount();
     const nx = $("#hd-next"), sk = $("#hd-skip"), bk = $("#hd-back");
     if (nx) nx.onclick = () => { if (step === 0) { step = 1; i = 0; } else if (step === 1) { if (i < ind.length) i++; else step = 2; } draw(); window.scrollTo(0, 0); };
-    if (sk) sk.onclick = () => { if (step === 0) { step = 1; i = 0; } else i = ind.length; draw(); };
+    if (sk) sk.onclick = () => { location.hash = chain.next; };
     if (bk) bk.onclick = () => { if (step === 2) { step = 1; i = ind.length; } else { i = Math.max(0, ind.length - 1); } draw(); };
   };
   draw();
@@ -454,11 +455,11 @@ function hofCeremony(cfg) {
       body = `<div class="hday-open"><div class="hday-logo">${cfg.logo(84)}</div><div class="eyebrow gold">Hall of Fame day</div><h1 style="margin:6px 0">${esc(cfg.title)}</h1><div class="dim">${esc(cfg.sub)}</div>
         <div class="hday-n">${cfg.counts.map(([n, t]) => `<div><b>${n}</b><span>${esc(t)}</span></div>`).join("")}</div>
         <div class="dim small">${items.length ? esc(cfg.blurb) : "Nobody was inducted this year."}</div></div>`;
-      foot = items.length ? `<button class="btn" id="hc-skip">Skip to the class</button><button class="btn pri" id="hc-next">Begin</button>` : `<a class="btn pri" href="${cfg.end[1]}">${esc(cfg.end[0])}</a>`;
+      foot = items.length ? `<button class="btn" id="hc-skip">Skip this hall</button><button class="btn pri" id="hc-next">Begin</button>` : `<a class="btn pri" href="${cfg.end[1]}">${esc(cfg.end[0])}</a>`;
     } else if (!last) {
       const it = items[i], nxt = items[i + 1];
       body = `<div class="dim small" style="margin:8px 2px">${esc(it.phase || "")}${i === items.length - 1 && items.length > 1 ? " &middot; the final name" : ""}</div>${hofReveal(it.e, it.scope, i, items.length, it.icon)}`;
-      foot = `<button class="btn" id="hc-skip">Skip to the class</button><button class="btn pri" id="hc-next">${nxt ? (nxt.phase !== it.phase && nxt.phase ? esc(nxt.phase) : "Next") : "The class"}</button>`;
+      foot = `<button class="btn" id="hc-skip">Skip this hall</button><button class="btn pri" id="hc-next">${nxt ? (nxt.phase !== it.phase && nxt.phase ? esc(nxt.phase) : "Next") : "The class"}</button>`;
     } else {
       body = `<div class="card" style="text-align:center;padding:22px 14px"><div class="hday-logo">${cfg.logo(56)}</div><div class="eyebrow gold">${items.length ? "That is the class" : "No class this year"}</div><div style="font-size:18px;font-weight:700;margin:8px 0">${esc(cfg.counts.map(([n, t]) => n + " " + t).join(" and "))}</div></div>
         ${items.length ? `<div class="hlist">${items.slice().reverse().map((it) => hofRow(Object.assign({}, it.e, { badge: { tier: it.e.tier, scope: it.e.scope } }), { right: it.e.via === "world" ? "with the world" : hofPct(it.e.pct), bar: it.e.via === "world" ? 0 : it.e.pct, gold: true, sub: esc(it.scope) })).join("")}</div>` : ""}
@@ -469,7 +470,7 @@ function hofCeremony(cfg) {
     hofCount();
     const cur = document.querySelector(".hstp .on"); if (cur && cur.scrollIntoView) cur.scrollIntoView({ inline: "center", block: "nearest" });
     const nx = $("#hc-next"); if (nx) nx.onclick = () => { i++; draw(); window.scrollTo(0, 0); };
-    const sk = $("#hc-skip"); if (sk) sk.onclick = () => { i = items.length; draw(); window.scrollTo(0, 0); };
+    const sk = $("#hc-skip"); if (sk) sk.onclick = () => { if (cfg.chain) { location.hash = cfg.end[1]; return; } i = items.length; draw(); window.scrollTo(0, 0); };
   };
   draw();
 }
