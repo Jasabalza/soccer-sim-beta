@@ -1465,15 +1465,19 @@ async function viewNews() {
   if (NWV.kind !== "all" && !kinds.includes(NWV.kind)) NWV.kind = "all";
   if (NWV.season !== "all" && !seasons.includes(+NWV.season)) NWV.season = "all";
   const rows = d.items.filter((n) => (NWV.kind === "all" || n.kind === NWV.kind) && (NWV.season === "all" || n.season === +NWV.season));
-  const item = (n) => `<div class="row"><span class="l"><span class="tag">${esc(label(n.kind))}</span><span>${esc(n.text)}<div class="dim small">S${n.season}${n.date ? " &middot; " + n.date.text : ""}</div></span></span></div>`;
+  let CL = []; try { CL = ((await api("/api/settings")).clubs || []).slice().sort((x, y) => y.length - x.length); } catch (e) {}
+  const KG = { star: "&#9733;", transfer: "&#8646;", coach: "C", cup: "&#9917;", collapse: "&#8595;", award: "&#9733;", worldcup: "&#9917;", rivalry: "&#9876;", upset: "!", title: "&#9733;", hof: "&#9733;" };
+  const TAGC = { coach: "gold", upset: "gold", rivalry: "red", cup: "blue", collapse: "red", title: "green", hof: "gold", worldcup: "blue" };
+  const markOf = (n) => { const c = CL.find((x) => n.text.includes(x)); return c ? crest(c, 34) : `<span class="ng">${KG[n.kind] || "&#8226;"}</span>`; };
+  const item = (n) => `<div class="ncard"><span class="nm">${markOf(n)}</span><span class="nt"><b>${esc(n.text)}</b><span class="dim small">Season ${n.season}${n.date ? " &middot; " + n.date.text : ""}</span></span><span class="ntag ${TAGC[n.kind] || ""}">${esc(label(n.kind))}</span></div>`;
   // Hall of Fame items fold into one card per season so they do not bury everything else
   const out = []; let i = 0;
   while (i < rows.length) {
     const n = rows[i];
     if (n.kind === "hof") { const g = []; while (i < rows.length && rows[i].kind === "hof" && rows[i].season === n.season) g.push(rows[i++]); out.push(`<details class="acc2 newsfold"><summary><b>Hall of Fame &middot; season ${n.season}</b><span class="dim small">${g.length} item${g.length === 1 ? "" : "s"}</span></summary>${g.map(item).join("")}</details>`); }
-    else { out.push(`<div class="card" style="padding:2px 14px">${item(n)}</div>`); i++; }
+    else { out.push(item(n)); i++; }
   }
-  $("#view").innerHTML = `<div class="v2"><h1>News</h1><div class="sub">${d.items.length} stories.</div>
+  $("#view").innerHTML = `<div class="v2"><div class="dim small" style="margin-bottom:2px">${rows.length} ${rows.length === 1 ? "story" : "stories"}</div><h1>News</h1>
     <nav class="chips" aria-label="Kind"><button data-nk="all" class="${NWV.kind === "all" ? "on" : ""}">All</button>${kinds.map((k) => `<button data-nk="${esc(k)}" class="${NWV.kind === k ? "on" : ""}">${esc(label(k))}</button>`).join("")}</nav>
     <p><select class="sel" id="nv-s" aria-label="Season"><option value="all">All seasons</option>${seasons.map((x) => `<option value="${x}" ${NWV.season !== "all" && +NWV.season === x ? "selected" : ""}>Season ${x}</option>`).join("")}</select></p>
     ${out.length ? out.join("") : '<div class="empty">Nothing matches.</div>'}</div>`;
