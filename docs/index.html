@@ -12884,6 +12884,8 @@ function awResults(d) {
     <section id="aw-prev" class="card"><h3>Previous winners <small>every season</small></h3>
       <nav class="chips" aria-label="Award">${AWH_KINDS.map(([k, t]) => `<button data-awh="${k}" class="${k === AWH ? "on" : ""}">${t}</button>`).join("")}</nav>
       <div id="aw-prev-b" class="dim small" style="padding:8px 0">Loading...</div></section>
+    <section id="aw-more" class="card"><h3>More history</h3>
+      ${[["World Cup winners", "#/trophies/winners/wc"], ["Club World Cup winners", "#/trophies/winners/cwc"], ["Most successful clubs", "#/trophies/clubs"], ["League records", "#/records"]].map(([t, h]) => `<a class="more" href="${h}"><span>${t}</span><span>&rsaquo;</span></a>`).join("")}</section>
     <section id="aw-cups" class="card"><h3>Cup awards <small>MVPs feed the Ballon d'Or</small></h3>
       ${cupsShow.map((c) => `<details class="acc"><summary><span>${esc(c.name)}</span><span class="dim">${c.winner ? esc(c.winner) : ""}</span></summary><div class="b">${awCompBlock(c)}</div></details>`).join("")}
       <a class="more" href="#/ceremony/${S}/team"><span>All ${nComps} competitions</span><span>&rsaquo;</span></a>
