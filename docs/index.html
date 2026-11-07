@@ -1005,6 +1005,15 @@ body.nosim #simbar { display: none; }
 .nu-m.on { background: var(--accent); border-color: var(--accent); color: #06210f; }
 .nu-t { flex: 1; display: flex; flex-direction: column; gap: 1px; }
 
+/* summer tournaments */
+.card.sum { padding: 8px 12px; }
+.card.sum .gold-lbl, .gold-lbl { font-size: 11px; letter-spacing: .8px; text-transform: uppercase; color: #f5c542; font-weight: 800; padding: 6px 0; }
+.sum-r { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-top: 1px solid var(--line); }
+.sum-l { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; color: var(--text); text-decoration: none; }
+.sum-l .mt { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.sum-b { flex: none; min-height: 38px; padding: 0 16px; border-radius: 99px; border: 0; background: var(--accent); color: #06210f; font-weight: 800; font-size: 13px; cursor: pointer; }
+.sum-b.done { background: none; color: var(--accent); font-weight: 700; }
+
 </style>
 
 <div id="top">
@@ -11801,8 +11810,14 @@ async function viewWorld() {
   const hiddenN = conts.flatMap((x) => x.rows).filter((r) => chosen && !r.fav).length;
   const leaguesDone = d.continents.every((c) => c.leagues.every((l) => l.done >= l.total));
   const summerOn = d.summer.length > 0 && leaguesDone;          // the World Cup and friends only show once every league has finished
-  const summerCard = summerOn ? `<div class="card summer"><h3>Summer tournaments<small>every league is finished</small></h3>
-      ${d.summer.map((x) => progressRow({ sim: x.locked.length ? "" : x.id, link: `<a href="#/comp/${enc(x.id)}">${esc(x.title)}</a>`, sub: x.locked.length ? "locked: needs " + x.locked.map((m) => esc(m.title)).join(", ") : x.next ? "next: " + esc(x.next) : "finished", done: x.done, total: x.total })).join("")}</div>` : "";
+  const sumState = (x) => (x.done >= x.total ? "done" : x.locked.length ? "locked" : x.done > 0 ? "going" : "new");
+  const sumAll = d.summer.filter((x) => !x.locked.length && x.done < x.total).map((x) => x.id);
+  const summerCard = summerOn ? `<div class="dim small" style="margin-bottom:2px">Season ${STATUS.header.season} &middot; summer</div><h1 style="margin-bottom:8px">Summer tournaments</h1>
+      <div class="card sum"><div class="gold-lbl">Tournaments</div>${d.summer.map((x) => { const st = sumState(x);
+        return `<div class="sum-r"><a class="sum-l" href="#/comp/${enc(x.id)}">${logoBox("comps", x.title, 34) || ""}<span class="mt"><b>${esc(x.title)}</b><span class="dim small">${st === "locked" ? "locked: needs " + x.locked.map((m) => esc(m.title)).join(", ") : st === "done" ? "Finished" : x.next ? esc(x.next) : x.done + " of " + x.total + " played"}</span></span></a>${st === "done" ? `<span class="sum-b done">Done &#10003;</span>` : st === "locked" ? "" : `<button class="sum-b" data-lwk="${esc(x.id)}">${st === "going" ? "Next game" : "Play"}</button>`}</div>`; }).join("")}</div>
+      <div class="card dim small">Same controls as any tournament: one game at a time, a whole group, or sim it to the end.</div>
+      ${sumAll.length ? `<button class="btn wide" id="sum-all" style="width:100%;min-height:50px;margin-top:10px">Sim all summer tournaments</button>` : ""}
+      <button class="btn pri wide" id="sum-next" style="width:100%;min-height:52px;font-size:15px;margin-top:10px" ${sumAll.length ? "disabled" : ""}>Continue to awards</button>` : "";
   const card = ({ c, rows }) => {
     const shown = onlyFav ? rows.filter((r) => r.fav) : rows;
     if (onlyFav && !shown.length) return "";
@@ -11849,11 +11864,25 @@ async function viewWorld() {
     <div class="chiprow">${compChips.map((x) => `<a class="cchip" href="#/comp/${enc(x.id)}">${logoBox("comps", x.title, 28) || ""}<span>${esc(x.title)}</span></a>`).join("")}</div>
     ${favNat.length ? `<div class="flags">${favNat.map((n) => `<a href="#/nation/${enc(n)}"><span class="fb">${natBadge(n, 30)}</span><span>${esc(n)}</span></a>`).join("")}</div>` : ""}` : ""}`;
   const inFlow = !!STATUS.header.flow && ["awards", "transfers", "graduates"].includes(STATUS.header.phase);
-  $("#view").innerHTML = (inFlow ? nextUpHTML(STATUS.header) + `<details class="acc2" style="margin-top:14px"><summary><b>Season ${STATUS.header.season} scores</b></summary>` : "") + `<div class="dim small" style="margin-bottom:2px">${seasonLine(STATUS.header)}</div><div class="whead whero"><h1>Scores</h1>${chosen ? `<div class="seg" role="group"><button data-fv="all" class="${onlyFav ? "" : "on"}">All</button><button data-fv="fav" class="${onlyFav ? "on" : ""}">Favorites ${FAVS.filter((k) => !k.startsWith("nation:")).length}</button></div>` : ""}</div>
+  const wrapIt = inFlow || summerOn;
+  $("#view").innerHTML = (wrapIt ? (inFlow ? nextUpHTML(STATUS.header) : summerCard) + `<details class="acc2" style="margin-top:14px"><summary><b>Season ${STATUS.header.season} scores</b></summary>` : "") + `<div class="dim small" style="margin-bottom:2px">${seasonLine(STATUS.header)}</div><div class="whead whero"><h1>Scores</h1>${chosen ? `<div class="seg" role="group"><button data-fv="all" class="${onlyFav ? "" : "on"}">All</button><button data-fv="fav" class="${onlyFav ? "on" : ""}">Favorites ${FAVS.filter((k) => !k.startsWith("nation:")).length}</button></div>` : ""}</div>
     ${scores}
-    ${summerOn ? `<div class="grid" style="margin-top:12px">${summerCard}</div>` : ""}${hint}
+    ${hint}
     ${hidden}
-    <details class="acc2"><summary>By continent and everything else</summary>${strip}<div class="grid">${conts.map(card).join("")}</div>${info}</details><div id="w-halls"></div>${inFlow ? "</details>" : ""}`;
+    <details class="acc2"><summary>By continent and everything else</summary>${strip}<div class="grid">${conts.map(card).join("")}</div>${info}</details><div id="w-halls"></div>${wrapIt ? "</details>" : ""}`;
+  if ($("#sum-all")) $("#sum-all").onclick = async () => {
+    for (const k in HOLD) delete HOLD[k];
+    let fin = [];
+    await busy("Simulating...", async () => {
+      for (let i = 0; i < 5; i++) {                       // a tournament can unlock the next one (play-off -> World Cup), so keep going
+        const w = await api("/api/world"), ids = w.summer.filter((x) => x.total > 0 && !x.locked.length && x.done < x.total).map((x) => x.id);
+        if (!ids.length) break;
+        const r = await api("/api/sim", { scope: "ids", ids, to_end: true }); if (r && r.finished) fin = fin.concat(r.finished);
+      }
+    });
+    await afterSim(); await playFinished(fin);
+  };
+  if ($("#sum-next")) $("#sum-next").onclick = () => rollover();
   if ($("#nu-go")) { const ph = STATUS.header.phase; $("#nu-go").onclick = () => flowStep(ph === "awards" ? "transfers" : ph === "transfers" ? "graduates" : "done"); }
   worldCompCards().catch(() => {}); worldHallsCard("#w-halls").catch(() => {});
   const ids = (code) => { const c = d.continents.find((x) => x.code === code); return [...c.leagues.map((l) => "L:" + l.name), ...c.comps.map((x) => x.id)]; };

@@ -1001,3 +1001,12 @@ body.nosim #simbar { display: none; }
 .nu-m.done { background: #123d28; border-color: #1f6b43; color: var(--accent); }
 .nu-m.on { background: var(--accent); border-color: var(--accent); color: #06210f; }
 .nu-t { flex: 1; display: flex; flex-direction: column; gap: 1px; }
+
+/* summer tournaments */
+.card.sum { padding: 8px 12px; }
+.card.sum .gold-lbl, .gold-lbl { font-size: 11px; letter-spacing: .8px; text-transform: uppercase; color: #f5c542; font-weight: 800; padding: 6px 0; }
+.sum-r { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-top: 1px solid var(--line); }
+.sum-l { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; color: var(--text); text-decoration: none; }
+.sum-l .mt { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.sum-b { flex: none; min-height: 38px; padding: 0 16px; border-radius: 99px; border: 0; background: var(--accent); color: #06210f; font-weight: 800; font-size: 13px; cursor: pointer; }
+.sum-b.done { background: none; color: var(--accent); font-weight: 700; }
