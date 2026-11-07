@@ -1397,8 +1397,21 @@ function awWatch(d) {
   };
   draw();
 }
-let PRES = { f: "all", lg: "" };
+let PRES = { f: "all", lg: "", tab: "clubs", kind: "p" };
+async function viewPrestigeHof() {
+  const d = await api("/api/hof?tier=W&kind=" + PRES.kind);
+  const people = PRES.kind === "c" ? "coaches" : "players";
+  $("#view").innerHTML = `<div class="v2"><div class="dim small" style="margin-bottom:2px">Ranked by prestige</div><h1>Prestige</h1>
+    <div class="pr-sw"><button data-pr="clubs">Clubs</button><button class="on">Hall of Fame winners</button></div>
+    <div class="chips"><button data-prk="p" class="${PRES.kind === "p" ? "on" : ""}">Players</button><button data-prk="c" class="${PRES.kind === "c" ? "on" : ""}">Coaches</button></div>
+    <div class="dim small" style="margin:4px 2px 8px">Everyone in the World Hall of Fame, ranked by score: awards, titles and peak rating. ${d.total} ${people} inducted.</div>
+    ${d.classes.length ? hofRankedList(d) : `<div class="card dim small">No ${people} in the World Hall of Fame yet. People become eligible ${d.cfg.wait} years after they retire.</div>`}
+    <a class="more" href="#/hof"><span>Open the Hall of Fame (ballots, snubs, records)</span><span>&rsaquo;</span></a></div>`;
+  document.querySelector("[data-pr=clubs]").onclick = () => { PRES.tab = "clubs"; route(); };
+  document.querySelectorAll("[data-prk]").forEach((b) => (b.onclick = () => { PRES.kind = b.dataset.prk; route(); }));
+}
 async function viewPrestige() {
+  if (PRES.tab === "hof") return viewPrestigeHof();
   const h = await api("/api/hof_clubs");
   const followed = (c) => !!(FAVS && FAVS.includes("L:" + c.league));
   const leagues = [...new Set(h.clubs.map((c) => c.league))].sort();
@@ -1413,14 +1426,14 @@ async function viewPrestige() {
     ${PRES.f === "lg" ? `<div class="chips">${leagues.map((l) => `<button data-prl="${esc(l)}" class="${PRES.lg === l ? "on" : ""}">${esc(l)}</button>`).join("")}</div>` : ""}
     <div class="card rlist">${rows.length ? rows.map(row).join("") : `<div class="empty">${h.clubs.length ? "No clubs match this filter." : "Nothing yet. Sim a season first."}</div>`}</div>
     <div class="dim small" style="margin-top:8px">How the score works: ${esc(h.points)}. ${h.total} clubs have scored so far.</div>
-    <div class="card note"><div class="gold-lbl">Players and coaches</div><div class="dim small">Everyone inducted into the Hall of Fame is ranked by the same kind of score, with a Players or Coaches filter, on the Hall of Fame page under Ranked.</div></div></div>`;
+</div>`;
   document.querySelectorAll("[data-prf]").forEach((b) => (b.onclick = () => { PRES.f = b.dataset.prf; viewPrestige(); }));
   document.querySelectorAll("[data-prl]").forEach((b) => (b.onclick = () => { PRES.lg = b.dataset.prl; viewPrestige(); }));
-  const hb = document.querySelector("[data-pr=hof]"); if (hb) hb.onclick = () => { HOF.ranked = true; location.hash = "#/hof"; };
+  const hb = document.querySelector("[data-pr=hof]"); if (hb) hb.onclick = () => { PRES.tab = "hof"; route(); };
 }
 async function viewTrophies(key, tab) {
   tab = tab || "winners";
-  const tabs = `<div class="tabs hof-tabs">${[["winners", "Winners"], ["clubs", "Prestige"]].map(([k, t]) => `<button data-tab="${k}" class="${tab === k ? "on" : ""}">${t}</button>`).join("")}</div>`;
+  const tabs = "";
   const go = (t) => (location.hash = t === "winners" ? "#/trophies" : "#/trophies/" + t);
   const rk = (i) => `<span class="rk ${i === 0 ? "g" : i === 1 ? "s" : i === 2 ? "b" : ""}">${i + 1}</span>`;
   const rrow = (i, main, sub, hon, score) => `<div class="rrow">${rk(i)}<div class="rm"><div class="rn">${main}</div><div class="dim small">${sub}</div>${hon ? `<div class="dim small rh">${hon}</div>` : ""}</div><div class="rs"><b>${score}</b><span class="dim small">score</span></div></div>`;

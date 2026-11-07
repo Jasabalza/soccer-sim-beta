@@ -44,6 +44,9 @@ function hofRow(r, o) {
 }
 const hofSeg = (attr, list, cur) => `<div class="seg" role="group">${list.map(([k, t]) => `<button ${attr}="${esc(k)}" class="${k === cur ? "on" : ""}">${t}</button>`).join("")}</div>`;
 
+function hofRankedList(d) {
+  return `<div class="hlist">${d.classes.flatMap((c) => c.rows.map((r) => Object.assign({ cl: c.label }, r))).sort((a, b) => (b.score || 0) - (a.score || 0)).map((r, i) => hofRow(r, { right: (r.score != null ? r.score + " pts" : ""), sub: "#" + (i + 1) + " &middot; class of " + esc(r.cl) + " &middot; " + hofSub(Object.assign({}, r, { n: 0 })) })).join("")}</div>`;
+}
 // ---------------------------------------------------------------- the Hall of Fame tab
 async function viewHof(tier, name) {
   tier = ["W", "C", "L", "K"].includes(tier) ? tier : "W";
