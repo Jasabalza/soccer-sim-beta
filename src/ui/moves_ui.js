@@ -156,8 +156,12 @@ async function viewMoves(season, tab) {
   if (!d.season) { $("#view").innerHTML = `<div class="v2"><div class="hd"><div><h1>Off-season moves</h1></div></div><div class="card dim small">No completed season yet. Transfers, new coaches and retirements appear here once a season is over.</div></div>`; return; }
   if (walking) return mvWalk(d);
   const S = d.season, c = d.counts;
-  const head = `<div class="hd"><div><h1>Off-season moves</h1><div class="sub">${mvSeasonLabel(d)}</div></div>${d.recorded ? `<a class="btn sm" href="#/moves/${S}/walk">Walk-through</a>` : ""}</div>
-    <p class="filters"><select id="mv-s" aria-label="Season">${Array.from({ length: d.seasons }, (_, i) => d.seasons - i).map((s) => `<option value="${s}" ${s === S ? "selected" : ""}>Season ${s}</option>`).join("")}</select>
+  const nMoves = c.transfers + c.free + c.hired + c.fired + c.left + c.retired;
+  const stepTo = (n) => `#/moves/${n}/${tab}`;
+  const head = `<div class="hd"><div><div class="dim small">Season ${S} &middot; ${esc(d.label)} &middot; ${nMoves} moves</div><h1>Moves</h1></div>
+      <div class="mv-st"><a class="${S <= 1 ? "off" : ""}" href="${S <= 1 ? "#" : stepTo(S - 1)}" aria-label="Previous season">&lsaquo;</a><b>S${S}</b><a class="${S >= d.seasons ? "off" : ""}" href="${S >= d.seasons ? "#" : stepTo(S + 1)}" aria-label="Next season">&rsaquo;</a></div></div>
+    ${d.recorded ? `<a class="more" href="#/moves/${S}/walk"><span>Walk-through: the hottest moves one by one</span><span>&rsaquo;</span></a>` : ""}
+    <p class="filters"><select id="mv-s" aria-label="Season" hidden><option value="${S}" selected></option></select>
     <select id="mv-l" aria-label="League"><option value="">Whole world</option>${favL.length ? `<option value="@favs" ${MV.league === "@favs" ? "selected" : ""}>My favourite leagues</option>` : ""}${leagueOpts(d.leagues, MV.league)}</select></p>
     <div class="seg mtabs" role="tablist">${MV_TABS.map(([k, t]) => `<button data-t="${k}" class="${k === tab ? "on" : ""}">${t}</button>`).join("")}</div>
     <div class="dim small mvsum">${c.transfers} transfers &middot; ${c.free} free agents signed &middot; ${c.hired + c.fired + c.left} coach moves &middot; ${c.retired} retired</div>`;
