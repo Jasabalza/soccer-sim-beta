@@ -257,14 +257,14 @@ function mvWalk(d) {
       body = `<div class="mtiles"><a><b>${c.transfers}</b><span>transfers</span></a><a><b>${c.free}</b><span>free agents signed</span></a><a><b>${c.hired + c.fired + c.left}</b><span>coach moves</span></a><a><b>${c.retired}</b><span>retired</span></a></div>
         <div class="dim small" style="margin:8px 2px">Want more? Every move is in the tabs, sorted the way you like.</div>
         <div class="foot"><button class="btn" id="mw-back">Back</button><a class="btn pri" href="#/moves/${S}/players">Browse all moves</a></div>
-        ${inFlow ? `<div style="text-align:center;margin-top:8px"><button class="linkbtn" id="mw-grad">Continue to graduates</button></div>` : ""}`;
+        ${inFlow ? `<div style="text-align:center;margin-top:8px"><button class="pri" id="mw-grad" style="min-height:48px;width:100%">Start season</button></div>` : ""}`;
     }
     $("#view").innerHTML = `<div class="v2 hday mvp">${head}${body}</div>`;
     const nx = $("#mw-next"), bk = $("#mw-back"), sk = $("#mw-skip"), gr = $("#mw-grad");
     if (nx) nx.onclick = () => { i++; draw(); window.scrollTo(0, 0); };
     if (bk) bk.onclick = () => { i = Math.max(0, i - 1); draw(); window.scrollTo(0, 0); };
     if (sk) sk.onclick = () => { const cur = r.chapter; while (i < w.length && w[i].chapter === cur) i++; draw(); window.scrollTo(0, 0); };
-    if (gr) gr.onclick = () => flowStep("graduates");
+    if (gr) gr.onclick = () => flowStep("done");
     document.querySelectorAll(".stp [data-c]").forEach((s) => s.onclick = () => { i = +s.dataset.c; draw(); });
   };
   draw();

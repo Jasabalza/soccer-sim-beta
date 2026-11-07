@@ -114,3 +114,7 @@
 
 ## v11-v12
 - Engine and API frozen as the single source of truth (JavaScript), golden-file regression suite, tournaments, rivalries, transfer market.
+
+## v16.2 beta: Graduates before Moves
+- Engine: academy graduates are made before the transfer market runs (`season_end`: `_make_youth` now precedes `poach`, `xleague_market`, `bids`), so clubs can sign and bid on them. Golden files re-recorded (intended behaviour change).
+- Flow: awards -> hall -> graduates -> moves -> next season (`/api/flow` accepts graduates from awards, transfers from graduates; chips, Next up, sim bar and buttons follow).

@@ -857,15 +857,15 @@ function a_rollover(body) {
   }
   rec = w.rollover();
   ST.last_review = review(rec, ST.stops.evaluate(w, rec));
-  w.flow = $dict($kw({"season": $idx(rec, "season"), "step": "awards"}));      // the off-season: awards ceremony, then transfers, then the new season
+  w.flow = $dict($kw({"season": $idx(rec, "season"), "step": "awards"}));      // the off-season: awards ceremony, then graduates, then transfers, then the new season
   return $dict($kw({"ok": true, "review": ST.last_review, "header": header(w)}));
 }
-// move through the off-season: awards -> transfers -> done (the new season starts). Anything else is refused.
+// move through the off-season: awards -> graduates -> transfers -> done (the new season starts). Anything else is refused.
 function a_flow(body) {
   const w = need_world(), step = $M.get(body, "step", "done"), cur = $T(w.flow) ? w.flow.get_("step") : null;
   if (!cur) return $dict($kw({"ok": true, "header": header(w)}));
-  if (step === "transfers" && cur === "awards") w.flow.set("step", "transfers");
-  else if (step === "graduates" && (cur === "transfers" || cur === "awards")) w.flow.set("step", "graduates");
+  if (step === "graduates" && cur === "awards") w.flow.set("step", "graduates");
+  else if (step === "transfers" && (cur === "graduates" || cur === "awards")) w.flow.set("step", "transfers");
   else if (step === "done") w.flow = null;
   else if (step !== cur) throw $new(ApiError, ["That step does not follow the current one.", 409]);
   return $dict($kw({"ok": true, "header": header(w)}));

@@ -358,7 +358,7 @@ async function hofResults(d, S) {
       ${panes[cur].html}
 </div>`;
     document.querySelectorAll("[data-hp]").forEach((b) => (b.onclick = () => { draw(+b.dataset.hp); window.scrollTo(0, 0); }));
-    const go = $("#hr-go"); if (go) go.onclick = () => flowStep("transfers");
+    const go = $("#hr-go"); if (go) go.onclick = () => flowStep("graduates");
   };
   draw(0);
 }
