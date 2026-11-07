@@ -1044,3 +1044,11 @@ body.nosim #simbar { display: none; }
 .hof-mine .chips { flex-wrap: nowrap; overflow-x: auto; }
 .hr.attn .tag{white-space:nowrap}
 .hof2 .seg button{padding-left:10px;padding-right:10px}
+.hintro{margin:12px 0;padding:16px;border-radius:18px;background:linear-gradient(160deg,rgba(214,176,74,.16),rgba(40,200,120,.07));border:1px solid rgba(214,176,74,.3)}
+.hintro .hi-k{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#d6b04a;font-weight:700}
+.hintro .hi-n{display:flex;gap:10px;margin:12px 0}
+.hintro .hi-n>div{flex:1;text-align:center;background:rgba(0,0,0,.2);border-radius:12px;padding:10px 4px}
+.hintro .hi-n b{display:block;font-size:26px}.hintro .hi-n span{font-size:12px;opacity:.7}
+.hintro .hi-b .btn{display:block;text-align:center}
+.hintro .hi-b .btn{display:flex;align-items:center;justify-content:center;min-height:48px;padding:0 16px}
+.hday{padding-bottom:110px}

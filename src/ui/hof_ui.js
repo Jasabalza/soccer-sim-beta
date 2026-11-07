@@ -48,7 +48,9 @@ const hofSeg = (attr, list, cur) => `<div class="seg" role="group">${list.map(([
 const attnSort = (a, b) => (a.left - b.left) || (Math.abs(0.75 - a.pct) - Math.abs(0.75 - b.pct));
 function attnRow(r, hall) {
   const tag = r.left === 0 ? "last chance" : r.left + (r.left === 1 ? " year left" : " years left");
-  return `<div class="hr attn"><div class="hr-a">${r.nat ? flag(r.nat, 18) : ""}<div class="hr-m"><b>${hofLink(r)}</b><span class="dim small">${hofSub(Object.assign({}, r, { n: 0 }))}${hall ? " &middot; " + esc(hall) : ""}</span></div><span class="tag red">${tag}</span><span class="hr-r">${r.pct != null ? hofPct(r.pct) : ""}</span></div>${r.pct != null ? `<div class="hbar"><i style="width:${Math.round(r.pct * 100)}%"></i><u style="left:75%"></u></div>` : ""}</div>`;
+  const p = r.pct != null ? r.pct : r.last;            // on ceremony day the vote is hidden: show last year's number
+  const rt = p == null ? "" : (r.pct != null ? hofPct(p) : "last yr " + hofPct(p));
+  return `<div class="hr attn"><div class="hr-a">${r.nat ? flag(r.nat, 18) : ""}<div class="hr-m"><b>${hofLink(r)}</b><span class="dim small">${hofSub(Object.assign({}, r, { n: 0 }))}${hall ? " &middot; " + esc(hall) : ""}</span></div><span class="tag red">${tag}</span><span class="hr-r">${rt}</span></div>${p != null ? `<div class="hbar"><i style="width:${Math.round(p * 100)}%"></i><u style="left:75%"></u></div>` : ""}</div>`;
 }
 function hofRankedList(d) {
   return `<div class="hlist">${d.classes.flatMap((c) => c.rows.map((r) => Object.assign({ cl: c.label }, r))).sort((a, b) => (b.score || 0) - (a.score || 0)).map((r, i) => hofRow(r, { right: (r.score != null ? r.score + " pts" : ""), sub: "#" + (i + 1) + " &middot; class of " + esc(r.cl) + " &middot; " + hofSub(Object.assign({}, r, { n: 0 })) })).join("")}</div>`;
@@ -297,7 +299,9 @@ async function viewHofDay(season, sub) {
   const list = (arr, o) => arr.length ? `<div class="hlist">${arr.map((r) => hofRow(r, o(r))).join("")}</div>` : "";
   const ind = d.inducted.concat(d.coaches.inducted);
   $("#view").innerHTML = `<div class="v2"><a class="crumb" href="#/ceremony/${S}">&lsaquo; Awards &middot; Season ${S}</a>
-    <div class="hd"><div><h1>World Hall of Fame</h1><div class="sub">Class of ${esc(d.label)}</div></div><a class="btn sm" href="#/hofday/${S}/watch">Watch the vote</a></div>
+    <div class="hd"><div><h1>World Hall of Fame</h1><div class="sub">Class of ${esc(d.label)}</div></div></div>
+    <div class="hintro"><div class="hi-k">Class of ${esc(d.label)}</div><div class="hi-n"><div><b>${d.inducted.length}</b><span>players in</span></div><div><b>${d.coaches.inducted.length}</b><span>coaches in</span></div><div><b>${d.fell.length + d.coaches.fell.length}</b><span>fell off</span></div></div>
+      <div class="hi-b"><a class="btn pri" href="#/hofday/${S}/watch">Begin the ceremony</a></div></div>
     <h2 class="lbl2">Inducted</h2>${ind.length ? list(ind, (r) => ({ right: hofPct(r.pct), bar: r.pct, gold: true })) : `<div class="card dim small">Nobody reached ${Math.round(d.cfg.pass * 100)}% this year.</div>`}
     ${d.vetoes.length ? d.vetoes.map((v) => `<div class="hveto"><b>${esc(v.nat)} did not honour ${esc(v.name)}.</b> ${esc(v.text.replace(/^.*?Federation veto: /, "Federation veto: "))}</div>`).join("") : ""}
     ${d.missed.length ? `<h2 class="lbl2">Missed out</h2>${list(d.missed, (r) => ({ right: hofPct(r.pct), bar: r.pct, tag: r.left === 0 ? "last year" : r.left === 1 ? "1 year left" : "", tagc: "red" }))}` : ""}
