@@ -1198,3 +1198,6 @@ select { padding-right: 30px; }
 .fx3 a { font-size: 13px; gap: 5px; }
 .fx3 svg, .fx3 img, .fx3 .lbox { width: 20px !important; height: 20px !important; }
 .fx3 { grid-template-columns: minmax(0,1fr) auto minmax(0,1fr) 50px; column-gap: 6px; }
+.scmode { margin: 2px 0 8px; border-radius: 99px; background: var(--panel); padding: 3px; }
+.scmode button { flex: 1; border-radius: 99px; background: none; color: var(--dim); font-weight: 700; }
+.scmode button.on { background: var(--accent); color: #06210f; }

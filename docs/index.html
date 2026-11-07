@@ -1201,6 +1201,9 @@ select { padding-right: 30px; }
 .fx3 a { font-size: 13px; gap: 5px; }
 .fx3 svg, .fx3 img, .fx3 .lbox { width: 20px !important; height: 20px !important; }
 .fx3 { grid-template-columns: minmax(0,1fr) auto minmax(0,1fr) 50px; column-gap: 6px; }
+.scmode { margin: 2px 0 8px; border-radius: 99px; background: var(--panel); padding: 3px; }
+.scmode button { flex: 1; border-radius: 99px; background: none; color: var(--dim); font-weight: 700; }
+.scmode button.on { background: var(--accent); color: #06210f; }
 
 </style>
 
@@ -12212,12 +12215,37 @@ async function viewWorld() {
   const smallRow = (l) => `<div class="srow"><a class="sl" href="#/league/${enc(l.name)}">${mark(l, 30)}<b>${esc(l.name)}</b></a><span class="dim small">${l.done >= l.total ? "Finished" : "MW " + (l.done + 1)}</span>${l.done < l.total ? `<button class="mini pri" data-lsim="L:${esc(l.name)}">Sim &#9656;</button>` : `<button class="mini" data-lrev="L:${esc(l.name)}">Review</button>`}</div>`;
   const compChips = d.continents.flatMap((c) => c.comps.map((x) => ({ ...x, c }))).filter((x) => !onlyFav || FAVS.includes(x.kind + ":" + x.c.code));
   const favNat = chosen ? FAVS.filter((k) => k.startsWith("nation:")).map((k) => k.slice(7)) : [];
-  const scores = `<div class="sec-h">LEAGUES${chosen ? `<button class="link" id="edit-favs2">Edit</button>` : ""}</div>
+  // the Leagues | Competitions switch: the chosen side gets the big cards, the other side stays as compact rows
+  const SM = (() => { try { return localStorage.getItem("ssb_scoremode") === "comps" ? "comps" : "leagues"; } catch (e) { return "leagues"; } })();
+  const compsAll = d.continents.flatMap((c) => c.comps.map((x) => ({ ...x, conf: c.code }))).filter((x) => !onlyFav || FAVS.includes(x.kind + ":" + x.conf));
+  const compCard = (x) => {
+    const fin = x.done >= x.total, lock = x.locked && x.locked.length;
+    return `<div class="lcard" style="--hh:${lhue(x.title)}"><a class="lhead" href="#/comp/${enc(x.id)}">${compEmb(x.title, null, 38) || `<span class="lph" style="width:38px;height:38px">${esc(x.title.split(" ").map((w) => w[0]).join("").slice(0, 3))}</span>`}<span class="mt"><b>${esc(x.title)}</b><span class="dim small">${fin ? "Finished" : lock ? "Locked" : nextTxt(x)}</span></span>${CHEV}</a>
+      <div class="bar"><i style="width:${x.total ? Math.round(100 * x.done / x.total) : 0}%"></i></div>
+      ${fin ? `<button class="pill wide" data-lrev="${esc(x.id)}">Season review</button>` : lock ? "" : `<div class="lbtns"><button class="pill pri" data-lsim="${esc(x.id)}">Sim to the end</button><button class="pill" data-lwk="${esc(x.id)}">Sim a week</button></div>`}</div>`;
+  };
+  const natInfo = {};
+  if (SM === "comps" && favNat.length) await Promise.all(favNat.map(async (n) => { try { natInfo[n] = await api("/api/nation?name=" + enc(n)); } catch (e) { /* skip */ } }));
+  const natCard = (n) => {
+    const cf = natInfo[n] && natInfo[n].confed, cs = cf ? compsAll.concat(d.continents.flatMap((c) => c.comps.map((x) => ({ ...x, conf: c.code })))).filter((x, i, a) => a.findIndex((y) => y.id === x.id) === i && x.conf === cf && x.kind !== "cup") : [];
+    const done = cs.reduce((t, x) => t + x.done, 0), total = cs.reduce((t, x) => t + x.total, 0), left = cs.filter((x) => x.done < x.total && !(x.locked && x.locked.length)).map((x) => x.id);
+    return `<div class="lcard" style="--hh:${lhue(n)}"><a class="lhead" href="#/nation/${enc(n)}">${natBadge(n, 38)}<span class="mt"><b>${esc(n)}</b><span class="dim small">${cf ? esc(cf) + " national team competitions" : "National team"}${total ? " &middot; " + done + "/" + total + " played" : ""}</span></span>${CHEV}</a>
+      <div class="bar"><i style="width:${total ? Math.round(100 * done / total) : 0}%"></i></div>
+      ${left.length ? `<div class="lbtns"><button class="pill pri" data-nsim="${esc(left.join("|"))}">Sim to the end</button><button class="pill" data-nwk="${esc(left.join("|"))}">Sim a week</button></div>` : `<div class="dim small" style="padding:6px 2px">${total ? "Nothing left to play this season." : "No competitions this season."}</div>`}</div>`;
+  };
+  const modeSw = `<div class="seg scmode" role="group" aria-label="Show"><button data-sm="leagues" class="${SM === "leagues" ? "on" : ""}">Leagues</button><button data-sm="comps" class="${SM === "comps" ? "on" : ""}">Competitions</button></div>`;
+  const compChipsHTML = `<div class="chiprow">${compChips.map((x) => `<a class="cchip" href="#/comp/${enc(x.id)}">${compEmb(x.title, null, 28, null, null) || ""}<span>${esc(x.title)}</span></a>`).join("")}</div>`;
+  const scores = SM === "leagues" ? `${modeSw}<div class="sec-h">LEAGUES${chosen ? `<button class="link" id="edit-favs2">Edit</button>` : ""}</div>
     ${bigL.map(bigCard).join("")}
     ${smallL.length ? `<div class="card srows">${smallL.slice(0, bigL.length ? 12 : 8).map(smallRow).join("")}${smallL.length > (bigL.length ? 12 : 8) ? `<a class="more" href="#/leagues"><span>All ${allLg.length} leagues</span><span>&rsaquo;</span></a>` : ""}</div>` : ""}
     ${compChips.length || favNat.length ? `<div class="sec-h">COMPETITIONS AND NATIONS</div>
-    <div class="chiprow">${compChips.map((x) => `<a class="cchip" href="#/comp/${enc(x.id)}">${compEmb(x.title, null, 28, null, null) || ""}<span>${esc(x.title)}</span></a>`).join("")}</div>
-    ${favNat.length ? `<div class="flags">${favNat.map((n) => `<a href="#/nation/${enc(n)}"><span class="fb">${natBadge(n, 30)}</span><span>${esc(n)}</span></a>`).join("")}</div>` : ""}` : ""}`;
+    ${compChipsHTML}
+    ${favNat.length ? `<div class="flags">${favNat.map((n) => `<a href="#/nation/${enc(n)}"><span class="fb">${natBadge(n, 30)}</span><span>${esc(n)}</span></a>`).join("")}</div>` : ""}` : ""}`
+    : `${modeSw}<div class="sec-h">COMPETITIONS${chosen ? `<button class="link" id="edit-favs2">Edit</button>` : ""}</div>
+    ${compsAll.length ? compsAll.map(compCard).join("") : `<div class="dim small" style="padding:6px 2px">No competitions to show.</div>`}
+    ${favNat.length ? `<div class="sec-h">NATIONS</div>${favNat.map(natCard).join("")}` : ""}
+    <div class="sec-h">LEAGUES</div>
+    <div class="card srows">${allLg.filter((l) => !onlyFav || isFavL(l)).slice(0, 12).map(smallRow).join("") || allLg.slice(0, 8).map(smallRow).join("")}<a class="more" href="#/leagues"><span>All ${allLg.length} leagues</span><span>&rsaquo;</span></a></div>`;
   const inFlow = !!STATUS.header.flow && ["awards", "transfers", "graduates"].includes(STATUS.header.phase);
   const wrapIt = inFlow || summerOn;
   $("#view").innerHTML = (wrapIt ? (inFlow ? nextUpHTML(STATUS.header) : summerCard) + `<details class="acc2" style="margin-top:14px"><summary><b>Season ${STATUS.header.season} scores</b></summary>` : "") + `<div class="dim small" style="margin-bottom:2px">${seasonLine(STATUS.header)}</div><div class="whead whero"><h1>Scores</h1>${chosen ? `<div class="seg" role="group"><button data-fv="all" class="${onlyFav ? "" : "on"}">All</button><button data-fv="fav" class="${onlyFav ? "on" : ""}">Favorites ${FAVS.filter((k) => !k.startsWith("nation:")).length}</button></div>` : ""}</div>
@@ -12241,6 +12269,9 @@ async function viewWorld() {
   if ($("#nu-go")) { const ph = STATUS.header.phase; $("#nu-go").onclick = () => flowStep(ph === "awards" ? "graduates" : ph === "graduates" ? "transfers" : "done"); }
   worldCompCards().catch(() => {});
   const ids = (code) => { const c = d.continents.find((x) => x.code === code); return [...c.leagues.map((l) => "L:" + l.name), ...c.comps.map((x) => x.id)]; };
+  document.querySelectorAll("[data-sm]").forEach((b) => b.onclick = () => { try { localStorage.setItem("ssb_scoremode", b.dataset.sm); } catch (e) {} route(); });
+  document.querySelectorAll("[data-nwk]").forEach((b) => b.onclick = () => simIds(b.dataset.nwk.split("|"), { weeks: 1 }));
+  document.querySelectorAll("[data-nsim]").forEach((b) => b.onclick = () => simIds(b.dataset.nsim.split("|"), { to_end: true }));
   document.querySelectorAll("[data-lwk]").forEach((b) => b.onclick = () => simIds([b.dataset.lwk], { weeks: 1 }));
   document.querySelectorAll("[data-lsim]").forEach((b) => b.onclick = () => simIds([b.dataset.lsim], { to_end: true }));
   document.querySelectorAll("[data-sim]").forEach((b) => b.onclick = () => simIds(ids(b.dataset.sim), { weeks: 1 }));
