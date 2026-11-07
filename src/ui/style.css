@@ -1105,3 +1105,4 @@ body.nosim #simbar { display: none; }
 .sh-sub{color:var(--dim,#8fa89a);font-size:12px;font-weight:400;margin-top:2px}
 .sh-row b{font-size:15px}
 .hintro .hi-halls{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+#simbar button.hofgo{border-color:#d6b04a;color:#d6b04a}

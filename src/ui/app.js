@@ -148,7 +148,7 @@ function renderSimBar() {
   const main = play
     ? `<button class="main" id="sb-week">Next week</button><button class="main" id="sb-4">4 weeks</button><button class="pri main" id="sb-end">${ph === "summer" ? "Finish summer" : "Rest of season"}</button>`
     : ph === "done" ? `<button class="pri main" id="sb-roll">Wrap up season ${h.season}</button>`
-    : ph === "awards" ? (hofSeenNow(h) ? `<button class="main" id="sb-hof">Hall of Fame</button><button class="pri main" id="sb-tr">Continue to off-season</button>` : `<button class="main" id="sb-cer">Awards</button><button class="pri main" id="sb-hof">Hall of Fame day</button>`)
+    : ph === "awards" ? `<button class="main${hofSeenNow(h) ? "" : " hofgo"}" id="sb-hof">${hofSeenNow(h) ? "Hall results" : "Hall of Fame day"}</button><button class="pri main" id="sb-tr">Continue to off-season</button>`
     : ph === "transfers" ? `<button class="main" id="sb-mk">Off-season moves</button><button class="pri main" id="sb-gr">Continue to graduates</button>`
     : `<button class="main" id="sb-pg">Graduates</button><button class="pri main" id="sb-next">Start season ${h.season}</button>`;
   bar_.className = (SBOPEN ? "open " : "") + "ph-" + (h.flow ? (ph === "awards" ? "awards" : "off") : ph === "summer" ? "summer" : ph === "done" ? "awards" : "season");
@@ -589,13 +589,14 @@ function nextUpHTML(h) {
     ["Season " + h.season + " begins", h.season_label, "", false],
   ];
   const cur = ph === "awards" ? (hofSeenNow(h) ? 3 : 2) : ph === "transfers" ? 3 : 4;
-  const btn = ph === "awards" ? (hofSeenNow(h) ? ["Continue to moves", "transfers"] : ["Hall of Fame day", "hof"]) : ph === "transfers" ? ["Continue to graduates", "graduates"] : ["Start season " + h.season, "done"];
+  const btn = ph === "awards" ? ["Continue to moves", "transfers"] : ph === "transfers" ? ["Continue to graduates", "graduates"] : ["Start season " + h.season, "done"];
   return `<div class="dim small" style="margin-bottom:2px">Season ${fs} &middot; off-season</div><h1>Next up</h1>
     <div class="card nu">${rows.map(([t, sub, href, done], i) => {
       const on = i === cur, mark = done ? "&#10003;" : String(i + 1);
       const inner = `<span class="nu-m${done ? " done" : on ? " on" : ""}">${mark}</span><span class="nu-t"><b>${t}</b><span class="dim small">${esc(sub)}</span></span>${href ? CHEV : ""}`;
       return href ? `<a class="nu-r" href="${href}">${inner}</a>` : `<div class="nu-r">${inner}</div>`;
     }).join("")}</div>
+    ${ph === "awards" && !hofSeenNow(h) ? `<a class="btn wide" id="nu-hof" href="#/hofday/${fs}" style="display:flex;align-items:center;justify-content:center;width:100%;min-height:52px;font-size:15px;margin-top:12px;border:1px solid #d6b04a;border-radius:12px;color:#d6b04a;text-decoration:none">Hall of Fame day</a>` : ""}
     <button class="btn pri wide" id="nu-go" style="width:100%;min-height:52px;font-size:15px;margin-top:12px">${btn[0]}</button>`;
 }
 async function viewWorld() {
@@ -686,7 +687,7 @@ async function viewWorld() {
     await afterSim(); await playFinished(fin);
   };
   if ($("#sum-next")) $("#sum-next").onclick = () => rollover();
-  if ($("#nu-go")) { const ph = STATUS.header.phase; $("#nu-go").onclick = () => ph === "awards" && !hofSeenNow(STATUS.header) ? (location.hash = "#/hofday/" + STATUS.header.flow.season) : flowStep(ph === "awards" ? "transfers" : ph === "transfers" ? "graduates" : "done"); }
+  if ($("#nu-go")) { const ph = STATUS.header.phase; $("#nu-go").onclick = () => flowStep(ph === "awards" ? "transfers" : ph === "transfers" ? "graduates" : "done"); }
   worldCompCards().catch(() => {});
   const ids = (code) => { const c = d.continents.find((x) => x.code === code); return [...c.leagues.map((l) => "L:" + l.name), ...c.comps.map((x) => x.id)]; };
   document.querySelectorAll("[data-lrev]").forEach((b) => b.onclick = async () => { try { const st = await busy("Loading...", () => api("/api/compstats?id=" + enc(b.dataset.lrev))); if (st) await showCompEnd(st, false); } catch (e) { toast(e.message); } });
