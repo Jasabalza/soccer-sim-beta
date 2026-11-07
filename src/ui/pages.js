@@ -250,7 +250,9 @@ async function viewLeague(name, season) {
   const past = season ? await api(`/api/league_season?name=${enc(name)}&season=${season}`) : null;
   const rows = past ? past.rows.map((r) => ({ ...r, form: "", zone: "", ovr: null, gd: r.gf - r.ga })) : d.rows;
   const p = d.progress, inProg = !past && d.next.some((f) => f.hg !== undefined);
-  const fx = past ? null : await api("/api/fixtures?name=" + enc(name)).catch(() => null);
+  const FS = LGS[name] || (LGS[name] = { tab: "table" });
+  const fx = past ? null : await api("/api/fixtures?name=" + enc(name) + (FS.fxw ? "&week=" + FS.fxw : "")).catch(() => null);
+  if (fx && fx.week === fx.cur) FS.fxw = 0;
   const S = LGS[name] || (LGS[name] = { tab: "table" });
   if (past) S.tab = "table";
   const titles = {}; if (hof) for (const b of hof.board) titles[b.club] = b.titles;
@@ -268,10 +270,10 @@ async function viewLeague(name, season) {
   const simCard = past ? "" : `<div class="card"><div class="dim small">${d.next_date ? "Next: matchweek " + Math.min(p.total, p.done + 1) + " &middot; " + esc(d.next_date.text) : fin ? "Season finished" : ""}</div>      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:10px"><button class="btn pri" id="l-one" ${fin ? "disabled" : ""}>Next game</button>
         ${inProg ? `<button class="btn" id="l-rest">Matchweek</button>` : `<button class="btn" data-m="1" ${fin ? "disabled" : ""}>Matchweek</button>`}<button class="btn" id="l-end" ${fin ? "disabled" : ""}>Rest of season</button></div>
       <details class="acc" style="margin-top:6px"><summary>More ways to sim</summary><div class="b"><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button class="btn sm" data-m="4" ${fin ? "disabled" : ""}>Next 4</button><span class="dim small">go to matchweek</span><input type="number" id="l-goto" min="1" max="${p.total}" value="${Math.min(p.total, p.done + 1)}" style="width:64px;min-height:36px"><button class="btn sm" id="l-go">Go</button></div></div></details></div>`;
-  const fixPane = `${simCard}${fx && fx.rows.length ? `<div class="card"><h3>Matchweek ${fx.week} <small>${fx.rows.filter((f) => f.done).length}/${fx.rows.length} played${d.next_date ? " · " + esc(d.next_date.text) : ""}</small></h3>
-      <div class="dim small" style="margin-bottom:6px">Pick any game to sim it now, or open its preview first.</div>
-      ${fx.rows.map((f, i) => `<div class="fix2"><div class="fix"><span class="h">${clubLink(f.h)}</span><span class="s">${f.done ? f.hg + "-" + f.ag : "v"}</span><span>${clubLink(f.a)}</span></div>
-        <div class="fx-m">${f.rivalry ? `<span class="tag red">${esc(f.rivalry.name)}</span>` : ""}<a href="#/matchup/${enc(d.id)}/${enc(f.h)}/${enc(f.a)}">${f.done ? "Match info" : "Preview"}</a>${f.done ? "" : `<button class="mini" data-fx="${i}">Sim this game</button>`}</div></div>`).join("")}</div>` : `<div class="card"><h3>Fixtures</h3><div class="dim small">${past ? "Past seasons keep the final table only." : "No fixtures left this season."}</div></div>`}
+  const fut = fx && fx.rows.length && fx.week > fx.cur;
+  const fixPane = `${simCard}${fx && fx.rows.length ? `<div class="card fxc"><div class="fx-step"><button id="fx-prev" aria-label="Previous matchweek" ${fut ? "" : "disabled"}>&lsaquo;</button><div><b>Matchweek ${fx.week}</b><span class="dim small">${fut ? "Coming up" : "Next matchweek"} &middot; ${fx.rows.length} games${fut ? "" : " &middot; " + fx.rows.filter((f) => f.done).length + " played"}</span></div><button id="fx-next" aria-label="Next matchweek" ${fx.week < fx.weeks ? "" : "disabled"}>&rsaquo;</button></div>
+      ${fx.rows.map((f, i) => `<div class="fx3"><a class="fx3-h" href="#/club/${enc(f.h)}">${crest(f.h, 22)}<span>${esc(f.h)}</span></a>${f.done ? `<b class="fx3-s">${f.hg}-${f.ag}</b>` : `<i class="fx3-v">v</i>`}<a class="fx3-a" href="#/club/${enc(f.a)}"><span>${esc(f.a)}</span>${crest(f.a, 22)}</a>
+        ${f.done || fut ? `<a class="fx3-go" href="#/matchup/${enc(d.id)}/${enc(f.h)}/${enc(f.a)}">${f.done ? "Info" : "View"}</a>` : `<button class="fx3-go sim" data-fx="${i}">Sim</button>`}${f.rivalry ? `<span class="tag red fx3-t">${esc(f.rivalry.name)}</span>` : ""}</div>`).join("")}</div>` : `<div class="card"><h3>Fixtures</h3><div class="dim small">${past ? "Past seasons keep the final table only." : "No fixtures left this season."}</div></div>`}
     ${d.last.length ? `<div class="card"><h3>Last matchweek <small>${d.last_date ? esc(d.last_date.text) : ""}</small></h3>${d.last.map((f) => `<div class="fix"><span class="h">${clubLink(f.h)}</span><span class="s">${f.hg}-${f.ag}</span><span>${clubLink(f.a)}</span></div>`).join("")}</div>` : ""}
     ${!inProg && d.next.length ? `<div class="card"><h3>Next matchweek <small>${d.next_date ? esc(d.next_date.text) : ""}</small></h3>${d.next.map((f) => `<div class="fix"><span class="h">${clubLink(f.h)}</span><span class="s">v</span><span>${clubLink(f.a)}</span></div>`).join("")}</div>` : ""}`;
   const subBits = [esc(d.confed), d.games + " games", "top " + d.slots + " reach the " + esc(d.cup)];
@@ -308,6 +310,8 @@ async function viewLeague(name, season) {
   document.querySelectorAll("#lg-money [data-fin]").forEach((a) => (a.onclick = () => { CV_OPEN = "fin"; }));
   document.querySelectorAll("[data-m]").forEach((b) => (b.onclick = () => simComp(d.id, { matches: +b.dataset.m })));
   if ($("#l-one")) $("#l-one").onclick = () => simComp(d.id, { fixtures: 1 });
+  if ($("#fx-next")) $("#fx-next").onclick = () => { FS.fxw = fx.week + 1; route(); };
+  if ($("#fx-prev")) $("#fx-prev").onclick = () => { FS.fxw = fx.week - 1 > fx.cur ? fx.week - 1 : 0; route(); };
   document.querySelectorAll("[data-fx]").forEach((b) => (b.onclick = () => { const f = fx.rows[+b.dataset.fx]; simComp(d.id, { fixture: { h: f.h, a: f.a } }); }));
   if ($("#l-rest")) $("#l-rest").onclick = () => simComp(d.id, { matches: 1 });
   if ($("#l-end")) $("#l-end").onclick = () => simComp(d.id, { to_end: true });
