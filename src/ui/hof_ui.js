@@ -92,7 +92,7 @@ async function viewHof(tier, name) {
     <div class="hof-sc">${HOF_LBL[tier]}${name ? " &middot; " + esc(name) : ""} <span class="dim small">&middot; ${d.total} ${people} inducted</span></div>
     <nav class="chips hof-tabs">${tabs.map(([k, t]) => `<button data-htab="${k}" class="${k === tab ? "on" : ""}">${t}</button>`).join("")}</nav>
     ${body}
-    <a class="more" href="#/academies"><span>Academies ranking</span><span>&rsaquo;</span></a><a class="more" href="#/trophies/clubs"><span>Club trophy ranking</span><span>&rsaquo;</span></a></div>`;
+</div>`;
   document.querySelectorAll("[data-tier]").forEach((b) => (b.onclick = () => (location.hash = "#/hof/" + b.dataset.tier)));
   document.querySelectorAll("[data-kind]").forEach((b) => (b.onclick = () => { HOF.kind = b.dataset.kind; route(); }));
   document.querySelectorAll("[data-hexp]").forEach((b) => (b.onclick = () => { HOF.open = b.dataset.hexp; document.querySelectorAll("[data-hexp]").forEach((x) => x.classList.toggle("on", x === b)); document.querySelectorAll("details.hcls").forEach((el, i) => { el.open = HOF.open === "all" || (HOF.open === "ten" && i < 10) || (HOF.open === "one" && i < 1); }); }));
@@ -414,7 +414,7 @@ async function viewAcademies(scope, name) {
   else if (ACV.sort === "under") rows = rows.filter((r) => r.under).sort((a, b) => b.level - a.level);
   rows = rows.slice(0, 30);
   const sel = scope === "world" ? "" : `<select id="ac-sel">${scope === "league" ? leagueOpts(d.leagues, name) : d.confeds.map((n) => `<option ${n === name ? "selected" : ""}>${esc(n)}</option>`).join("")}</select>`;
-  $("#view").innerHTML = `<div class="v2"><a class="crumb" href="#/hof">&lsaquo; Hall of Fame</a><h1>Academies</h1><div class="sub">Ranked by prestige: what their graduates became.</div>
+  $("#view").innerHTML = `<div class="v2">${plTabs("academies")}<h1>Academies</h1><div class="sub">Ranked by prestige: what their graduates became.</div>
     ${hofSeg("data-acs", [["world", "World"], ["continent", "Continent"], ["league", "League"]], scope)}
     <div class="hof-ctl">${sel}${hofSeg("data-acsort", [["prestige", "Top"], ["rising", "Rising"], ["under", "Underachievers"]], ACV.sort)}</div>
     <div class="hlist" style="margin-top:10px">${rows.length ? rows.map((r) => `<a class="hr hr-link" href="#/club/${enc(r.club)}" data-acad="1"><div class="hr-a"><span class="rk">${r.rank}</span>${crest(r.club, 26)}<div class="hr-m"><b>${esc(r.club)}</b><span class="dim small">level ${r.level} &middot; ${r.stars} stars &middot; ${r.graduates} graduates</span></div>${r.rising > 1 ? '<span class="tag green">rising</span>' : ""}${r.under ? '<span class="tag red">spent a lot</span>' : ""}<span class="hr-r">${Math.round(r.prestige)}</span></div><div class="hbar"><i style="width:${Math.min(100, r.prestige)}%"></i></div></a>`).join("") : '<div class="card dim small" style="margin:0">Nobody fits yet.</div>'}</div></div>`;

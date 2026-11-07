@@ -101,7 +101,7 @@ function menuPage(title, sub, groups) {
 function viewMore() {
   menuPage("More", "Everything else, in one place.", [
     ["Money and moves", [["money", "Money", "finances across the world", "#/money"], ["moves", "Off-season moves", "transfers, retirements, new players", "#/moves"], ["grad", "Graduates", "academy prospects", "#/prospects"]]],
-    ["Explore", [["nations", "Nations", "national teams and rankings", "#/nations"], ["rivals", "Rivals", "derbies and rivalries", "#/rivals"], ["acad", "Academies", "ranked by prestige", "#/academies"]]],
+    ["Explore", [["nations", "Nations", "national teams and rankings", "#/nations"], ["rivals", "Rivals", "derbies and rivalries", "#/rivals"]]],
     ["Game", [["save", "Save and load", "slots, export, import", "", "mr-save"], ["gear", "Settings", "animations, god mode, logos", "", "mr-set"]]],
   ]);
   $("#mr-save").onclick = (e) => { e.preventDefault(); saveDialog(); };
@@ -110,9 +110,10 @@ function viewMore() {
 function viewHistory() {
   menuPage("History", "Look back at what happened.", [
     ["Seasons", [["aw", "Awards", "ceremony, overview, winners", "#/ceremony"], ["hof", "Hall of Fame", "inductees and ceremonies", "#/hof"], ["news", "News", "everything that happened", "#/news"]]],
-    ["Records", [["trophy", "Trophies", "winners and club ranking", "#/trophies"], ["rec", "Records", "world records", "#/records"], ["acad", "Academies", "what graduates became", "#/academies"]]],
+    ["Records", [["trophy", "Trophies", "winners and club ranking", "#/trophies"], ["rec", "Records", "world records", "#/records"]]],
   ]);
 }
+const plTabs = (cur) => `<nav class="tabs2 lgtabs" aria-label="Players and academies">${[["players", "Players"], ["academies", "Academies"]].map(([k, t]) => `<a href="#/${k}" class="${k === cur ? "on" : ""}">${t}</a>`).join("")}</nav>`;
 const lgTabs = (cur) => `<nav class="tabs2 lgtabs" aria-label="Leagues and nations">${[["leagues", "Leagues"], ["nations", "Nations"], ["rivals", "Rivals"]].map(([k, t]) => `<a href="#/${k}" class="${k === cur ? "on" : ""}">${t}</a>`).join("")}</nav>`;
 function injectLgTabs(cur) { const v = $("#view"); if (v && !v.querySelector(".lgtabs")) v.insertAdjacentHTML("afterbegin", `<div class="v2">${lgTabs(cur)}</div>`); }
 async function viewLeagues() {
@@ -1733,7 +1734,7 @@ async function viewPlayers() {
   const qs = () => Object.entries({ ...PF, limit: 100 }).filter(([k, v]) => v !== "" && v != null).map(([k, v]) => k + "=" + enc(v)).join("&");
   const d = await api("/api/players?" + qs());
   const opt = (list, cur, label) => `<option value="">${label}</option>` + list.map((x) => `<option ${x === cur ? "selected" : ""}>${esc(x)}</option>`).join("");
-  $("#view").innerHTML = `<h1>Players</h1><div class="sub">${d.total.toLocaleString()} players. Search by name, filter, and click a name for the player page. G/A/CS are this season so far (league).</div>
+  $("#view").innerHTML = `<div class="v2">${plTabs("players")}</div><h1>Players</h1><div class="sub">${d.total.toLocaleString()} players. Search by name, filter, and click a name for the player page. G/A/CS are this season so far (league).</div>
     <p class="filters"><input id="pf-q" placeholder="Search name..." value="${esc(PF.q)}"> <select id="pf-pos">${opt(["GK", "DEF", "MID", "FWD"], PF.pos, "Any position")}</select>
     <select id="pf-nat">${opt(d.nations, PF.nat, "Any nation")}</select><select id="pf-league"><option value="">Any league</option>${leagueOpts(d.leagues, PF.league)}</select>
     <select id="pf-sort">${[["ovr", "Sort: OVR"], ["pot", "Potential"], ["age", "Youngest"], ["value", "Value"], ["wage", "Wage"], ["goals", "Goals"], ["assists", "Assists"], ["name", "Name"]].map(([k, t]) => `<option value="${k}" ${PF.sort === k ? "selected" : ""}>${t}</option>`).join("")}</select>
