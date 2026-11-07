@@ -150,7 +150,11 @@ async function worldCompCards() {
   if (!hub) return;
   const cards = hub.cards.filter((x) => x.confed === "WORLD");
   if (!cards.length || !$("#view") || !$("#view").querySelector(".grid")) return;
-  $("#view").insertAdjacentHTML("beforeend", `<div class="v2"><h2 class="lbl2">World competitions</h2>${cards.map(compCard).join("")}</div>`);
+  const h = STATUS && STATUS.header, folded = !!(h && h.flow && ["awards", "transfers", "graduates"].includes(h.phase));
+  // in the off-season the page is the checklist: the world tournaments wait folded below it
+  $("#view").insertAdjacentHTML("beforeend", folded
+    ? `<div class="v2"><details class="acc2" style="margin-top:14px"><summary><b>World competitions</b><div class="dim small" style="margin-top:3px">${cards.map((x) => esc(x.title || x.name || "")).filter(Boolean).join(" · ")}</div></summary>${cards.map(compCard).join("")}</details></div>`
+    : `<div class="v2"><h2 class="lbl2">World competitions</h2>${cards.map(compCard).join("")}</div>`);
 }
 
 // ---------------------------------------------------------------- competition page: History and Stats tabs
