@@ -1262,6 +1262,7 @@ select { padding-right: 30px; }
 .gb-post{background:#141b27;border-radius:12px;padding:10px;margin-bottom:8px;border-left:4px solid #2c3648}.gb-post.hit{border-left-color:#2fbf71}.gb-post.miss{border-left-color:#d9534f}.gb-post.ad{opacity:.75;font-size:13px;border-left-color:#6b5a1f}
 .gb-hot,.gb-cold{font-size:12px}
 .gb-apps{display:flex;gap:6px;overflow-x:auto;margin-bottom:6px}.gb-app{flex:0 0 auto;padding:7px 10px;border-radius:10px;border:1px solid #2c3648;background:#141b27;color:inherit;font-size:12px}.gb-app small{display:block;font-size:10px;opacity:.65}.gb-app.on{border-color:#f5c542;background:#2a2610}.gb-app:disabled{opacity:.4}
+.gb-tabs{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none}.gb-tabs a{flex:0 0 auto}.gb-wk{flex:0 0 auto;padding-left:8px}
 
 </style>
 
@@ -12121,10 +12122,10 @@ async function gbViewHome() {
   $("#view").innerHTML = `<div class="gb-home${(GBU.slip.length && GBU.tab === "slate") || (GBU.tab === "titles" && GBU.tpick) ? " hasslip" : ""}">
     <div class="gb-top"><div class="gb-brand">${esc(gbApp().brand)}${(r.app || "bait") === "bait" ? " <span>Bets</span>" : ""}</div><div class="gb-sub">${esc(gbApp().tag)}</div></div>
     <div class="gb-bank"><div><div class="gb-lbl">Bankroll</div><div class="gb-amt">${gbMoney(r.bankroll)}</div></div><div class="gb-q"><div class="gb-lbl">Level ${r.level} quota &middot; ${wl} wk left</div><b>${gbMoney(r.quota)}</b><div class="gb-lbl">${need ? gbMoney(need) + " to go" : "Quota met"}</div></div></div>
-    <div class="gb-bills"><span>Bill ${gbMoney(bill)} in ${bd} wk${gbDebt(r) ? " &middot; debt " + gbMoney(gbDebt(r)) : ""}</span><span>${"&#10006;".repeat(r.strikes)}${"&#9675;".repeat(Math.max(0, GB_MAX_STRIKES - r.strikes))} strikes</span></div>
+    <div class="gb-bills"><span>Wk ${r.week}${h.season_label ? " &middot; " + esc(h.season_label) : ""} &middot; bill ${gbMoney(bill)} in ${bd}${gbDebt(r) ? " &middot; debt " + gbMoney(gbDebt(r)) : ""}</span><span>${"&#10006;".repeat(r.strikes)}${"&#9675;".repeat(Math.max(0, GB_MAX_STRIKES - r.strikes))} strikes</span></div>
     ${GBU.tab === "slate" || GBU.tab === "titles" ? gbAppsHtml() : ""}
     ${gbPerksStrip(r)}
-    <div class="gb-tabs"><a href="#/gambler" class="${GBU.tab === "slate" ? "on" : ""}">Slate</a><a href="#/gambler/titles" class="${GBU.tab === "titles" ? "on" : ""}">Titles</a><a href="#/gambler/loans" class="${GBU.tab === "loans" ? "on" : ""}">Loans${r.loans && r.loans.length ? " (" + r.loans.length + ")" : ""}</a><a href="#/gambler/chirp" class="${GBU.tab === "chirp" ? "on" : ""}">Chirp</a><a href="#/gambler/bets" class="${GBU.tab === "bets" ? "on" : ""}">Bets${gbOpenBets().length + gbOpenTitles().length ? " (" + (gbOpenBets().length + gbOpenTitles().length) + ")" : ""}</a><span class="gb-wk">Week ${r.week}${h.season_label ? " &middot; " + esc(h.season_label) : ""}</span></div>
+    <div class="gb-tabs"><a href="#/gambler" class="${GBU.tab === "slate" ? "on" : ""}">Slate</a><a href="#/gambler/titles" class="${GBU.tab === "titles" ? "on" : ""}">Titles</a><a href="#/gambler/loans" class="${GBU.tab === "loans" ? "on" : ""}">Loans${r.loans && r.loans.length ? " (" + r.loans.length + ")" : ""}</a><a href="#/gambler/chirp" class="${GBU.tab === "chirp" ? "on" : ""}">Chirp</a><a href="#/gambler/bets" class="${GBU.tab === "bets" ? "on" : ""}">Bets${gbOpenBets().length + gbOpenTitles().length ? " (" + (gbOpenBets().length + gbOpenTitles().length) + ")" : ""}</a></div>
     ${GBU.msg ? `<div class="gb-msg">${GBU.msg}</div>` : ""}${body}
     ${GBU.tab === "slate" && !over && !ended && !(r.offer && r.offer.length) ? gbSlipHtml() : ""}<div class="gb-note">Play money only. No real gambling.</div></div>`;
   GBU.msg = "";
