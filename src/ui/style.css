@@ -1255,3 +1255,4 @@ select { padding-right: 30px; }
 
 .gb-ttable{display:flex;flex-direction:column;gap:6px;margin-bottom:10px}.gb-trow{display:flex;align-items:center;gap:8px;background:#141b27;border-radius:10px;padding:6px 8px}
 .gb-tpos{width:20px;opacity:.6;font-size:12px}.gb-tclub{flex:1}.gb-tclub b{display:block}.gb-tclub i{font-style:normal;font-size:11px;opacity:.65}.gb-trow .gb-o{width:72px;flex-direction:row;justify-content:center}
+.gb-h{margin:12px 2px 6px;font-size:14px}.gb-lender{background:#141b27;border-radius:12px;padding:10px;margin-bottom:8px}.gb-lender .gb-stake input{width:90px}.gb-tabs{flex-wrap:wrap}.gb-tabs a{padding:8px 11px}

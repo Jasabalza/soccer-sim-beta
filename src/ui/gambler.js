@@ -16,7 +16,7 @@ function gbFilterSaves(saves) { const g = gbActive(); return (saves || []).filte
 function gbSlot(name) { name = String(name || "").replace(/[^A-Za-z0-9_\- ]/g, "").trim().slice(0, 36) || "run"; return gbIsName(name) ? name : "gb_" + name; }
 const gbShow = (n) => String(n).replace(/^gb_/, "");
 const gbMoney = (n) => (n < 0 ? "-$" : "$") + Math.abs(Math.round(n)).toLocaleString("en-US");
-function gbNewRecord(name, seed) { return { name, seed: +seed || 1, bankroll: GB_START, week: 1, level: 1, lw: 0, quota: gbQuotaFor(1), strikes: 0, owed: 0, seasons: 1, bets: [], nid: 1, created: Date.now(), v: 3 }; }
+function gbNewRecord(name, seed) { return { name, seed: +seed || 1, bankroll: GB_START, week: 1, level: 1, lw: 0, t: 0, credit: 720, loans: [], perks: [], bonus: 0, offer: null, quota: gbQuotaFor(1), strikes: 0, owed: 0, seasons: 1, bets: [], nid: 1, created: Date.now(), v: 3 }; }
 async function gbStore() { if (GB.run && SIM.kv) { try { await SIM.kv.put("gbrun_" + GB.run.name, GB.run); } catch (e) { /* storage full: the run still lives in memory */ } } }
 // called after any save of the world: keep the run record next to it under the same name
 async function gbSavedAs(name) { if (GB.run && gbIsName(name) && SIM.kv) { try { await SIM.kv.put("gbrun_" + name, Object.assign({}, GB.run, { name })); } catch (e) { /* ignore */ } } }
@@ -170,11 +170,11 @@ async function gbViewHome() {
   gbSetMode("gambler");
   if (!GBU.slate) await gbLoadSlate();
   const part = (location.hash.replace(/^#\/?/, "").split("/")[1]) || "";
-  GBU.tab = part === "bets" ? "bets" : part === "titles" ? "titles" : "slate";
+  GBU.tab = part === "bets" ? "bets" : part === "titles" ? "titles" : part === "loans" ? "loans" : "slate";
   const h = (STATUS && STATUS.header) || {}, L = GBU.slate.leagues, lg = L.find((x) => x.name === GBU.league);
   const over = (r.bankroll < 5 && !gbOpenBets().length && !gbOpenTitles().length) || r.strikes >= GB_MAX_STRIKES;
   const ended = !GBU.slate.leaguesLeft, idle = !ended && !L.length;
-  const need = Math.max(0, r.quota - r.bankroll), wl = GB_LEVEL - r.lw, bd = GB_BILL_EVERY - (r.lw % GB_BILL_EVERY), bill = gbBill(r) + r.owed;
+  const need = Math.max(0, r.quota - gbNet(r)), wl = GB_LEVEL - r.lw, bd = GB_BILL_EVERY - (r.lw % GB_BILL_EVERY), bill = gbBill(r) + r.owed;
   let body = "";
   if (over) body = `<div class="card gb-bust"><h3>Busted</h3><div class="meta">${r.strikes >= GB_MAX_STRIKES ? "Three missed quotas. The house has repossessed your account." : "You are out of money and have nothing riding. The house thanks you for your service."}</div><p>Reached level ${r.level}, ${r.week - 1} weeks, best bankroll ${gbMoney(r.best || GB_START)}.</p><button class="pri wide" id="gb-newrun">Start a new run</button></div>`;
   else if (r.offer && r.offer.length) body = gbOfferHtml(r);
@@ -182,6 +182,7 @@ async function gbViewHome() {
   else if (idle && GBU.tab !== "bets") body = `<div class="card"><h3>No league games this week</h3><div class="meta">Cups and international games only.</div><button class="pri wide" id="gb-finish">Finish week</button></div>`;
   else if (GBU.tab === "bets") body = gbBetsHtml();
   else if (GBU.tab === "titles") body = await gbTitlesHtml();
+  else if (GBU.tab === "loans") body = gbLoansHtml();
   else {
     const chips = L.map((x) => `<button class="gb-lc${x.name === GBU.league ? " on" : ""}" data-gblg="${esc(x.name)}">${esc(x.name)}<small>${x.left} left</small></button>`).join("");
     const rows = lg ? lg.rows.filter((m) => GBU.slot === "all" || m.slot === GBU.slot) : [];
@@ -190,9 +191,9 @@ async function gbViewHome() {
   $("#view").innerHTML = `<div class="gb-home${(GBU.slip.length && GBU.tab === "slate") || (GBU.tab === "titles" && GBU.tpick) ? " hasslip" : ""}">
     <div class="gb-top"><div class="gb-brand">BAIT <span>Bets</span></div><div class="gb-sub">Bet Anything, It's Totally fine</div></div>
     <div class="gb-bank"><div><div class="gb-lbl">Bankroll</div><div class="gb-amt">${gbMoney(r.bankroll)}</div></div><div class="gb-q"><div class="gb-lbl">Level ${r.level} quota &middot; ${wl} wk left</div><b>${gbMoney(r.quota)}</b><div class="gb-lbl">${need ? gbMoney(need) + " to go" : "Quota met"}</div></div></div>
-    <div class="gb-bills"><span>Bill ${gbMoney(bill)} in ${bd} wk</span><span>${"&#10006;".repeat(r.strikes)}${"&#9675;".repeat(Math.max(0, GB_MAX_STRIKES - r.strikes))} strikes</span></div>
+    <div class="gb-bills"><span>Bill ${gbMoney(bill)} in ${bd} wk${gbDebt(r) ? " &middot; debt " + gbMoney(gbDebt(r)) : ""}</span><span>${"&#10006;".repeat(r.strikes)}${"&#9675;".repeat(Math.max(0, GB_MAX_STRIKES - r.strikes))} strikes</span></div>
     ${gbPerksStrip(r)}
-    <div class="gb-tabs"><a href="#/gambler" class="${GBU.tab === "slate" ? "on" : ""}">Slate</a><a href="#/gambler/titles" class="${GBU.tab === "titles" ? "on" : ""}">Titles</a><a href="#/gambler/bets" class="${GBU.tab === "bets" ? "on" : ""}">My bets${gbOpenBets().length + gbOpenTitles().length ? " (" + (gbOpenBets().length + gbOpenTitles().length) + ")" : ""}</a><span class="gb-wk">Week ${r.week}${h.season_label ? " &middot; " + esc(h.season_label) : ""}</span></div>
+    <div class="gb-tabs"><a href="#/gambler" class="${GBU.tab === "slate" ? "on" : ""}">Slate</a><a href="#/gambler/titles" class="${GBU.tab === "titles" ? "on" : ""}">Titles</a><a href="#/gambler/loans" class="${GBU.tab === "loans" ? "on" : ""}">Loans${r.loans && r.loans.length ? " (" + r.loans.length + ")" : ""}</a><a href="#/gambler/bets" class="${GBU.tab === "bets" ? "on" : ""}">Bets${gbOpenBets().length + gbOpenTitles().length ? " (" + (gbOpenBets().length + gbOpenTitles().length) + ")" : ""}</a><span class="gb-wk">Week ${r.week}${h.season_label ? " &middot; " + esc(h.season_label) : ""}</span></div>
     ${GBU.msg ? `<div class="gb-msg">${GBU.msg}</div>` : ""}${body}
     ${GBU.tab === "slate" && !over && !ended && !(r.offer && r.offer.length) ? gbSlipHtml() : ""}<div class="gb-note">Play money only. No real gambling.</div></div>`;
   GBU.msg = "";
@@ -210,6 +211,8 @@ function gbWire() {
   q("[data-gbtl]").forEach((b) => b.onclick = () => { GBU.tleague = b.dataset.gbtl; GBU.tpick = null; redraw(); });
   q("[data-gbtp]").forEach((b) => b.onclick = () => { GBU.tpick = GBU.tpick === b.dataset.gbtp ? null : b.dataset.gbtp; redraw(); });
   on("gb-tplace", gbPlaceTitle);
+  q("[data-gbborrow]").forEach((b) => b.onclick = () => gbBorrow(b.dataset.gbborrow, document.getElementById("gb-ln-" + b.dataset.gbborrow).value));
+  q("[data-gbrepay]").forEach((b) => b.onclick = () => gbRepay(+b.dataset.gbrepay));
   q("[data-gbone]").forEach((b) => b.onclick = () => gbSimGame(b.dataset.gbone));
   q("[data-gbcash]").forEach((b) => b.onclick = () => gbCashOut(+b.dataset.gbcash));
   q("[data-gbmore]").forEach((b) => b.onclick = async () => {
@@ -315,16 +318,17 @@ async function gbFinishWeek() {
 }
 // bills and quota: called after every finished week
 function gbAfterWeek(r) {
-  const out = []; r.lw++;
+  const out = []; r.lw++; r.t = (r.t || 0) + 1;
   const sp = gbPerkCount("sponsor"); if (sp) { r.bankroll = Math.round((r.bankroll + 60 * sp) * 100) / 100; out.push("Sponsorship: +" + gbMoney(60 * sp) + "."); }
   if (r.lw % GB_BILL_EVERY === 0) {
     const due = gbBill(r) + r.owed;
     if (r.bankroll >= due) { r.bankroll = Math.round((r.bankroll - due) * 100) / 100; r.owed = 0; out.push("Bill paid: " + gbMoney(due) + " (rent, probably)."); }
     else { r.owed = Math.round(due * (1 + GB_LATE)); gbStrike(r, out, "Couldn't cover the " + gbMoney(due) + " bill. Late fee added: it is now " + gbMoney(r.owed) + "."); }
   }
+  gbCollect(r, out);
   if (r.lw >= GB_LEVEL) {
     r.lw = 0;
-    if (r.bankroll >= r.quota) { r.level++; r.quota = gbQuotaFor(r.level); out.push("<b>Quota hit.</b> Level " + r.level + " starts now: quota " + gbMoney(r.quota) + "."); r.offer = gbOfferFor(r); }
+    if (gbNet(r) >= r.quota) { r.level++; r.quota = gbQuotaFor(r.level); out.push("<b>Quota hit.</b> Level " + r.level + " starts now: quota " + gbMoney(r.quota) + "."); r.offer = gbOfferFor(r); }
     else { gbStrike(r, out, "<b>Quota missed</b> (" + gbMoney(r.quota) + ")."); if (r.strikes < GB_MAX_STRIKES) out.push("Same quota, one more try."); }
   }
   r.best = Math.max(r.best || GB_START, r.bankroll);
