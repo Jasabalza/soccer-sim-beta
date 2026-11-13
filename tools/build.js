@@ -7,7 +7,7 @@ const data = {}; for (const k of ["leagues", "nations", "clubs_geo", "rivalries"
 const rt = ["sha_consts", "rt_random", "rt_core", "rt_ser"].map((n) => rd("src/rt/" + n + ".js")).join("\n");
 const engine = order.map((n) => rd("src/engine/" + n + ".js")).join("\n");
 const platform = rd("src/platform/shim_web.js");
-const engineJs = "const $mods = {};\n" + rt + "\n" + platform + "\n" + engine + "\nwindow.SIM = { request: $mods.shim.request, init: $mods.shim.init, store: $mods.shim.store, logos: $mods.shim.logos, canExport: $mods.shim.canExport };";
+const engineJs = "const $mods = {};\n" + rt + "\n" + platform + "\n" + engine + "\nwindow.SIM = { request: $mods.shim.request, init: $mods.shim.init, store: $mods.shim.store, logos: $mods.shim.logos, kv: $mods.shim.kv, canExport: $mods.shim.canExport };";
 const safe = (s) => s.replace(/<\/script/gi, "<\\/script");
 // optional: node tools/build.js --site  ->  also writes docs/ (the GitHub Pages site: index.html, manifest, service worker; icons come from tools/make_icons.js)
 // optional: node tools/build.js --logos logos_pack  ->  also writes dist/soccersim_personal.html with the logo pack baked in (PERSONAL use, never published)
@@ -22,7 +22,7 @@ function page(kind, logos) {
   const scripts = [
     "window.__DATA = " + JSON.stringify(data) + ";" + "window.__KIND = " + JSON.stringify(kind) + ";" + (logos ? logoScript() : ""),
     "(function(){\n" + engineJs + "\n})();",
-    rd("src/ui/emblems.js"), rd("src/ui/flags.js"), rd("src/ui/wclogo.js"), rd("src/ui/pages.js"), rd("src/ui/hof_ui.js"), rd("src/ui/moves_ui.js"), rd("src/ui/gambler.js"), rd("src/ui/gambler_perks.js"), rd("src/ui/gambler_loans.js"), rd("src/ui/gambler_chirp.js"), rd("src/ui/app.js"),
+    rd("src/ui/emblems.js"), rd("src/ui/flags.js"), rd("src/ui/wclogo.js"), rd("src/ui/pages.js"), rd("src/ui/hof_ui.js"), rd("src/ui/moves_ui.js"), rd("src/ui/gambler.js"), rd("src/ui/gambler_perks.js"), rd("src/ui/gambler_loans.js"), rd("src/ui/gambler_chirp.js"), rd("src/ui/gambler_apps.js"), rd("src/ui/app.js"),
   ].map((s) => "<script>" + safe(s) + "</script>").join("\n");
   return `<title>Soccer Sim</title>\n<style>\n:root { color-scheme: dark; }\n${css}\n</style>\n${rd("src/ui/body.html")}\n${scripts}\n`;
 }

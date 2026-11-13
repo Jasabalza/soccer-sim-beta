@@ -25,7 +25,7 @@ function gbGivePerk(r, id) {
   else r.perks.push(p);
   r.offer = null;
 }
-const gbAdj = (o) => Math.max(1.05, Math.round(o * (1 + 0.02 * gbPerkCount("vip")) * 100) / 100);
+const gbAdj = (o, key) => Math.max(1.05, Math.round(o * gbFactor(key || "") * 100) / 100);
 const gbBill = (r) => Math.round(gbBillFor(r.level) * Math.max(0.25, 1 - 0.25 * gbPerkCount("landlord")));
 // combined odds of a list of legs (same-match legs worth less, socks help parlays)
 function gbCombo(legs) {
