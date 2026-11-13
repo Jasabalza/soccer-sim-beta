@@ -198,7 +198,7 @@ $mods.shim = (function () {
       try { const w = A.need_world(), q = {}; for (const [k, v] of arg.itemsArr()) q[k] = v; return { code: 200, body: $plain($mods.tourney.games(w, q.comp)) }; }
       catch (e) { if (e instanceof A.ApiError) return { code: e.code, body: { error: e.message } }; console.error(e); return { code: 500, body: { error: "Error: " + (e && e.message) } }; }
     }
-    if (p === "/api/gb_slate" || p === "/api/gb_slot" || p === "/api/gb_settle" || p === "/api/gb_finish" || p === "/api/gb_play" || p === "/api/gb_tip" || p === "/api/gb_title" || p === "/api/gb_titles" || p === "/api/gb_props" || p === "/api/gb_detail") {
+    if (p === "/api/gb_slate" || p === "/api/gb_slot" || p === "/api/gb_settle" || p === "/api/gb_finish" || p === "/api/gb_play" || p === "/api/gb_mode" || p === "/api/gb_tip" || p === "/api/gb_title" || p === "/api/gb_titles" || p === "/api/gb_props" || p === "/api/gb_detail") {
       try { const w = A.need_world(), q = {}; for (const [k, v] of arg.itemsArr()) q[k] = v; return { code: 200, body: $plain($mods.gambler.api(w, p, q, body || {})) }; }
       catch (e) { if (e instanceof A.ApiError) return { code: e.code, body: { error: e.message } }; console.error(e); return { code: 500, body: { error: (e && e.constructor ? e.constructor.name : "Error") + ": " + (e && e.message) } }; }
     }

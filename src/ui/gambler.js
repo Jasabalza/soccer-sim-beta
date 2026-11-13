@@ -49,6 +49,8 @@ function gbWireNew() {
     GB.run = gbNewRecord("gb_autosave", seed);             // set first: the engine's autosave after "new" must land under a gb_ name
     const ok = await busy("Building the world (about 2 seconds)...", () => api("/api/new", { seed, rules: {} }));
     if (!ok) { GB.run = null; return; }
+    await api("/api/gb_mode", { momentum: true });          // hot and cold teams are part of this mode
+    await gbLoadSlate();
     GB.run.offer = gbOfferFor(GB.run);                      // a run starts with a perk pick, like any roguelike
     await gbStore();
     location.hash = "#/gambler"; await refreshStatus(); await route();
@@ -85,11 +87,12 @@ function gbPropsHtml(m, p) {
     <div class="gb-row4">${gbBtn(m, "cor", "O", "Over 9.5 corners", p.corners.over)}${gbBtn(m, "cor", "U", "Under 9.5", p.corners.under)}${gbBtn(m, "crd", "O", "Over 3.5 cards", p.cards.over)}${gbBtn(m, "crd", "U", "Under 3.5", p.cards.under)}</div>
     <div class="gb-sub2">Anytime goalscorer <span class="gb-gen">same draw as the scorer table</span></div><div class="gb-scs">${sc("H", m.h)}${sc("A", m.a)}</div></div>`;
 }
+const gbHeat = (v) => v >= 0.5 ? ` <span class="gb-hot" title="Hot: winning more than the ratings say">&#128293;</span>` : v <= -0.5 ? ` <span class="gb-cold" title="Cold: losing more than the ratings say">&#10052;</span>` : "";
 function gbMatchHtml(m) {
   const lock = m.done, o = m.odds;
   const score = m.done ? `<span class="gb-fin">${m.hg} - ${m.ag}</span>` : `<span class="gb-slotchip">${GB_ICON[m.slot]} ${GB_SLOTS[m.slot]}</span>`;
   return `<div class="gb-match${m.done ? " done" : ""}">
-    <div class="gb-mh"><span class="gb-teams"><b>${esc(m.h)}</b> <i>v</i> <b>${esc(m.a)}</b></span>${score}</div>
+    <div class="gb-mh"><span class="gb-teams"><b>${esc(m.h)}</b>${gbHeat(m.mh)} <i>v</i> <b>${esc(m.a)}</b>${gbHeat(m.ma)}</span>${score}</div>
     <div class="gb-sub2">${m.hpos ? "#" + m.hpos + " v #" + m.apos : ""}${m.rivalry ? " &middot; " + esc(m.rivalry) : ""}${m.marquee && !m.rivalry ? " &middot; big one" : ""}</div>
     <div class="gb-row3">${gbBtn(m, "1x2", "H", "1", o.home, lock)}${gbBtn(m, "1x2", "D", "X", o.draw, lock)}${gbBtn(m, "1x2", "A", "2", o.away, lock)}</div>
     <div class="gb-row4">${gbBtn(m, "ou", "O", "Over 2.5", o.over, lock)}${gbBtn(m, "ou", "U", "Under 2.5", o.under, lock)}${gbBtn(m, "btts", "Y", "Both score", o.yes, lock)}${gbBtn(m, "btts", "N", "Not both", o.no, lock)}</div>

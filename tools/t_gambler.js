@@ -70,6 +70,16 @@ const call = async (p, b) => { const r = await R.request(p, b); if (r.code !== 2
     ok(right / N > 0.74 && right / N < 0.86, "tip reliability near 0.8, got " + (right / N).toFixed(2));
     ok(JSON.stringify(G.tip(w2, "x", 0.5, 3)) === JSON.stringify(G.tip(w2, "x", 0.5, 3)), "tip is deterministic");
   }
+  // momentum: capped, off by default, and a matchweek's results never depend on the order its games are played
+  {
+    const mk = async (rev) => { await call("/api/new", { seed: 5, rules: {} }); await call("/api/gb_mode", { momentum: true }); const w5 = R.mods.app_v11.need_world();
+      for (let i = 0; i < 9; i++) { const sl = await call("/api/gb_slate"); await call("/api/gb_slot", { slot: "all" }); await call("/api/gb_finish", { wk: sl.wk }); }
+      const c5 = w5.comps.get_("L:Premier League"), fx = c5.unplayed().map((f) => [f[0], f[1]]); if (rev) fx.reverse(); const out = [];
+      const hot = Object.values(G.momentum(w5, c5)); ok(hot.every((v) => Math.abs(v) <= 3.0001) && hot.some((v) => Math.abs(v) > 0.5), "momentum within the cap and not all zero");
+      for (const [h, a] of fx) out.push(c5.play_fixture(h, a).join(",")); return out.sort().join(";"); };
+    const A = await mk(false), B = await mk(true); ok(A === B, "momentum: matchweek is order independent");
+    await call("/api/new", { seed: 5, rules: {} }); ok(!R.mods.app_v11.need_world().gb_mom, "momentum off by default");
+  }
   console.log(bad ? bad + " failed" : "gambler checks: all passed (" + n + " games checked)");
   process.exit(bad ? 1 : 0);
 })();

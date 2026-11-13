@@ -33,9 +33,28 @@ $mods["gambler"] = (function () {
     return { home: price(o.home), draw: price(o.draw), away: price(o.away), over: price(1 - under), under: price(under), yes: price(bt), no: price(1 - bt),
       p: { home: o.home, draw: o.draw, away: o.away, over: 1 - under, btts: bt } };
   }
+
+  // ---------------------------------------------------------------- momentum (hot and cold teams; only when the world has it switched on)
+  // Built from FILED matchweeks only, so every game inside a matchweek sees the same numbers and play order never matters.
+  // Each of the last five results counts for how much it beat (or missed) what the ratings expected. The effect is capped at +-MOM_CAP rating points.
+  const MOM_CAP = 3, momCache = new WeakMap();
+  function momentum(w, c) {
+    const hit = momCache.get(c); if (hit && hit.k === c.ptr && hit.n === c.results.length) return hit.m;
+    const m = {}, rounds = c.results.slice(-5);
+    rounds.forEach((rd, i) => {
+      const wt = 0.6 + 0.1 * (i + (5 - rounds.length));
+      for (const [h, a, hg, ag] of rd) {
+        const eh = gv(c.eff, h), ea = gv(c.eff, a), exp = Math.max(0.12, Math.min(0.88, 0.5 + (eh - ea) / 60 + 0.05));
+        const act = hg > ag ? 1 : hg === ag ? 0.5 : 0;
+        m[h] = (m[h] || 0) + wt * (act - exp); m[a] = (m[a] || 0) + wt * ((1 - act) - (1 - exp));
+      }
+    });
+    const out = {}; for (const t of Object.keys(m)) out[t] = Math.max(-1, Math.min(1, m[t] * 0.5)) * MOM_CAP;
+    momCache.set(c, { k: c.ptr, n: c.results.length, m: out }); return out;
+  }
   function matchOdds(w, c, h, a) {
     const lab = $mods.rivals.label(w, h, a);
-    const eh = c.eff ? gv(c.eff, h) : gv(w.clubs.get_(h), "eff"), ea = c.eff ? gv(c.eff, a) : gv(w.clubs.get_(a), "eff");
+    const [eh, ea] = c.fx_eff ? c.fx_eff(h, a) : [gv(w.clubs.get_(h), "eff"), gv(w.clubs.get_(a), "eff")];
     return { o: $mods.rivals.odds(eh, ea, lab ? lab.intensity : 0, false), lab };
   }
   // the calendar week the world will play next (the earliest next event across everything still running), and the same peek step() uses
@@ -60,7 +79,8 @@ $mods["gambler"] = (function () {
         const hp = order.indexOf(h) + 1, ap = order.indexOf(a) + 1, marquee = (lab && lab.intensity >= 0.5) || (hp <= 4 && ap <= 4);
         const mk = markets(o); delete mk.p;
         ovr += gv(w.clubs.get_(h), "ovr") + gv(w.clubs.get_(a), "ovr"); n += 2;
-        rows.push({ id: [name, week, h, a].join("|"), league: name, week, h, a, hpos: hp, apos: ap, slot: slotFor(w, name, week, h, a, marquee), marquee: !!marquee,
+        const mm = w.gb_mom ? momentum(w, c) : null;
+        rows.push({ mh: mm ? Math.round((mm[h] || 0) / MOM_CAP * 100) / 100 : 0, ma: mm ? Math.round((mm[a] || 0) / MOM_CAP * 100) / 100 : 0, id: [name, week, h, a].join("|"), league: name, week, h, a, hpos: hp, apos: ap, slot: slotFor(w, name, week, h, a, marquee), marquee: !!marquee,
           rivalry: lab ? lab.name : null, done: !!done, hg: done ? done[2] : null, ag: done ? done[3] : null, odds: mk });
       }
       out.push({ name, week, weeks: c.rounds.length, avg: n ? Math.round(ovr / n * 10) / 10 : 0, left: rows.filter((r) => !r.done).length, rows });
@@ -200,7 +220,7 @@ $mods["gambler"] = (function () {
   // A tip is a claim about a game that has not been played. The game's real result is already fixed by its own stream, so we can
   // look at it without playing it (the same call comp._fixture makes, minus the table update). A source with reliability rho is
   // right that often, decided by a keyed hash, never by chance at the time you look.
-  function peek(w, c, h, a) { return $mods.comps.score(c.fixture_rng(h, a), c.eff.get_(h), c.eff.get_(a), false, 1.0, $mods.rivals.effect(w, h, a, 1.0)); }
+  function peek(w, c, h, a) { const [eh, ea] = c.fx_eff(h, a); return $mods.comps.score(c.fixture_rng(h, a), eh, ea, false, 1.0, $mods.rivals.effect(w, h, a, 1.0)); }
   const MK_PICKS = { "1x2": ["H", "D", "A"], ou: ["O", "U"], btts: ["Y", "N"] };
   const realPick = (mk, hg, ag) => mk === "1x2" ? (hg > ag ? "H" : hg === ag ? "D" : "A") : mk === "ou" ? (hg + ag > LINE ? "O" : "U") : (hg > 0 && ag > 0 ? "Y" : "N");
   function tip(w, src, rho, salt) {
@@ -255,6 +275,7 @@ $mods["gambler"] = (function () {
   function api(w, path, q, body) {
     if (path === "/api/gb_props") { const [lg, wk, h, a] = String(q.id).split("|"); return props(w, lg, +wk, h, a); }
     if (path === "/api/gb_detail") { const [lg, wk, h, a] = String(q.id).split("|"), r = result(w, lg, +wk, h, a); if (!r) fail("not played yet", 409); return detail(w, lg, +wk, h, a, r[0], r[1]); }
+    if (path === "/api/gb_mode") { w.gb_mom = !!body.momentum; return { ok: true, momentum: !!w.gb_mom }; }
     if (path === "/api/gb_tip") return tip(w, String(body.src), +body.rho, String(body.salt || 0));
     if (path === "/api/gb_title") return titleQuote(w, q.league);
     if (path === "/api/gb_titles") return { bets: titleCheck(w, body.bets || []) };
@@ -269,5 +290,5 @@ $mods["gambler"] = (function () {
     if (path === "/api/gb_settle") return { bets: settle(w, body.bets || []) };
     return null;
   }
-  return { api, tip, peek, titleChances, titleQuote, titleCheck, props, detail, scorersFor, slate, playSlot, settle, settleLeg, combine, price, markets, slotFor, slotWeights, h01, SLOTS, MARGIN, LINE };
+  return { api, momentum, tip, peek, titleChances, titleQuote, titleCheck, props, detail, scorersFor, slate, playSlot, settle, settleLeg, combine, price, markets, slotFor, slotWeights, h01, SLOTS, MARGIN, LINE };
 })();

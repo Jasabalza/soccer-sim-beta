@@ -300,9 +300,15 @@ class LeagueComp extends Comp {
     r.seed(this.w.seed + "|" + this.w.season + "|" + this.id + "|f|" + this.ptr + "|" + h + "|" + a);
     return r;
   }
+  // ratings used for a game: the club ratings, plus momentum when the world has it switched on (it is off unless the gambler mode asks)
+  fx_eff(h, a) {
+    const e = this.eff, m = this.w.gb_mom ? $mods.gambler.momentum(this.w, this) : null;
+    return [e.get_(h) + (m ? m[h] || 0 : 0), e.get_(a) + (m ? m[a] || 0 : 0)];
+  }
   _fixture(h, a) {
     const self = this, st = self.st;
-    const [hg, ag] = score(self.fixture_rng(h, a), self.eff.get_(h), self.eff.get_(a), false, 1.0, $mods.rivals.effect(self.w, h, a, 1.0));
+    const [eh, ea] = self.fx_eff(h, a);
+    const [hg, ag] = score(self.fixture_rng(h, a), eh, ea, false, 1.0, $mods.rivals.effect(self.w, h, a, 1.0));
     const sh = st.get_(h), sa = st.get_(a);
     sh.set("p", sh.get_("p") + 1); sa.set("p", sa.get_("p") + 1);
     sh.set("gf", sh.get_("gf") + hg); sh.set("ga", sh.get_("ga") + ag);
