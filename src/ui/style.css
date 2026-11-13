@@ -829,7 +829,7 @@ a + .lbox, .lbox + a { margin-left: 4px; } .lbox { vertical-align: middle; margi
 .hexp { display: flex; align-items: center; gap: 6px; margin: 0 2px 10px; flex-wrap: wrap; }
 .hexp button { background: transparent; border: 1px solid var(--line, #2c3b33); color: var(--dim); border-radius: 999px; padding: 5px 11px; font-size: 12px; } .hexp button.on { background: var(--accent2, #f5c542); color: #121a15; border-color: transparent; font-weight: 700; }
 
-/* ---- v16.2 beta: bottom tab bar (phones), sheets ---- */
+/* ---- v16.2: bottom tab bar (phones), sheets ---- */
 #tabbar { display: none; }
 .sheet { display: flex; flex-direction: column; max-height: 62vh; overflow-y: auto; background: var(--bg); border: 1px solid var(--line); border-radius: 16px; padding: 2px 14px; }
 .sheet-row { display: flex; align-items: center; gap: 10px; min-height: 46px; border-bottom: 1px solid var(--line); color: var(--text); }
