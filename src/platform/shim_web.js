@@ -106,6 +106,13 @@ $mods.shim = (function () {
     async clear() { try { await delSave(LOGO_KEY); } catch (e) { /* nothing stored */ } },
   };
 
+  // ---- small JSON records kept next to the saves (gambler runs, the gambler profile). Names start with "__", so they never show in the save list.
+  const kv = {
+    async get(key) { try { const r = await getSave("__" + key); return r && r.data ? JSON.parse(r.data) : null; } catch (e) { return null; } },
+    async put(key, obj) { const data = JSON.stringify(obj); await putSave({ name: "__" + key, fmt: "json", data, size: data.length, time: Math.floor(Date.now() / 1000) }); return true; },
+    async del(key) { try { await delSave("__" + key); } catch (e) { /* nothing stored */ } },
+  };
+
   function list_saves() { return SAVES.map((s) => ({ name: s.name, size: s.size, time: s.time })); }
   function safe_slot(name) {
     name = String(name == null ? "" : name).replace(/[^A-Za-z0-9_\- ]/g, "").trim();
@@ -286,6 +293,6 @@ $mods.shim = (function () {
   return {
     DATA: { leagues: DATA.leagues, nations: DATA.nations, clubs_geo: DATA.clubs_geo, rivalries: DATA.rivalries, rivalries_nat: DATA.rivalries_nat }, castlike: $castlike,
     a_save, a_load, a_delete, a_export, a_beat, a_quit, list_saves, safe_slot,
-    init, request, store, SAVES, migrateClubs, logos,
+    init, request, store, SAVES, migrateClubs, logos, kv,
   };
 })();

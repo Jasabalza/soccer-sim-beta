@@ -1201,3 +1201,16 @@ select { padding-right: 30px; }
 .scmode { margin: 2px 0 8px; border-radius: 99px; background: var(--panel); padding: 3px; }
 .scmode button { flex: 1; border-radius: 99px; background: none; color: var(--dim); font-weight: 700; }
 .scmode button.on { background: var(--accent); color: #06210f; }
+
+/* ---- gambler mode (BAIT Bets) ---- */
+.gb-switch{display:flex;gap:6px;margin:0 0 12px;background:var(--panel,#1b2230);padding:4px;border-radius:12px}
+.gb-switch button{flex:1;padding:10px 8px;border-radius:9px;border:0;background:transparent;color:inherit;font-weight:700}
+.gb-switch button.on{background:#f5c542;color:#111}
+.gb-tag{font-size:10px;letter-spacing:.06em;margin-left:4px;opacity:.8}
+.gb-home{max-width:480px;margin:0 auto}
+.gb-top{padding:6px 2px 12px}
+.gb-brand{font-size:26px;font-weight:900;letter-spacing:.02em}.gb-brand span{color:#f5c542}
+.gb-sub{font-size:12px;opacity:.65}
+.gb-bank{border-radius:16px;padding:16px;background:linear-gradient(135deg,#14532d,#166534);margin-bottom:12px}
+.gb-amt{font-size:40px;font-weight:900;line-height:1.1}.gb-lbl{font-size:12px;opacity:.8}
+.gb-note{text-align:center;font-size:11px;opacity:.55;margin:14px 0}

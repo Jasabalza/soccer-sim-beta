@@ -1205,6 +1205,19 @@ select { padding-right: 30px; }
 .scmode button { flex: 1; border-radius: 99px; background: none; color: var(--dim); font-weight: 700; }
 .scmode button.on { background: var(--accent); color: #06210f; }
 
+/* ---- gambler mode (BAIT Bets) ---- */
+.gb-switch{display:flex;gap:6px;margin:0 0 12px;background:var(--panel,#1b2230);padding:4px;border-radius:12px}
+.gb-switch button{flex:1;padding:10px 8px;border-radius:9px;border:0;background:transparent;color:inherit;font-weight:700}
+.gb-switch button.on{background:#f5c542;color:#111}
+.gb-tag{font-size:10px;letter-spacing:.06em;margin-left:4px;opacity:.8}
+.gb-home{max-width:480px;margin:0 auto}
+.gb-top{padding:6px 2px 12px}
+.gb-brand{font-size:26px;font-weight:900;letter-spacing:.02em}.gb-brand span{color:#f5c542}
+.gb-sub{font-size:12px;opacity:.65}
+.gb-bank{border-radius:16px;padding:16px;background:linear-gradient(135deg,#14532d,#166534);margin-bottom:12px}
+.gb-amt{font-size:40px;font-weight:900;line-height:1.1}.gb-lbl{font-size:12px;opacity:.8}
+.gb-note{text-align:center;font-size:11px;opacity:.55;margin:14px 0}
+
 </style>
 
 <div id="top">
@@ -2216,6 +2229,13 @@ $mods.shim = (function () {
     async clear() { try { await delSave(LOGO_KEY); } catch (e) { /* nothing stored */ } },
   };
 
+  // ---- small JSON records kept next to the saves (gambler runs, the gambler profile). Names start with "__", so they never show in the save list.
+  const kv = {
+    async get(key) { try { const r = await getSave("__" + key); return r && r.data ? JSON.parse(r.data) : null; } catch (e) { return null; } },
+    async put(key, obj) { const data = JSON.stringify(obj); await putSave({ name: "__" + key, fmt: "json", data, size: data.length, time: Math.floor(Date.now() / 1000) }); return true; },
+    async del(key) { try { await delSave("__" + key); } catch (e) { /* nothing stored */ } },
+  };
+
   function list_saves() { return SAVES.map((s) => ({ name: s.name, size: s.size, time: s.time })); }
   function safe_slot(name) {
     name = String(name == null ? "" : name).replace(/[^A-Za-z0-9_\- ]/g, "").trim();
@@ -2396,7 +2416,7 @@ $mods.shim = (function () {
   return {
     DATA: { leagues: DATA.leagues, nations: DATA.nations, clubs_geo: DATA.clubs_geo, rivalries: DATA.rivalries, rivalries_nat: DATA.rivalries_nat }, castlike: $castlike,
     a_save, a_load, a_delete, a_export, a_beat, a_quit, list_saves, safe_slot,
-    init, request, store, SAVES, migrateClubs, logos,
+    init, request, store, SAVES, migrateClubs, logos, kv,
   };
 })();
 
@@ -11536,6 +11556,70 @@ function mvWalk(d) {
   draw();
 }
 </script>
+<script>// BAIT Bets (v17): the gambler mode. Milestone 0: the Sim / Gambler switch, gambler saves kept apart from sim saves,
+// and an empty phone home screen. Gambler state lives in its own record (never inside the world save).
+const GB_START = 1000;                              // starting bankroll, dollars
+const GB = { run: null };                           // the open run: { name, seed, bankroll, week, created }
+const gbIsName = (n) => /^gb_/.test(String(n || ""));
+function gbMode() { try { return localStorage.getItem("ssb_mode") === "gambler" ? "gambler" : "sim"; } catch (e) { return "sim"; } }
+function gbSetMode(m) { try { localStorage.setItem("ssb_mode", m); } catch (e) { /* private mode */ } }
+// are we dealing with gambler saves right now? (inside a run, or choosing on the start screen)
+function gbOnStart() { const r = location.hash.replace(/^#\/?/, "").split("/")[0]; return !(STATUS && STATUS.has_world) || r === "" || r === "start"; }
+function gbActive() { return gbOnStart() ? gbMode() === "gambler" : !!GB.run; }
+function gbFilterSaves(saves) { const g = gbActive(); return (saves || []).filter((s) => gbIsName(s.name) === g); }
+function gbSlot(name) { name = String(name || "").replace(/[^A-Za-z0-9_\- ]/g, "").trim().slice(0, 36) || "run"; return gbIsName(name) ? name : "gb_" + name; }
+const gbShow = (n) => String(n).replace(/^gb_/, "");
+const gbMoney = (n) => (n < 0 ? "-$" : "$") + Math.abs(Math.round(n)).toLocaleString("en-US");
+function gbNewRecord(name, seed) { return { name, seed: +seed || 1, bankroll: GB_START, week: 1, created: Date.now(), v: 1 }; }
+async function gbStore() { if (GB.run && SIM.kv) { try { await SIM.kv.put("gbrun_" + GB.run.name, GB.run); } catch (e) { /* storage full: the run still lives in memory */ } } }
+// called after any save of the world: keep the run record next to it under the same name
+async function gbSavedAs(name) { if (GB.run && gbIsName(name) && SIM.kv) { try { await SIM.kv.put("gbrun_" + name, Object.assign({}, GB.run, { name })); } catch (e) { /* ignore */ } } }
+async function gbLoaded(name) {
+  if (!gbIsName(name)) { GB.run = null; return; }
+  let rec = null; try { rec = SIM.kv ? await SIM.kv.get("gbrun_" + name) : null; } catch (e) { rec = null; }
+  GB.run = rec || gbNewRecord(name, 1);
+  GB.run.name = name;
+}
+async function gbDeleted(name) { if (gbIsName(name) && SIM.kv) await SIM.kv.del("gbrun_" + name); }
+
+function gbSwitchHtml() {
+  const g = gbMode() === "gambler";
+  return `<div class="gb-switch" role="tablist"><button data-gbmode="sim" class="${g ? "" : "on"}">Sim</button><button data-gbmode="gambler" class="${g ? "on" : ""}">Gambler <span class="gb-tag">BAIT Bets</span></button></div>`;
+}
+function gbNewCardHtml() {
+  return `<div class="card gb-new"><h3>New run</h3>
+    <div class="meta">Play money only. You start with <b>${gbMoney(GB_START)}</b> and a quota to hit by the end of the season. The sim runs underneath; you just bet on it.</div>
+    <div class="field"><label for="gb-seed">Seed<span class="meta" style="display:block">same seed, same world</span></label><span class="seedrow"><input type="number" id="gb-seed" value="1" min="1"><button id="gb-seed-rnd">Random</button></span></div>
+    <button class="pri wide" id="gb-go">Start a run</button></div>`;
+}
+function gbWireStart() {
+  document.querySelectorAll("[data-gbmode]").forEach((b) => b.onclick = async () => { gbSetMode(b.dataset.gbmode); await viewStart(); });
+}
+function gbWireNew() {
+  const rnd = document.getElementById("gb-seed-rnd"); if (rnd) rnd.onclick = () => (document.getElementById("gb-seed").value = 1 + Math.floor(Math.random() * 99999));
+  const go = document.getElementById("gb-go"); if (!go) return;
+  go.onclick = async () => {
+    const seed = document.getElementById("gb-seed").value;
+    GB.run = gbNewRecord("gb_autosave", seed);             // set first: the engine's autosave after "new" must land under a gb_ name
+    const ok = await busy("Building the world (about 2 seconds)...", () => api("/api/new", { seed, rules: {} }));
+    if (!ok) { GB.run = null; return; }
+    await gbStore();
+    location.hash = "#/gambler"; await refreshStatus(); await route();
+  };
+}
+// the phone home screen (empty for now: the slate, slip, bank and the rest arrive in the next milestones)
+async function gbViewHome() {
+  const r = GB.run;
+  if (!r) { location.hash = "#/world"; return; }
+  gbSetMode("gambler");
+  const h = (STATUS && STATUS.header) || {};
+  $("#view").innerHTML = `<div class="gb-home">
+    <div class="gb-top"><div class="gb-brand">BAIT <span>Bets</span></div><div class="gb-sub">Bet Anything, It's Totally fine</div></div>
+    <div class="gb-bank"><div class="gb-lbl">Bankroll</div><div class="gb-amt">${gbMoney(r.bankroll)}</div><div class="gb-lbl">Week ${r.week}${h.season_label ? " &middot; " + esc(h.season_label) : ""}</div></div>
+    <div class="card"><h3>This week</h3><div class="empty">The betting slate opens in the next update. Your run is saved and the sim is running underneath.</div></div>
+    <div class="gb-note">Play money only. No real gambling.</div></div>`;
+}
+</script>
 <script>"use strict";
 /* Soccer Sim v11 - window front-end (phase 2). Plain JS, no libraries. */
 
@@ -11551,7 +11635,7 @@ async function api(path, body) {
   try { r = await SIM.request(path, body); } catch (e) { console.error(e); throw new Error("The game engine stopped: " + e); }
   if (r.code !== 200) throw new Error((r.body && r.body.error) || "Something went wrong");
   if (body !== undefined && SIM.store.persistent && !api.auto && (path === "/api/years" || path === "/api/rollover" || path === "/api/new")) {
-    api.auto = true; try { const a = await SIM.request("/api/save", { name: "autosave" }); if (a.code !== 200) toast("Autosave failed: " + ((a.body && a.body.error) || "unknown")); } catch (e) { toast("Autosave failed."); } api.auto = false;
+    api.auto = true; try { const an = GB.run ? "gb_autosave" : "autosave"; const a = await SIM.request("/api/save", { name: an }); if (GB.run) await gbSavedAs(an); if (a.code !== 200) toast("Autosave failed: " + ((a.body && a.body.error) || "unknown")); } catch (e) { toast("Autosave failed."); } api.auto = false;
   }
   return r.body;
 }
@@ -11627,9 +11711,9 @@ function renderTabbar(has, route) {
   const el = $("#tabbar"); if (!el) return;
   if (!has) { el.innerHTML = ""; el.hidden = true; return; }
   el.hidden = false;
-  const cur = TAB_OF[route] || "season";
+  const cur = route === "gambler" ? "bets" : (TAB_OF[route] || "season");
   const tab = (k, t, href) => `<a data-tab="${k}" href="${href || "#"}" class="${cur === k ? "on" : ""}"><svg width="22" height="22" viewBox="0 0 24 24" fill="${k === "more" ? "currentColor" : "none"}" stroke="${k === "more" ? "none" : "currentColor"}" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${TAB_ICONS[k]}</svg><span>${t}</span></a>`;
-  el.innerHTML = tab("season", "Season", "#/world") + tab("leagues", "Leagues", "#/leagues") + tab("players", "Players", "#/players") + tab("history", "History", "#/history") + tab("more", "More", "#/more");
+  el.innerHTML = (GB.run ? tab("bets", "Bets", "#/gambler") : "") + tab("season", "Season", "#/world") + tab("leagues", "Leagues", "#/leagues") + tab("players", "Players", "#/players") + tab("history", "History", "#/history") + tab("more", "More", "#/more");
 }
 const CHEV = '<svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg>';
 const MENU_ICON = (d) => `<span class="mi"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg></span>`;
@@ -11835,8 +11919,9 @@ async function stopsDialog() {
   };
 }
 function saveRows(saves, canSave) {
+  saves = gbFilterSaves(saves);
   if (!saves.length) return `<div class="empty">No saves yet.</div>`;
-  return saves.map((s) => `<div class="row"><span><b>${esc(s.name)}</b> <span class="meta">${new Date(s.time * 1000).toLocaleString()} &middot; ${Math.round(s.size / 1024)} KB</span></span>
+  return saves.map((s) => `<div class="row"><span><b>${esc(gbShow(s.name))}</b> <span class="meta">${new Date(s.time * 1000).toLocaleString()} &middot; ${Math.round(s.size / 1024)} KB</span></span>
     <span>${canSave ? `<button data-over="${esc(s.name)}">Overwrite</button> ` : ""}<button data-load="${esc(s.name)}">Load</button> <button data-copy="${esc(s.name)}">Copy</button>${window.__KIND === "pc" ? ` <button data-file="${esc(s.name)}">File</button>` : ""} <button data-del="${esc(s.name)}">Delete</button></span></div>`).join("");
 }
 async function saveDialog() {
@@ -11898,7 +11983,8 @@ function wireSaveTools(inGame) {
   }
 }
 async function doSave(name) {
-  try { const r = await busy("Saving...", () => api("/api/save", { name })); if (!r) return; toast("Saved " + r.name + " (" + Math.round((r.saves.find((x) => x.name === r.name) || { size: 0 }).size / 1024) + " KB)", true); closeModal(); await refreshStatus(); }
+  if (gbActive()) name = gbSlot(name);
+  try { const r = await busy("Saving...", () => api("/api/save", { name })); if (!r) return; await gbSavedAs(r.name); toast("Saved " + r.name + " (" + Math.round((r.saves.find((x) => x.name === r.name) || { size: 0 }).size / 1024) + " KB)", true); closeModal(); await refreshStatus(); }
   catch (e) { toast(e.message); }
 }
 function wireSaves(inGame) {
@@ -11929,18 +12015,19 @@ function wireSaves(inGame) {
   });
   document.querySelectorAll("[data-load]").forEach((b) => b.onclick = async () => {
     await busy("Loading the save (big saves can take 10-30 seconds on a tablet)...", () => api("/api/load", { name: b.dataset.load }));
-    closeModal(); PICK_ASKED = false; location.hash = "#/world"; await refreshStatus(); await route();
+    await gbLoaded(b.dataset.load); gbSetMode(GB.run ? "gambler" : "sim");
+    closeModal(); PICK_ASKED = false; location.hash = GB.run ? "#/gambler" : "#/world"; await refreshStatus(); await route();
   });
   document.querySelectorAll("[data-del]").forEach((b) => b.onclick = async () => {
     if (b.dataset.sure !== "1") { b.dataset.sure = "1"; b.textContent = "Tap again to delete"; setTimeout(() => { b.dataset.sure = ""; b.textContent = "Delete"; }, 3000); return; }
-    const r = await api("/api/delete", { name: b.dataset.del });
+    const r = await api("/api/delete", { name: b.dataset.del }); await gbDeleted(b.dataset.del);
     $("#save-list").innerHTML = saveRows(r.saves, inGame); wireSaves(inGame);
   });
 }
 
 // ---------------------------------------------------------------- favorites
 // A favorite is a key: "L:<league>" or "<kind>:<confed>" (cup, ct, nl, qual). The list is kept inside the world, so it travels with every save.
-const APP_VERSION = "v16.2.0-beta", APP_TAG = "Show Your Worth";
+const APP_VERSION = "v17.0.0-beta", APP_TAG = "BAIT Bets";
 let FAVS = null, PICK_ASKED = false;                    // FAVS: null until the player has chosen, then an array of keys
 const CT_NAMES = { UEFA: "European Championship", CONMEBOL: "Copa America", CONCACAF: "Gold Cup", CAF: "Africa Cup of Nations", AFC: "Asian Cup", OFC: "OFC Nations Cup" };
 const NL_NAMES = { UEFA: "UEFA Nations League", CONMEBOL: "CONMEBOL Nations League", CONCACAF: "CONCACAF Nations League", CAF: "CAF Nations League", AFC: "AFC Nations League", OFC: "OFC Nations League" };
@@ -12093,7 +12180,7 @@ function wireLogoPanel() {
 async function viewStart() {
   const st = STATUS;
   const rules = Object.entries(st.rules || {});
-  const hasSaves = !!(st.saves && st.saves.length);
+  const hasSaves = gbFilterSaves(st.saves).length > 0;
   const newCard = `<div class="card"><h3>New world</h3>
       <div class="field"><label for="seed">Seed<span class="meta" style="display:block">same seed, same world</span></label><span class="seedrow"><input type="number" id="seed" value="1" min="1"><button id="seed-rnd">Random</button></span></div>
       <div class="field"><label for="start-year">First season starts in</label><input type="number" id="start-year" value="${esc((st.rules || {}).start_year ?? 2026)}" min="1900" max="2200" style="width:90px"></div>
@@ -12104,13 +12191,16 @@ async function viewStart() {
         <div class="rules" id="rules" hidden>${rules.map(([k, v]) => `<div class="field"><span>${esc(k)}</span><input data-rule="${esc(k)}" data-def="${esc(v)}" value="${esc(v)}" style="width:130px"></div>`).join("")}</div>
       </details>
       <button class="pri wide" id="go-new">Start new world</button></div>`;
+  const newCard2 = gbActive() ? gbNewCardHtml() : newCard;
   const loadCard = `<div class="card"><h3>${hasSaves ? "Your saves" : "Load a save"}</h3><div id="save-list">${saveRows(st.saves, false)}</div>
       <details class="opts"><summary>Storage, logos and importing</summary><div id="store-note"></div>${saveTools()}${logoPanel()}</details></div>`;
   $("#view").innerHTML = `<div class="start">
     <div class="start-head"><h1>Soccer Sim <span class="ver">${APP_VERSION}</span></h1>
       <div class="start-tag">${starSvg(14)} ${APP_TAG}<span>Title stars, federation badges, league and competition logos</span></div>
       <div class="sub">Commissioner mode: no lineups, no relegation, one worldwide player market.</div></div>
-    ${hasSaves ? loadCard + newCard : newCard + loadCard}</div>`;
+    ${gbSwitchHtml()}${hasSaves ? loadCard + newCard2 : newCard2 + loadCard}</div>`;
+  gbWireStart();
+  if (gbActive()) { gbWireNew(); wireSaves(false); wireSaveTools(false); wireLogoPanel(); storageNote(); return; }
   $("#rules-on").onchange = (e) => ($("#rules").hidden = !e.target.checked);
   $("#seed-rnd").onclick = () => ($("#seed").value = 1 + Math.floor(Math.random() * 99999));
   $("#go-new").onclick = async () => {
@@ -12119,6 +12209,7 @@ async function viewStart() {
     if ($("#start-year").value && $("#start-year").value !== String((st.rules || {}).start_year ?? 2026)) rules.start_year = $("#start-year").value;
     try { localStorage.setItem("ssb_anim", $("#su-anim").checked ? "1" : "0"); } catch (e) {}
     await api("/api/settings_set", { god: $("#su-god").checked });
+    GB.run = null; gbSetMode("sim");
     const ok = await busy("Building the world (about 2 seconds)...", () => api("/api/new", { seed: $("#seed").value, rules }));
     if (ok) { PICK_ASKED = false; location.hash = "#/world"; await refreshStatus(); await route(); }
   };
@@ -13568,6 +13659,7 @@ async function route() {
 async function routeInner(r, a, b) {
   {
     if (!r || r === "start") return viewStart();
+    if (r === "gambler") return await gbViewHome();
     if (r === "world") return await viewWorld();
     if (r === "leagues") return await viewLeagues();
     if (r === "more") return viewMore();
