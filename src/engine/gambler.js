@@ -156,6 +156,45 @@ $mods["gambler"] = (function () {
       cards: { line: CRD_LINE, over: price(cd), under: price(1 - cd), mean: Math.round(P.cards * 10) / 10 },
       scorers: { H: side(h, P.hl), A: side(a, P.al) } };
   }
+
+  // ---------------------------------------------------------------- title bets (milestone 4)
+  // The title chance comes from playing the rest of the league season many times over with a keyed stream (same world and same
+  // games played = same quote). It never touches the real sim: it only reads standings and the open fixtures.
+  const TITLE_MARGIN = 0.10, TITLE_SIMS = 300;
+  const titlePrice = (p) => Math.min(500, Math.max(MIN_ODDS, r2((1 - TITLE_MARGIN) / Math.max(0.0005, p))));
+  function titleChances(w, league) {
+    const cid = "L:" + league; if (!w.comps.has(cid)) return null;
+    const c = w.comps.get_(cid), order = c.standings(), done = c.ptr >= c.rounds.length;
+    const base = {}; for (const t of order) { const st = c.st.get_(t); base[t] = [gv(st, "pts"), gv(st, "gf") - gv(st, "ga"), gv(st, "gf")]; }
+    if (done) { const p = {}; for (const t of order) p[t] = t === order[0] ? 1 : 0; return { c, order, base, p, left: 0, done: true }; }
+    const played = new Set((c.partial || []).map((r) => r[0] + "|" + r[1])), fx = [];
+    for (let i = c.ptr; i < c.rounds.length; i++) for (const [h, a] of c.rounds[i]) { if (i === c.ptr && played.has(h + "|" + a)) continue; fx.push([h, a, matchOdds(w, c, h, a).o.exp]); }
+    const r = $py.random.Random([w.seed, w.season, league, c.ptr, played.size, "title"].join("|")), wins = {}; for (const t of order) wins[t] = 0;
+    for (let n = 0; n < TITLE_SIMS; n++) {
+      const pts = {}, gd = {}, gf = {}; for (const t of order) { pts[t] = base[t][0]; gd[t] = base[t][1]; gf[t] = base[t][2]; }
+      for (const [h, a, [hl, al]] of fx) { const x = pois(r, hl), y = pois(r, al); gf[h] += x; gf[a] += y; gd[h] += x - y; gd[a] += y - x; if (x > y) pts[h] += 3; else if (x < y) pts[a] += 3; else { pts[h]++; pts[a]++; } }
+      let best = order[0]; for (const t of order) if (pts[t] > pts[best] || (pts[t] === pts[best] && (gd[t] > gd[best] || (gd[t] === gd[best] && gf[t] > gf[best])))) best = t;
+      wins[best]++;
+    }
+    const p = {}; for (const t of order) p[t] = wins[t] / TITLE_SIMS;
+    return { c, order, base, p, left: fx.length, done: false };
+  }
+  function titleQuote(w, league) {
+    const T = titleChances(w, league); if (!T) fail("unknown league", 404);
+    const rows = T.order.map((t, i) => ({ club: t, pos: i + 1, pts: T.base[t][0], p: T.p[t], odds: titlePrice(Math.max(T.p[t], 0)) })).filter((x) => x.p > 0 || x.pos <= 3);
+    rows.sort((x, y) => y.p - x.p || x.pos - y.pos);
+    return { league, week: T.c.ptr + 1, weeks: T.c.rounds.length, left: T.left, done: T.done, rows: rows.slice(0, 12), margin: TITLE_MARGIN };
+  }
+  // each open title bet: still open (with its chance now) or settled
+  function titleCheck(w, bets) {
+    const cache = {};
+    return bets.map((b) => {
+      const T = cache[b.league] || (cache[b.league] = titleChances(w, b.league));
+      if (!T) return { id: b.id, status: "void", p: 0 };
+      if (T.done) return { id: b.id, status: T.order[0] === b.club ? "won" : "lost", p: T.p[b.club] || 0 };
+      return { id: b.id, status: "open", p: T.p[b.club] || 0 };
+    });
+  }
   // does one leg win? null = not played yet
   function settleLeg(leg, hg, ag, det) {
     if (hg == null) return null;
@@ -199,6 +238,8 @@ $mods["gambler"] = (function () {
   function api(w, path, q, body) {
     if (path === "/api/gb_props") { const [lg, wk, h, a] = String(q.id).split("|"); return props(w, lg, +wk, h, a); }
     if (path === "/api/gb_detail") { const [lg, wk, h, a] = String(q.id).split("|"), r = result(w, lg, +wk, h, a); if (!r) fail("not played yet", 409); return detail(w, lg, +wk, h, a, r[0], r[1]); }
+    if (path === "/api/gb_title") return titleQuote(w, q.league);
+    if (path === "/api/gb_titles") return { bets: titleCheck(w, body.bets || []) };
     if (path === "/api/gb_slate") return slate(w);
     if (path === "/api/gb_slot") return playSlot(w, body.slot === "all" ? "all" : +body.slot);
     if (path === "/api/gb_play") {                                                    // one chosen game (comp.play_fixture gives it its own stream, so order never matters)
@@ -210,5 +251,5 @@ $mods["gambler"] = (function () {
     if (path === "/api/gb_settle") return { bets: settle(w, body.bets || []) };
     return null;
   }
-  return { api, props, detail, scorersFor, slate, playSlot, settle, settleLeg, combine, price, markets, slotFor, slotWeights, h01, SLOTS, MARGIN, LINE };
+  return { api, titleChances, titleQuote, titleCheck, props, detail, scorersFor, slate, playSlot, settle, settleLeg, combine, price, markets, slotFor, slotWeights, h01, SLOTS, MARGIN, LINE };
 })();

@@ -49,6 +49,15 @@ const call = async (p, b) => { const r = await R.request(p, b); if (r.code !== 2
   ok(match === rows.length, "scorer goals equal comp_stats for the top 10 (" + match + "/" + rows.length + ")");
   const pr = G.props(w, lg, c.ptr + 1, c.rounds[c.ptr][0][0], c.rounds[c.ptr][0][1]);
   ok(pr.scorers.H.length > 0 && pr.corners.over > 1 && pr.ht.D > 1, "props priced");
+  // title chances: add up to 1, deterministic, favourite is a top-4 side, settle after the last round
+  const tq = G.titleQuote(w, lg), tq2 = G.titleQuote(w, lg), T = G.titleChances(w, lg);
+  ok(JSON.stringify(tq) === JSON.stringify(tq2), "title quote deterministic");
+  ok(Math.abs(Object.values(T.p).reduce((x, y) => x + y, 0) - 1) < 1e-9, "title chances sum to 1");
+  ok(tq.rows[0].odds >= 1.05 && tq.rows.length > 2, "title rows priced");
+  const t0 = Date.now(); G.titleChances(w, lg); ok(Date.now() - t0 < 1500, "title quote fast enough (" + (Date.now() - t0) + " ms)");
+  await call("/api/sim", { scope: "world", to_end: true });
+  const fin = G.titleCheck(w, [{ id: 1, league: lg, club: w.comps.get_("L:" + lg).standings()[0] }, { id: 2, league: lg, club: w.comps.get_("L:" + lg).standings()[1] }]);
+  ok(fin[0].status === "won" && fin[1].status === "lost", "title settles on the final table");
   console.log(bad ? bad + " failed" : "gambler checks: all passed (" + n + " games checked)");
   process.exit(bad ? 1 : 0);
 })();
