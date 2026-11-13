@@ -1251,3 +1251,4 @@ select { padding-right: 30px; }
 .gb-perks{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px}.gb-chip{font-size:11px;padding:4px 8px;border-radius:999px;background:#2a2610;border:1px solid #6b5a1f}.gb-chip.bonus{background:#10302a;border-color:#1f6b57}
 .gb-offer .gb-perk{display:block;width:100%;text-align:left;margin-top:8px;padding:10px;border-radius:12px;border:1px solid #6b5a1f;background:#1d1a0c;color:inherit}
 .gb-perk b{display:block;font-size:15px;color:#f5c542}.gb-perk span{display:block;font-size:13px;margin:2px 0}.gb-perk i{display:block;font-size:11px;opacity:.6}
+.gb-one{width:100%;margin-top:6px;padding:7px;border-radius:9px;border:1px solid #1f6b43;background:#10281c;color:inherit;font-size:12px}.gb-cash{width:100%;margin-top:8px;padding:9px;border-radius:10px;border:0;background:#f5c542;color:#111;font-weight:800}.gb-cash:disabled{background:#2c3648;color:#9aa;font-weight:600}

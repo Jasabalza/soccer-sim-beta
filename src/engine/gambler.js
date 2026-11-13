@@ -201,6 +201,11 @@ $mods["gambler"] = (function () {
     if (path === "/api/gb_detail") { const [lg, wk, h, a] = String(q.id).split("|"), r = result(w, lg, +wk, h, a); if (!r) fail("not played yet", 409); return detail(w, lg, +wk, h, a, r[0], r[1]); }
     if (path === "/api/gb_slate") return slate(w);
     if (path === "/api/gb_slot") return playSlot(w, body.slot === "all" ? "all" : +body.slot);
+    if (path === "/api/gb_play") {                                                    // one chosen game (comp.play_fixture gives it its own stream, so order never matters)
+      const [lg, wk, h, a] = String(body.id).split("|"), c = w.comps.has("L:" + lg) ? w.comps.get_("L:" + lg) : null;
+      if (!c || +wk - 1 !== c.ptr) fail("That game is not on this week's slate.", 409);
+      try { const r = c.play_fixture(h, a); return { ok: true, hg: r[2], ag: r[3] }; } catch (e) { if (e instanceof ValueError) fail(e.message); throw e; }
+    }
     if (path === "/api/gb_finish") return finishWeek(w, body.wk);
     if (path === "/api/gb_settle") return { bets: settle(w, body.bets || []) };
     return null;
