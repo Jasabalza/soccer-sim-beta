@@ -11882,8 +11882,8 @@ function mvWalk(d) {
 const GB_START = 1000;
 // a level is 8 game weeks: a bill after weeks 4 and 8, then the quota. The quota only ever goes up (Lethal Company style).
 const GB_LEVEL = 8, GB_BILL_EVERY = 4, GB_MAX_STRIKES = 3, GB_LATE = 0.1;
-const gbQuotaFor = (n) => Math.round(1300 * Math.pow(1.3, n - 1) / 50) * 50;
-const gbBillFor = (n) => Math.round(100 * Math.pow(1.2, n - 1) / 5) * 5;                              // starting bankroll, dollars
+const gbQuotaFor = (n) => Math.round(1050 * Math.pow(1.25, n - 1) / 50) * 50;
+const gbBillFor = (n) => Math.round(75 * Math.pow(1.15, n - 1) / 5) * 5;                              // starting bankroll, dollars
 const GB = { run: null };                           // the open run: { name, seed, bankroll, week, created }
 const gbIsName = (n) => /^gb_/.test(String(n || ""));
 function gbMode() { try { return localStorage.getItem("ssb_mode") === "gambler" ? "gambler" : "sim"; } catch (e) { return "sim"; } }
@@ -11928,6 +11928,7 @@ function gbWireNew() {
     GB.run = gbNewRecord("gb_autosave", seed);             // set first: the engine's autosave after "new" must land under a gb_ name
     const ok = await busy("Building the world (about 2 seconds)...", () => api("/api/new", { seed, rules: {} }));
     if (!ok) { GB.run = null; return; }
+    GB.run.offer = gbOfferFor(GB.run);                      // a run starts with a perk pick, like any roguelike
     await gbStore();
     location.hash = "#/gambler"; await refreshStatus(); await route();
   };
@@ -12206,7 +12207,7 @@ async function gbFinishWeek() {
 // bills and quota: called after every finished week
 function gbAfterWeek(r) {
   const out = []; r.lw++; r.t = (r.t || 0) + 1;
-  const sp = gbPerkCount("sponsor"); if (sp) { r.bankroll = Math.round((r.bankroll + 60 * sp) * 100) / 100; out.push("Sponsorship: +" + gbMoney(60 * sp) + "."); }
+  const sp = gbPerkCount("sponsor"); if (sp) { r.bankroll = Math.round((r.bankroll + 40 * sp) * 100) / 100; out.push("Sponsorship: +" + gbMoney(40 * sp) + "."); }
   if (r.lw % GB_BILL_EVERY === 0) {
     const due = gbBill(r) + r.owed;
     if (r.bankroll >= due) { r.bankroll = Math.round((r.bankroll - due) * 100) / 100; r.owed = 0; out.push("Bill paid: " + gbMoney(due) + " (rent, probably)."); }
@@ -12233,7 +12234,7 @@ async function gbRestart() { gbSetMode("gambler"); GB.run = null; GBU.slate = nu
 const GB_PERKS = {
   vip:      { name: "VIP Rewards Tier", text: "All odds +2%.", flavor: "You are now a Valued Customer. It costs you nothing, which is what they think of you." },
   boost:    { name: "Profit Boost Token", text: "+10% on every winning payout's profit.", flavor: "Valid on bets you were going to win anyway." },
-  sponsor:  { name: "Sponsorship Deal", text: "+$60 every week.", flavor: "Brought to you by Vinny's Gutter Cleaning. Your face is on a van." },
+  sponsor:  { name: "Sponsorship Deal", text: "+$40 every week.", flavor: "Brought to you by Vinny's Gutter Cleaning. Your face is on a van." },
   landlord: { name: "Landlord's Nephew", text: "Bills cost 25% less.", flavor: "He 'handles the rent now'. Do not ask." },
   insure:   { name: "Parlay Insurance", text: "A 3+ leg parlay that loses by exactly one leg gets its stake back (2 uses).", flavor: "Terms and conditions apply. They are 40 pages long." },
   shield:   { name: "Strike Shield", text: "Ignore your next strike.", flavor: "A man named Greg made a phone call." },
@@ -12275,7 +12276,7 @@ function gbStrike(r, out, why) {
   r.strikes++; out.push(why + " Strike " + r.strikes + " of " + GB_MAX_STRIKES + ".");
 }
 function gbOfferHtml(r) {
-  return `<div class="card gb-offer"><h3>Level cleared. Pick a perk.</h3><div class="meta">Three offers, no refunds.</div>
+  return `<div class="card gb-offer"><h3>${r.level > 1 ? "Level cleared. " : "Welcome to BAIT Bets. "}Pick a perk.</h3><div class="meta">Three offers, no refunds.</div>
     ${r.offer.map((id) => `<button class="gb-perk" data-gbperk="${id}"><b>${esc(GB_PERKS[id].name)}</b><span>${esc(GB_PERKS[id].text)}</span><i>${esc(GB_PERKS[id].flavor)}</i></button>`).join("")}</div>`;
 }
 function gbPerksStrip(r) {

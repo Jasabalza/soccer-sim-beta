@@ -3,7 +3,7 @@
 const GB_PERKS = {
   vip:      { name: "VIP Rewards Tier", text: "All odds +2%.", flavor: "You are now a Valued Customer. It costs you nothing, which is what they think of you." },
   boost:    { name: "Profit Boost Token", text: "+10% on every winning payout's profit.", flavor: "Valid on bets you were going to win anyway." },
-  sponsor:  { name: "Sponsorship Deal", text: "+$60 every week.", flavor: "Brought to you by Vinny's Gutter Cleaning. Your face is on a van." },
+  sponsor:  { name: "Sponsorship Deal", text: "+$40 every week.", flavor: "Brought to you by Vinny's Gutter Cleaning. Your face is on a van." },
   landlord: { name: "Landlord's Nephew", text: "Bills cost 25% less.", flavor: "He 'handles the rent now'. Do not ask." },
   insure:   { name: "Parlay Insurance", text: "A 3+ leg parlay that loses by exactly one leg gets its stake back (2 uses).", flavor: "Terms and conditions apply. They are 40 pages long." },
   shield:   { name: "Strike Shield", text: "Ignore your next strike.", flavor: "A man named Greg made a phone call." },
@@ -45,7 +45,7 @@ function gbStrike(r, out, why) {
   r.strikes++; out.push(why + " Strike " + r.strikes + " of " + GB_MAX_STRIKES + ".");
 }
 function gbOfferHtml(r) {
-  return `<div class="card gb-offer"><h3>Level cleared. Pick a perk.</h3><div class="meta">Three offers, no refunds.</div>
+  return `<div class="card gb-offer"><h3>${r.level > 1 ? "Level cleared. " : "Welcome to BAIT Bets. "}Pick a perk.</h3><div class="meta">Three offers, no refunds.</div>
     ${r.offer.map((id) => `<button class="gb-perk" data-gbperk="${id}"><b>${esc(GB_PERKS[id].name)}</b><span>${esc(GB_PERKS[id].text)}</span><i>${esc(GB_PERKS[id].flavor)}</i></button>`).join("")}</div>`;
 }
 function gbPerksStrip(r) {

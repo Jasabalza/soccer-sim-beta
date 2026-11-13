@@ -3,8 +3,8 @@
 const GB_START = 1000;
 // a level is 8 game weeks: a bill after weeks 4 and 8, then the quota. The quota only ever goes up (Lethal Company style).
 const GB_LEVEL = 8, GB_BILL_EVERY = 4, GB_MAX_STRIKES = 3, GB_LATE = 0.1;
-const gbQuotaFor = (n) => Math.round(1300 * Math.pow(1.3, n - 1) / 50) * 50;
-const gbBillFor = (n) => Math.round(100 * Math.pow(1.2, n - 1) / 5) * 5;                              // starting bankroll, dollars
+const gbQuotaFor = (n) => Math.round(1050 * Math.pow(1.25, n - 1) / 50) * 50;
+const gbBillFor = (n) => Math.round(75 * Math.pow(1.15, n - 1) / 5) * 5;                              // starting bankroll, dollars
 const GB = { run: null };                           // the open run: { name, seed, bankroll, week, created }
 const gbIsName = (n) => /^gb_/.test(String(n || ""));
 function gbMode() { try { return localStorage.getItem("ssb_mode") === "gambler" ? "gambler" : "sim"; } catch (e) { return "sim"; } }
@@ -49,6 +49,7 @@ function gbWireNew() {
     GB.run = gbNewRecord("gb_autosave", seed);             // set first: the engine's autosave after "new" must land under a gb_ name
     const ok = await busy("Building the world (about 2 seconds)...", () => api("/api/new", { seed, rules: {} }));
     if (!ok) { GB.run = null; return; }
+    GB.run.offer = gbOfferFor(GB.run);                      // a run starts with a perk pick, like any roguelike
     await gbStore();
     location.hash = "#/gambler"; await refreshStatus(); await route();
   };
@@ -327,7 +328,7 @@ async function gbFinishWeek() {
 // bills and quota: called after every finished week
 function gbAfterWeek(r) {
   const out = []; r.lw++; r.t = (r.t || 0) + 1;
-  const sp = gbPerkCount("sponsor"); if (sp) { r.bankroll = Math.round((r.bankroll + 60 * sp) * 100) / 100; out.push("Sponsorship: +" + gbMoney(60 * sp) + "."); }
+  const sp = gbPerkCount("sponsor"); if (sp) { r.bankroll = Math.round((r.bankroll + 40 * sp) * 100) / 100; out.push("Sponsorship: +" + gbMoney(40 * sp) + "."); }
   if (r.lw % GB_BILL_EVERY === 0) {
     const due = gbBill(r) + r.owed;
     if (r.bankroll >= due) { r.bankroll = Math.round((r.bankroll - due) * 100) / 100; r.owed = 0; out.push("Bill paid: " + gbMoney(due) + " (rent, probably)."); }
