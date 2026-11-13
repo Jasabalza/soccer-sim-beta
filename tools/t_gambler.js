@@ -58,6 +58,18 @@ const call = async (p, b) => { const r = await R.request(p, b); if (r.code !== 2
   await call("/api/sim", { scope: "world", to_end: true });
   const fin = G.titleCheck(w, [{ id: 1, league: lg, club: w.comps.get_("L:" + lg).standings()[0] }, { id: 2, league: lg, club: w.comps.get_("L:" + lg).standings()[1] }]);
   ok(fin[0].status === "won" && fin[1].status === "lost", "title settles on the final table");
+  // tips: peeking never changes the game, and a rho-reliable source is right about rho of the time
+  {
+    await call("/api/new", { seed: 11, rules: {} });
+    const w2 = R.mods.app_v11.need_world(), sl = await call("/api/gb_slate"), L = sl.leagues[0], c2 = w2.comps.get_("L:" + L.name), m = L.rows[0];
+    const pk = G.peek(w2, c2, m.h, m.a), before = JSON.stringify(c2.st.get_(m.h)); G.peek(w2, c2, m.h, m.a);
+    ok(JSON.stringify(c2.st.get_(m.h)) === before, "peek leaves the table alone");
+    const played = c2.play_fixture(m.h, m.a); ok(played[2] === pk[0] && played[3] === pk[1], "peek equals the real result");
+    let right = 0, N = 300;
+    for (let i = 0; i < N; i++) { const t = G.tip(w2, "test", 0.8, i); if (t.none) continue; const cc = w2.comps.get_("L:" + t.league), [hg, ag] = G.peek(w2, cc, t.h, t.a); if (G.settleLeg({ market: t.market, pick: t.pick }, hg, ag)) right++; }
+    ok(right / N > 0.74 && right / N < 0.86, "tip reliability near 0.8, got " + (right / N).toFixed(2));
+    ok(JSON.stringify(G.tip(w2, "x", 0.5, 3)) === JSON.stringify(G.tip(w2, "x", 0.5, 3)), "tip is deterministic");
+  }
   console.log(bad ? bad + " failed" : "gambler checks: all passed (" + n + " games checked)");
   process.exit(bad ? 1 : 0);
 })();

@@ -195,6 +195,23 @@ $mods["gambler"] = (function () {
       return { id: b.id, status: "open", p: T.p[b.club] || 0 };
     });
   }
+
+  // ---------------------------------------------------------------- tips (the Chirp feed and the tip shop)
+  // A tip is a claim about a game that has not been played. The game's real result is already fixed by its own stream, so we can
+  // look at it without playing it (the same call comp._fixture makes, minus the table update). A source with reliability rho is
+  // right that often, decided by a keyed hash, never by chance at the time you look.
+  function peek(w, c, h, a) { return $mods.comps.score(c.fixture_rng(h, a), c.eff.get_(h), c.eff.get_(a), false, 1.0, $mods.rivals.effect(w, h, a, 1.0)); }
+  const MK_PICKS = { "1x2": ["H", "D", "A"], ou: ["O", "U"], btts: ["Y", "N"] };
+  const realPick = (mk, hg, ag) => mk === "1x2" ? (hg > ag ? "H" : hg === ag ? "D" : "A") : mk === "ou" ? (hg + ag > LINE ? "O" : "U") : (hg > 0 && ag > 0 ? "Y" : "N");
+  function tip(w, src, rho, salt) {
+    const wk = worldWeek(w), open = [];
+    for (const [cid, c] of w.comps.itemsArr()) { if (!openLeague(c, wk)) continue; for (const f of c.unplayed()) open.push([cid.slice(2), c, f[0], f[1]]); }
+    if (!open.length) return { none: true };
+    const key = [w.seed, w.season, wk, src, salt].join("|"), [league, c, h, a] = open[Math.floor(h01(key + "|m") * open.length)];
+    const mk = ["1x2", "ou", "btts"][Math.floor(h01(key + "|k") * 3)], [hg, ag] = peek(w, c, h, a), real = realPick(mk, hg, ag);
+    let pick = real; if (h01(key + "|t") >= rho) { const others = MK_PICKS[mk].filter((x) => x !== real); pick = others[Math.floor(h01(key + "|o") * others.length)]; }
+    return { id: [league, c.ptr + 1, h, a].join("|"), league, week: c.ptr + 1, h, a, market: mk, pick };
+  }
   // does one leg win? null = not played yet
   function settleLeg(leg, hg, ag, det) {
     if (hg == null) return null;
@@ -238,6 +255,7 @@ $mods["gambler"] = (function () {
   function api(w, path, q, body) {
     if (path === "/api/gb_props") { const [lg, wk, h, a] = String(q.id).split("|"); return props(w, lg, +wk, h, a); }
     if (path === "/api/gb_detail") { const [lg, wk, h, a] = String(q.id).split("|"), r = result(w, lg, +wk, h, a); if (!r) fail("not played yet", 409); return detail(w, lg, +wk, h, a, r[0], r[1]); }
+    if (path === "/api/gb_tip") return tip(w, String(body.src), +body.rho, String(body.salt || 0));
     if (path === "/api/gb_title") return titleQuote(w, q.league);
     if (path === "/api/gb_titles") return { bets: titleCheck(w, body.bets || []) };
     if (path === "/api/gb_slate") return slate(w);
@@ -251,5 +269,5 @@ $mods["gambler"] = (function () {
     if (path === "/api/gb_settle") return { bets: settle(w, body.bets || []) };
     return null;
   }
-  return { api, titleChances, titleQuote, titleCheck, props, detail, scorersFor, slate, playSlot, settle, settleLeg, combine, price, markets, slotFor, slotWeights, h01, SLOTS, MARGIN, LINE };
+  return { api, tip, peek, titleChances, titleQuote, titleCheck, props, detail, scorersFor, slate, playSlot, settle, settleLeg, combine, price, markets, slotFor, slotWeights, h01, SLOTS, MARGIN, LINE };
 })();
