@@ -1,6 +1,10 @@
 // BAIT Bets (v17): the gambler mode. Milestone 0: the Sim / Gambler switch, gambler saves kept apart from sim saves,
 // and an empty phone home screen. Gambler state lives in its own record (never inside the world save).
-const GB_START = 1000;                              // starting bankroll, dollars
+const GB_START = 1000;
+// a level is 8 game weeks: a bill after weeks 4 and 8, then the quota. The quota only ever goes up (Lethal Company style).
+const GB_LEVEL = 8, GB_BILL_EVERY = 4, GB_MAX_STRIKES = 3, GB_LATE = 0.1;
+const gbQuotaFor = (n) => Math.round(1300 * Math.pow(1.3, n - 1) / 50) * 50;
+const gbBillFor = (n) => Math.round(100 * Math.pow(1.2, n - 1) / 5) * 5;                              // starting bankroll, dollars
 const GB = { run: null };                           // the open run: { name, seed, bankroll, week, created }
 const gbIsName = (n) => /^gb_/.test(String(n || ""));
 function gbMode() { try { return localStorage.getItem("ssb_mode") === "gambler" ? "gambler" : "sim"; } catch (e) { return "sim"; } }
@@ -12,7 +16,7 @@ function gbFilterSaves(saves) { const g = gbActive(); return (saves || []).filte
 function gbSlot(name) { name = String(name || "").replace(/[^A-Za-z0-9_\- ]/g, "").trim().slice(0, 36) || "run"; return gbIsName(name) ? name : "gb_" + name; }
 const gbShow = (n) => String(n).replace(/^gb_/, "");
 const gbMoney = (n) => (n < 0 ? "-$" : "$") + Math.abs(Math.round(n)).toLocaleString("en-US");
-function gbNewRecord(name, seed) { return { name, seed: +seed || 1, bankroll: GB_START, week: 1, season: 1, quota: 1500, bets: [], nid: 1, lastWeek: 0, created: Date.now(), v: 2 }; }
+function gbNewRecord(name, seed) { return { name, seed: +seed || 1, bankroll: GB_START, week: 1, level: 1, lw: 0, quota: gbQuotaFor(1), strikes: 0, owed: 0, seasons: 1, bets: [], nid: 1, created: Date.now(), v: 3 }; }
 async function gbStore() { if (GB.run && SIM.kv) { try { await SIM.kv.put("gbrun_" + GB.run.name, GB.run); } catch (e) { /* storage full: the run still lives in memory */ } } }
 // called after any save of the world: keep the run record next to it under the same name
 async function gbSavedAs(name) { if (GB.run && gbIsName(name) && SIM.kv) { try { await SIM.kv.put("gbrun_" + name, Object.assign({}, GB.run, { name })); } catch (e) { /* ignore */ } } }
@@ -30,7 +34,7 @@ function gbSwitchHtml() {
 }
 function gbNewCardHtml() {
   return `<div class="card gb-new"><h3>New run</h3>
-    <div class="meta">Play money only. You start with <b>${gbMoney(GB_START)}</b> and a quota to hit by the end of the season. The sim runs underneath; you just bet on it.</div>
+    <div class="meta">Play money only. You start with <b>${gbMoney(GB_START)}</b> and a quota to hit every 8 weeks, and bills due every 4. Miss the quota three times and the run is over. The sim runs underneath; you just bet on it.</div>
     <div class="field"><label for="gb-seed">Seed<span class="meta" style="display:block">same seed, same world</span></label><span class="seedrow"><input type="number" id="gb-seed" value="1" min="1"><button id="gb-seed-rnd">Random</button></span></div>
     <button class="pri wide" id="gb-go">Start a run</button></div>`;
 }
@@ -122,13 +126,12 @@ async function gbViewHome() {
   const part = (location.hash.replace(/^#\/?/, "").split("/")[1]) || "";
   GBU.tab = part === "bets" ? "bets" : "slate";
   const h = (STATUS && STATUS.header) || {}, L = GBU.slate.leagues, lg = L.find((x) => x.name === GBU.league);
-  const over = r.bankroll < 5 && !gbOpenBets().length;
+  const over = (r.bankroll < 5 && !gbOpenBets().length) || r.strikes >= GB_MAX_STRIKES;
   const ended = !GBU.slate.leaguesLeft, idle = !ended && !L.length;
-  const need = Math.max(0, r.quota - r.bankroll);
+  const need = Math.max(0, r.quota - r.bankroll), wl = GB_LEVEL - r.lw, bd = GB_BILL_EVERY - (r.lw % GB_BILL_EVERY), bill = gbBillFor(r.level) + r.owed;
   let body = "";
-  if (over) body = `<div class="card gb-bust"><h3>Busted</h3><div class="meta">You are out of money and have nothing riding. The house thanks you for your service.</div><p>Run: ${r.week - 1} weeks, season ${r.season}, best bankroll ${gbMoney(r.best || GB_START)}.</p><button class="pri wide" id="gb-newrun">Start a new run</button></div>`;
-  else if (ended) body = `<div class="card"><h3>Season over</h3><div class="meta">Quota ${gbMoney(r.quota)} &middot; you have ${gbMoney(r.bankroll)}.</div>
-      ${r.bankroll >= r.quota ? `<p>Quota hit. Next season's quota is ${gbMoney(Math.round(r.quota * 1.5))}.</p><button class="pri wide" id="gb-next">Start next season</button>` : `<p>Short by ${gbMoney(need)}. The run ends here.</p><button class="pri wide" id="gb-newrun">Start a new run</button>`}</div>`;
+  if (over) body = `<div class="card gb-bust"><h3>Busted</h3><div class="meta">${r.strikes >= GB_MAX_STRIKES ? "Three missed quotas. The house has repossessed your account." : "You are out of money and have nothing riding. The house thanks you for your service."}</div><p>Reached level ${r.level}, ${r.week - 1} weeks, best bankroll ${gbMoney(r.best || GB_START)}.</p><button class="pri wide" id="gb-newrun">Start a new run</button></div>`;
+  else if (ended) body = `<div class="card"><h3>Season break</h3><div class="meta">The league season is over. Your level carries on.</div><button class="pri wide" id="gb-next">Start next season</button></div>`;
   else if (idle && GBU.tab !== "bets") body = `<div class="card"><h3>No league games this week</h3><div class="meta">Cups and international games only.</div><button class="pri wide" id="gb-finish">Finish week</button></div>`;
   else if (GBU.tab === "bets") body = gbBetsHtml();
   else {
@@ -138,7 +141,8 @@ async function gbViewHome() {
   }
   $("#view").innerHTML = `<div class="gb-home${GBU.slip.length && GBU.tab === "slate" ? " hasslip" : ""}">
     <div class="gb-top"><div class="gb-brand">BAIT <span>Bets</span></div><div class="gb-sub">Bet Anything, It's Totally fine</div></div>
-    <div class="gb-bank"><div><div class="gb-lbl">Bankroll</div><div class="gb-amt">${gbMoney(r.bankroll)}</div></div><div class="gb-q"><div class="gb-lbl">Quota by season end</div><b>${gbMoney(r.quota)}</b><div class="gb-lbl">${need ? gbMoney(need) + " to go" : "Quota met"}</div></div></div>
+    <div class="gb-bank"><div><div class="gb-lbl">Bankroll</div><div class="gb-amt">${gbMoney(r.bankroll)}</div></div><div class="gb-q"><div class="gb-lbl">Level ${r.level} quota &middot; ${wl} wk left</div><b>${gbMoney(r.quota)}</b><div class="gb-lbl">${need ? gbMoney(need) + " to go" : "Quota met"}</div></div></div>
+    <div class="gb-bills"><span>Bill ${gbMoney(bill)} in ${bd} wk</span><span>${"&#10006;".repeat(r.strikes)}${"&#9675;".repeat(Math.max(0, GB_MAX_STRIKES - r.strikes))} strikes</span></div>
     <div class="gb-tabs"><a href="#/gambler" class="${GBU.tab === "slate" ? "on" : ""}">Slate</a><a href="#/gambler/bets" class="${GBU.tab === "bets" ? "on" : ""}">My bets${gbOpenBets().length ? " (" + gbOpenBets().length + ")" : ""}</a><span class="gb-wk">Week ${r.week}${h.season_label ? " &middot; " + esc(h.season_label) : ""}</span></div>
     ${GBU.msg ? `<div class="gb-msg">${GBU.msg}</div>` : ""}${body}
     ${GBU.tab === "slate" && !over && !ended ? gbSlipHtml() : ""}<div class="gb-note">Play money only. No real gambling.</div></div>`;
@@ -203,14 +207,31 @@ async function gbFinishWeek() {
   await busy("Playing out the week...", async () => { await api("/api/gb_slot", { slot: "all" }); });
   const s = await gbSettleAll();
   await busy("On to next week...", () => api("/api/gb_finish", { wk: wasWk }));
-  await refreshStatus(); await gbLoadSlate(); GB.run.week = GBU.slate.wk || GB.run.week + 1; GBU.slip = []; GBU.msg = gbSummary(s, "Week " + wasWk);
+  await refreshStatus(); await gbLoadSlate(); GB.run.week = GBU.slate.wk || GB.run.week + 1; GBU.slip = [];
+  const lines = [gbSummary(s, "Week " + wasWk)].concat(gbAfterWeek(GB.run));
+  if (!GBU.slate.leaguesLeft && GB.run.strikes < GB_MAX_STRIKES) { await gbRollSeason(); lines.push("New league season."); }
+  GBU.msg = lines.join("<br>");
   await gbPersist(); await gbViewHome();
 }
-async function gbNextSeason() {
-  const r = GB.run;
+// bills and quota: called after every finished week
+function gbAfterWeek(r) {
+  const out = []; r.lw++;
+  if (r.lw % GB_BILL_EVERY === 0) {
+    const due = gbBillFor(r.level) + r.owed;
+    if (r.bankroll >= due) { r.bankroll = Math.round((r.bankroll - due) * 100) / 100; r.owed = 0; out.push("Bill paid: " + gbMoney(due) + " (rent, probably)."); }
+    else { r.owed = Math.round(due * (1 + GB_LATE)); out.push("Couldn't cover the " + gbMoney(due) + " bill. Late fee added: it is now " + gbMoney(r.owed) + "."); r.strikes++; out.push("Strike " + r.strikes + " of " + GB_MAX_STRIKES + "."); }
+  }
+  if (r.lw >= GB_LEVEL) {
+    r.lw = 0;
+    if (r.bankroll >= r.quota) { r.level++; r.quota = gbQuotaFor(r.level); out.push("<b>Quota hit.</b> Level " + r.level + " starts now: quota " + gbMoney(r.quota) + "."); }
+    else { r.strikes++; out.push("<b>Quota missed</b> (" + gbMoney(r.quota) + "). Strike " + r.strikes + " of " + GB_MAX_STRIKES + "." + (r.strikes >= GB_MAX_STRIKES ? "" : " Same quota, one more try.")); }
+  }
+  r.best = Math.max(r.best || GB_START, r.bankroll);
+  return out;
+}
+async function gbRollSeason() {
   await busy("Wrapping up the season...", async () => { await api("/api/sim", { scope: "world", to_end: true }); await api("/api/rollover", {}); await api("/api/flow", { step: "done" }); });
-  r.quota = Math.round(r.quota * 1.5); r.season++; await refreshStatus(); await gbLoadSlate(); GBU.slip = [];
-  GBU.msg = "New season. Quota is " + gbMoney(r.quota) + ".";
-  await gbPersist(); await gbViewHome();
+  GB.run.seasons++; await refreshStatus(); await gbLoadSlate(); GBU.slip = [];
 }
+async function gbNextSeason() { await gbRollSeason(); GBU.msg = "New league season."; await gbPersist(); await gbViewHome(); }
 async function gbRestart() { gbSetMode("gambler"); GB.run = null; GBU.slate = null; GBU.slip = []; location.hash = "#/start"; await route(); }

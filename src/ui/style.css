@@ -1246,3 +1246,4 @@ select { padding-right: 30px; }
 .gb-more{width:100%;margin-top:6px;padding:7px;border-radius:9px;border:1px dashed #2c3648;background:transparent;color:inherit;font-size:12px}
 .gb-props{margin-top:8px;border-top:1px solid #ffffff14;padding-top:6px}.gb-gen{font-size:9px;letter-spacing:.05em;text-transform:uppercase;opacity:.5;margin-left:4px}
 .gb-scs{display:grid;grid-template-columns:1fr 1fr;gap:8px}.gb-sc .gb-o{margin-bottom:5px;flex-direction:row;justify-content:space-between;padding:7px 8px;width:100%}
+.gb-bills{display:flex;justify-content:space-between;font-size:12px;opacity:.85;margin:-4px 2px 10px}
