@@ -12,7 +12,7 @@ function gbFilterSaves(saves) { const g = gbActive(); return (saves || []).filte
 function gbSlot(name) { name = String(name || "").replace(/[^A-Za-z0-9_\- ]/g, "").trim().slice(0, 36) || "run"; return gbIsName(name) ? name : "gb_" + name; }
 const gbShow = (n) => String(n).replace(/^gb_/, "");
 const gbMoney = (n) => (n < 0 ? "-$" : "$") + Math.abs(Math.round(n)).toLocaleString("en-US");
-function gbNewRecord(name, seed) { return { name, seed: +seed || 1, bankroll: GB_START, week: 1, created: Date.now(), v: 1 }; }
+function gbNewRecord(name, seed) { return { name, seed: +seed || 1, bankroll: GB_START, week: 1, season: 1, quota: 1500, bets: [], nid: 1, lastWeek: 0, created: Date.now(), v: 2 }; }
 async function gbStore() { if (GB.run && SIM.kv) { try { await SIM.kv.put("gbrun_" + GB.run.name, GB.run); } catch (e) { /* storage full: the run still lives in memory */ } } }
 // called after any save of the world: keep the run record next to it under the same name
 async function gbSavedAs(name) { if (GB.run && gbIsName(name) && SIM.kv) { try { await SIM.kv.put("gbrun_" + name, Object.assign({}, GB.run, { name })); } catch (e) { /* ignore */ } } }
@@ -49,15 +49,154 @@ function gbWireNew() {
     location.hash = "#/gambler"; await refreshStatus(); await route();
   };
 }
-// the phone home screen (empty for now: the slate, slip, bank and the rest arrive in the next milestones)
+
+// ---------------------------------------------------------------- the betting screens (milestone 1)
+const GBU = { slate: null, slip: [], league: null, slot: "all", tab: "slate", stake: 25, msg: "" };
+const GB_SLOTS = ["Morning", "Midday", "Night"], GB_ICON = ["&#9728;", "&#9788;", "&#9790;"];
+const gbOdds = (x) => (+x).toFixed(2);
+async function gbPersist() {
+  await gbStore();
+  try { await SIM.request("/api/save", { name: "gb_autosave" }); await gbSavedAs("gb_autosave"); } catch (e) { /* the run record is already kept */ }
+}
+async function gbLoadSlate() { GBU.slate = await api("/api/gb_slate"); const ls = GBU.slate.leagues; if (!GBU.league || !ls.some((l) => l.name === GBU.league)) GBU.league = ls.length ? ls[0].name : null; }
+const gbLegLabel = (l) => ({ "1x2": { H: l.h + " win", D: "Draw", A: l.a + " win" }, ou: { O: "Over 2.5 goals", U: "Under 2.5 goals" }, btts: { Y: "Both teams score", N: "Not both score" } }[l.market][l.pick]);
+const gbOpenBets = () => GB.run.bets.filter((b) => b.status === "open");
+function gbSlipToggle(m, market, pick, odds) {
+  const k = (l) => l.id === m.id && l.market === market;
+  const i = GBU.slip.findIndex(k);
+  if (i >= 0) { const same = GBU.slip[i].pick === pick; GBU.slip.splice(i, 1); if (same) return; }
+  GBU.slip.push({ id: m.id, league: m.league, week: m.week, h: m.h, a: m.a, market, pick, odds });
+}
+const gbOn = (m, market, pick) => GBU.slip.some((l) => l.id === m.id && l.market === market && l.pick === pick);
+function gbBtn(m, market, pick, label, odds, lock) {
+  return `<button class="gb-o${gbOn(m, market, pick) ? " on" : ""}" ${lock ? "disabled" : ""} data-gbl="${esc(m.id)}" data-mk="${market}" data-pk="${pick}" data-od="${odds}"><span>${label}</span><b>${gbOdds(odds)}</b></button>`;
+}
+function gbMatchHtml(m) {
+  const lock = m.done, o = m.odds;
+  const score = m.done ? `<span class="gb-fin">${m.hg} - ${m.ag}</span>` : `<span class="gb-slotchip">${GB_ICON[m.slot]} ${GB_SLOTS[m.slot]}</span>`;
+  return `<div class="gb-match${m.done ? " done" : ""}">
+    <div class="gb-mh"><span class="gb-teams"><b>${esc(m.h)}</b> <i>v</i> <b>${esc(m.a)}</b></span>${score}</div>
+    <div class="gb-sub2">${m.hpos ? "#" + m.hpos + " v #" + m.apos : ""}${m.rivalry ? " &middot; " + esc(m.rivalry) : ""}${m.marquee && !m.rivalry ? " &middot; big one" : ""}</div>
+    <div class="gb-row3">${gbBtn(m, "1x2", "H", "1", o.home, lock)}${gbBtn(m, "1x2", "D", "X", o.draw, lock)}${gbBtn(m, "1x2", "A", "2", o.away, lock)}</div>
+    <div class="gb-row4">${gbBtn(m, "ou", "O", "Over 2.5", o.over, lock)}${gbBtn(m, "ou", "U", "Under 2.5", o.under, lock)}${gbBtn(m, "btts", "Y", "Both score", o.yes, lock)}${gbBtn(m, "btts", "N", "Not both", o.no, lock)}</div></div>`;
+}
+function gbSlipHtml() {
+  const legs = GBU.slip; if (!legs.length) return "";
+  const comb = legs.reduce((m, l, i) => { const sm = legs.slice(0, i).some((x) => x.id === l.id); return m * l.odds * (sm ? 0.85 : 1); }, 1);
+  const st = Math.max(0, +GBU.stake || 0), win = st * comb, many = legs.length > 1;
+  const rows = legs.map((l, i) => `<div class="gb-leg"><span><b>${esc(gbLegLabel(l))}</b><i>${esc(l.h)} v ${esc(l.a)}</i></span><span>${gbOdds(l.odds)} <button class="mini" data-gbx="${i}">x</button></span></div>`).join("");
+  return `<div class="gb-slip"><div class="gb-sliph"><b>Bet slip (${legs.length})</b><button class="mini" id="gb-clear">Clear</button></div><div class="gb-legs">${rows}</div>
+    ${many ? `<div class="gb-sub2">${new Set(legs.map((l) => l.id)).size < legs.length ? "Same-game legs pay x0.85 each. " : ""}Parlay odds <b>${gbOdds(comb)}</b></div>` : ""}
+    <div class="gb-stake"><span>Stake $</span><input id="gb-stake" type="number" min="1" value="${esc(GBU.stake)}">${[10, 25, 50, 100].map((v) => `<button class="mini" data-gbs="${v}">${v}</button>`).join("")}<button class="mini" data-gbs="all">All in</button></div>
+    <div class="gb-sub2">To win ${many ? "(parlay) " : ""}<b id="gb-win" data-c="${comb}">${gbMoney(win)}</b>${many ? "" : " &middot; pays " + gbMoney(win - st) + " profit"}</div>
+    <div class="gb-place"><button class="pri" id="gb-place">${many ? "Place parlay" : "Place bet"}</button>${many ? `<button id="gb-singles">Place ${legs.length} singles</button>` : ""}</div></div>`;
+}
+function gbBetsHtml() {
+  const bets = GB.run.bets.slice().reverse();
+  if (!bets.length) return `<div class="empty">No bets yet. Go to the slate and pick something.</div>`;
+  return bets.map((b) => `<div class="gb-bet ${b.status}"><div class="gb-bh"><b>${b.legs.length > 1 ? b.legs.length + "-leg parlay" : "Single"}</b><span class="gb-st">${b.status === "open" ? "Open" : b.status === "won" ? "Won " + gbMoney(b.payout) : "Lost"}</span></div>
+    ${b.legs.map((l, i) => `<div class="gb-leg"><span><b>${esc(gbLegLabel(l))}</b><i>${esc(l.h)} v ${esc(l.a)}${b.res && b.res[i] && b.res[i].hg != null ? " &middot; " + b.res[i].hg + "-" + b.res[i].ag : ""}</i></span><span class="${b.res && b.res[i] && b.res[i].ok === true ? "gb-w" : b.res && b.res[i] && b.res[i].ok === false ? "gb-l" : ""}">${gbOdds(l.odds)}</span></div>`).join("")}
+    <div class="gb-sub2">Stake ${gbMoney(b.stake)} &middot; odds ${gbOdds(b.odds)} &middot; week ${b.week}</div></div>`).join("");
+}
+function gbSlotBar() {
+  const L = GBU.slate.leagues, cnt = [0, 0, 0], left = [0, 0, 0];
+  for (const lg of L) for (const m of lg.rows) { cnt[m.slot]++; if (!m.done) left[m.slot]++; }
+  const mine = [0, 0, 0]; for (const b of gbOpenBets()) for (const l of b.legs) { const lg = L.find((x) => x.name === l.league), m = lg && lg.rows.find((r) => r.id === [l.league, l.week, l.h, l.a].join("|")); if (m && !m.done) mine[m.slot]++; }
+  return `<div class="gb-slots"><button class="gb-sl${GBU.slot === "all" ? " on" : ""}" data-gbslot="all">All</button>${GB_SLOTS.map((n, i) => `<button class="gb-sl${GBU.slot === i ? " on" : ""}" data-gbslot="${i}">${GB_ICON[i]} ${n}<small>${left[i] ? left[i] + " games" : "played"}${mine[i] ? " &middot; " + mine[i] + " bet" + (mine[i] > 1 ? "s" : "") : ""}</small></button>`).join("")}</div>
+    <div class="gb-sim">${GB_SLOTS.map((n, i) => left[i] ? `<button class="mini pri" data-gbsim="${i}">Sim ${n}</button>` : "").join("")}<button class="mini" id="gb-finish">Finish week</button></div>`;
+}
 async function gbViewHome() {
   const r = GB.run;
   if (!r) { location.hash = "#/world"; return; }
   gbSetMode("gambler");
-  const h = (STATUS && STATUS.header) || {};
-  $("#view").innerHTML = `<div class="gb-home">
+  if (!GBU.slate) await gbLoadSlate();
+  const part = (location.hash.replace(/^#\/?/, "").split("/")[1]) || "";
+  GBU.tab = part === "bets" ? "bets" : "slate";
+  const h = (STATUS && STATUS.header) || {}, L = GBU.slate.leagues, lg = L.find((x) => x.name === GBU.league);
+  const over = r.bankroll < 5 && !gbOpenBets().length;
+  const ended = !GBU.slate.leaguesLeft, idle = !ended && !L.length;
+  const need = Math.max(0, r.quota - r.bankroll);
+  let body = "";
+  if (over) body = `<div class="card gb-bust"><h3>Busted</h3><div class="meta">You are out of money and have nothing riding. The house thanks you for your service.</div><p>Run: ${r.week - 1} weeks, season ${r.season}, best bankroll ${gbMoney(r.best || GB_START)}.</p><button class="pri wide" id="gb-newrun">Start a new run</button></div>`;
+  else if (ended) body = `<div class="card"><h3>Season over</h3><div class="meta">Quota ${gbMoney(r.quota)} &middot; you have ${gbMoney(r.bankroll)}.</div>
+      ${r.bankroll >= r.quota ? `<p>Quota hit. Next season's quota is ${gbMoney(Math.round(r.quota * 1.5))}.</p><button class="pri wide" id="gb-next">Start next season</button>` : `<p>Short by ${gbMoney(need)}. The run ends here.</p><button class="pri wide" id="gb-newrun">Start a new run</button>`}</div>`;
+  else if (idle && GBU.tab !== "bets") body = `<div class="card"><h3>No league games this week</h3><div class="meta">Cups and international games only.</div><button class="pri wide" id="gb-finish">Finish week</button></div>`;
+  else if (GBU.tab === "bets") body = gbBetsHtml();
+  else {
+    const chips = L.map((x) => `<button class="gb-lc${x.name === GBU.league ? " on" : ""}" data-gblg="${esc(x.name)}">${esc(x.name)}<small>${x.left} left</small></button>`).join("");
+    const rows = lg ? lg.rows.filter((m) => GBU.slot === "all" || m.slot === GBU.slot) : [];
+    body = gbSlotBar() + `<div class="gb-leagues">${chips}</div>` + (rows.length ? rows.map(gbMatchHtml).join("") : `<div class="empty">No games in this slot.</div>`);
+  }
+  $("#view").innerHTML = `<div class="gb-home${GBU.slip.length && GBU.tab === "slate" ? " hasslip" : ""}">
     <div class="gb-top"><div class="gb-brand">BAIT <span>Bets</span></div><div class="gb-sub">Bet Anything, It's Totally fine</div></div>
-    <div class="gb-bank"><div class="gb-lbl">Bankroll</div><div class="gb-amt">${gbMoney(r.bankroll)}</div><div class="gb-lbl">Week ${r.week}${h.season_label ? " &middot; " + esc(h.season_label) : ""}</div></div>
-    <div class="card"><h3>This week</h3><div class="empty">The betting slate opens in the next update. Your run is saved and the sim is running underneath.</div></div>
-    <div class="gb-note">Play money only. No real gambling.</div></div>`;
+    <div class="gb-bank"><div><div class="gb-lbl">Bankroll</div><div class="gb-amt">${gbMoney(r.bankroll)}</div></div><div class="gb-q"><div class="gb-lbl">Quota by season end</div><b>${gbMoney(r.quota)}</b><div class="gb-lbl">${need ? gbMoney(need) + " to go" : "Quota met"}</div></div></div>
+    <div class="gb-tabs"><a href="#/gambler" class="${GBU.tab === "slate" ? "on" : ""}">Slate</a><a href="#/gambler/bets" class="${GBU.tab === "bets" ? "on" : ""}">My bets${gbOpenBets().length ? " (" + gbOpenBets().length + ")" : ""}</a><span class="gb-wk">Week ${r.week}${h.season_label ? " &middot; " + esc(h.season_label) : ""}</span></div>
+    ${GBU.msg ? `<div class="gb-msg">${GBU.msg}</div>` : ""}${body}
+    ${GBU.tab === "slate" && !over && !ended ? gbSlipHtml() : ""}<div class="gb-note">Play money only. No real gambling.</div></div>`;
+  GBU.msg = "";
+  gbWire();
 }
+function gbWire() {
+  const q = (s) => document.querySelectorAll(s), on = (id, f) => { const e = document.getElementById(id); if (e) e.onclick = f; };
+  const redraw = () => gbViewHome();
+  q("[data-gblg]").forEach((b) => b.onclick = () => { GBU.league = b.dataset.gblg; redraw(); });
+  q("[data-gbslot]").forEach((b) => b.onclick = () => { GBU.slot = b.dataset.gbslot === "all" ? "all" : +b.dataset.gbslot; redraw(); });
+  q("[data-gbl]").forEach((b) => b.onclick = () => {
+    const lg = GBU.slate.leagues.find((x) => x.name === GBU.league), m = lg && lg.rows.find((x) => x.id === b.dataset.gbl); if (!m) return;
+    gbSlipToggle(m, b.dataset.mk, b.dataset.pk, +b.dataset.od); const y = window.scrollY; redraw().then(() => window.scrollTo(0, y));
+  });
+  q("[data-gbx]").forEach((b) => b.onclick = () => { GBU.slip.splice(+b.dataset.gbx, 1); redraw(); });
+  q("[data-gbs]").forEach((b) => b.onclick = () => { GBU.stake = b.dataset.gbs === "all" ? Math.floor(GB.run.bankroll) : +b.dataset.gbs; redraw(); });
+  const si = document.getElementById("gb-stake"); if (si) si.oninput = () => { GBU.stake = Math.max(0, Math.floor(+si.value || 0)); const w = document.getElementById("gb-win"); if (w) w.textContent = gbMoney(GBU.stake * (+w.dataset.c)); };
+  on("gb-clear", () => { GBU.slip = []; redraw(); });
+  on("gb-place", () => gbPlace(false)); on("gb-singles", () => gbPlace(true));
+  q("[data-gbsim]").forEach((b) => b.onclick = () => gbSimSlot(+b.dataset.gbsim));
+  on("gb-finish", gbFinishWeek); on("gb-newrun", gbRestart); on("gb-next", gbNextSeason);
+}
+function gbPlace(singles) {
+  const r = GB.run, legs = GBU.slip, st = Math.floor(+GBU.stake || 0);
+  const total = singles ? st * legs.length : st;
+  if (!legs.length) return;
+  if (st < 1) { GBU.msg = "Pick a stake of at least $1."; return gbViewHome(); }
+  if (total > r.bankroll) { GBU.msg = "You only have " + gbMoney(r.bankroll) + "."; return gbViewHome(); }
+  const mk = (ls) => ({ id: r.nid++, week: r.week, stake: st, legs: ls.map((l) => Object.assign({}, l)), odds: ls.reduce((m, l, i) => m * l.odds * (ls.slice(0, i).some((x) => x.id === l.id) ? 0.85 : 1), 1), status: "open", payout: 0 });
+  const made = singles ? legs.map((l) => mk([l])) : [mk(legs)];
+  for (const b of made) { b.odds = Math.round(b.odds * 100) / 100; r.bets.push(b); }
+  r.bankroll = Math.round((r.bankroll - total) * 100) / 100; GBU.slip = []; GBU.msg = made.length > 1 ? made.length + " singles placed." : "Bet placed.";
+  gbStore(); gbViewHome();
+}
+// settle every open bet against the games now played; pays out winners
+async function gbSettleAll() {
+  const r = GB.run, open = gbOpenBets(); if (!open.length) return { won: 0, lost: 0, paid: 0 };
+  const res = await api("/api/gb_settle", { bets: open.map((b) => ({ id: b.id, stake: b.stake, legs: b.legs })) });
+  let won = 0, lost = 0, paid = 0;
+  for (const x of res.bets) {
+    const b = r.bets.find((y) => y.id === x.id); b.res = x.legs;
+    if (x.status === "open") continue;
+    b.status = x.status; if (x.status === "won") { b.payout = x.payout; r.bankroll = Math.round((r.bankroll + x.payout) * 100) / 100; won++; paid += x.payout; } else lost++;
+  }
+  r.best = Math.max(r.best || GB_START, r.bankroll);
+  return { won, lost, paid };
+}
+const gbSummary = (s, n) => (s.won + s.lost ? `${n}: ${s.won} bet${s.won === 1 ? "" : "s"} won, ${s.lost} lost${s.paid ? ", paid " + gbMoney(s.paid) : ""}.` : `${n}: played.`);
+async function gbSimSlot(i) {
+  await busy(`Playing ${GB_SLOTS[i]} games...`, async () => { await api("/api/gb_slot", { slot: i }); });
+  const s = await gbSettleAll(); await gbLoadSlate(); GBU.msg = gbSummary(s, GB_SLOTS[i]);
+  await gbPersist(); await gbViewHome();
+}
+async function gbFinishWeek() {
+  const wasWk = GBU.slate.wk;
+  await busy("Playing out the week...", async () => { await api("/api/gb_slot", { slot: "all" }); });
+  const s = await gbSettleAll();
+  await busy("On to next week...", () => api("/api/gb_finish", { wk: wasWk }));
+  await refreshStatus(); await gbLoadSlate(); GB.run.week = GBU.slate.wk || GB.run.week + 1; GBU.slip = []; GBU.msg = gbSummary(s, "Week " + wasWk);
+  await gbPersist(); await gbViewHome();
+}
+async function gbNextSeason() {
+  const r = GB.run;
+  await busy("Wrapping up the season...", async () => { await api("/api/sim", { scope: "world", to_end: true }); await api("/api/rollover", {}); await api("/api/flow", { step: "done" }); });
+  r.quota = Math.round(r.quota * 1.5); r.season++; await refreshStatus(); await gbLoadSlate(); GBU.slip = [];
+  GBU.msg = "New season. Quota is " + gbMoney(r.quota) + ".";
+  await gbPersist(); await gbViewHome();
+}
+async function gbRestart() { gbSetMode("gambler"); GB.run = null; GBU.slate = null; GBU.slip = []; location.hash = "#/start"; await route(); }

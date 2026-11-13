@@ -198,6 +198,10 @@ $mods.shim = (function () {
       try { const w = A.need_world(), q = {}; for (const [k, v] of arg.itemsArr()) q[k] = v; return { code: 200, body: $plain($mods.tourney.games(w, q.comp)) }; }
       catch (e) { if (e instanceof A.ApiError) return { code: e.code, body: { error: e.message } }; console.error(e); return { code: 500, body: { error: "Error: " + (e && e.message) } }; }
     }
+    if (p === "/api/gb_slate" || p === "/api/gb_slot" || p === "/api/gb_settle" || p === "/api/gb_finish") {
+      try { const w = A.need_world(), q = {}; for (const [k, v] of arg.itemsArr()) q[k] = v; return { code: 200, body: $plain($mods.gambler.api(w, p, q, body || {})) }; }
+      catch (e) { if (e instanceof A.ApiError) return { code: e.code, body: { error: e.message } }; console.error(e); return { code: 500, body: { error: (e && e.constructor ? e.constructor.name : "Error") + ": " + (e && e.message) } }; }
+    }
     if (p === "/api/rivalries" || p === "/api/rivals_page" || p === "/api/matchup" || p === "/api/rivalry_name" || p === "/api/fixtures") {
       try {
         const w = A.need_world(), q = {};
