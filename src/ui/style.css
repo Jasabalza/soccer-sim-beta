@@ -1260,3 +1260,4 @@ select { padding-right: 30px; }
 .gb-hot,.gb-cold{font-size:12px}
 .gb-apps{display:flex;gap:6px;overflow-x:auto;margin-bottom:6px}.gb-app{flex:0 0 auto;padding:7px 10px;border-radius:10px;border:1px solid #2c3648;background:#141b27;color:inherit;font-size:12px}.gb-app small{display:block;font-size:10px;opacity:.65}.gb-app.on{border-color:#f5c542;background:#2a2610}.gb-app:disabled{opacity:.4}
 .gb-tabs{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none}.gb-tabs a{flex:0 0 auto}.gb-wk{flex:0 0 auto;padding-left:8px}
+.gb-run .lgtabs{display:none}

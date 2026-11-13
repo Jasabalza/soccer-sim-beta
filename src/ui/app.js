@@ -8,8 +8,10 @@ let STATUS = null;
 let SORT = { key: "ovr", dir: -1 };
 
 // ---------------------------------------------------------------- api
+const GB_SIM_PATHS = new Set(["/api/sim", "/api/years", "/api/rollover", "/api/flow", "/api/edit"]);
 async function api(path, body) {
   let r;
+  if (GB.run && !GB.allow && body !== undefined && GB_SIM_PATHS.has(path.split("?")[0])) throw new Error("In a gambler run the games are played from the Bets tab.");
   try { r = await SIM.request(path, body); } catch (e) { console.error(e); throw new Error("The game engine stopped: " + e); }
   if (r.code !== 200) throw new Error((r.body && r.body.error) || "Something went wrong");
   if (body !== undefined && SIM.store.persistent && !api.auto && (path === "/api/years" || path === "/api/rollover" || path === "/api/new")) {
@@ -65,7 +67,8 @@ function renderShell() {
   $("#nav").innerHTML = has ? items.map(([k, t]) => `<a href="#/${k}" class="${route === k || (k === "moves" && route === "ledger") ? "on" : ""}">${t}</a>`).join("") : "";
   renderTabbar(has, route);
   document.body.classList.toggle("inapp", !!has);
-  document.body.classList.toggle("nosim", !has || !SIM_ROUTES.has(route));
+  document.body.classList.toggle("nosim", !has || !SIM_ROUTES.has(route) || !!GB.run);
+  document.body.classList.toggle("gb-run", !!(has && GB.run));
   const h = STATUS && STATUS.header;
   $("#season-info").innerHTML = h
     ? (h.flow
@@ -82,6 +85,7 @@ const TAB_ICONS = {
   leagues: '<path d="M4 6h16M4 12h16M4 18h10"/>',
   players: '<circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/>',
   history: '<path d="M8 4h8v5a4 4 0 0 1-8 0zM8 6H4v1a4 4 0 0 0 4 4M16 6h4v1a4 4 0 0 1-4 4M12 13v4M8 21h8M10 17h4"/>',
+  bets: '<circle cx="12" cy="12" r="8"/><path d="M12 7v10M9.5 9.5c0-1.2 1.1-2 2.5-2s2.5.8 2.5 2-1.1 1.7-2.5 2-2.5.8-2.5 2 1.1 2 2.5 2 2.5-.8 2.5-2"/>',
   more: '<circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/>',
 };
 const TAB_OF = { more: "more", history: "history", leagues: "leagues", world: "season", moves: "season", ledger: "season", prospects: "season", ceremony: "history", continent: "leagues", league: "leagues", club: "leagues", comp: "leagues", c: "leagues", matchup: "leagues", rivals: "leagues", nations: "leagues", nation: "leagues", players: "players", player: "players", coach: "players", academies: "players", news: "history", hof: "history", hofcard: "history", hofday: "history", hofnation: "history", hofleague: "history", trophies: "history", prestige: "history", records: "history", money: "more" };
@@ -91,6 +95,7 @@ function renderTabbar(has, route) {
   el.hidden = false;
   const cur = route === "gambler" ? "bets" : (TAB_OF[route] || "season");
   const tab = (k, t, href) => `<a data-tab="${k}" href="${href || "#"}" class="${cur === k ? "on" : ""}"><svg width="22" height="22" viewBox="0 0 24 24" fill="${k === "more" ? "currentColor" : "none"}" stroke="${k === "more" ? "none" : "currentColor"}" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${TAB_ICONS[k]}</svg><span>${t}</span></a>`;
+  if (GB.run) { const g = location.hash.split("/")[1] === "gambler" ? "bets" : cur; el.innerHTML = tab("bets", "Bets", "#/gambler").replace(`class="${cur === "bets" ? "on" : ""}"`, `class="${g === "bets" ? "on" : ""}"`) + tab("leagues", "Leagues", "#/leagues") + tab("players", "Players", "#/players") + tab("more", "Menu", "#/gambler/menu"); return; }
   el.innerHTML = (GB.run ? tab("bets", "Bets", "#/gambler") : "") + tab("season", "Season", "#/world") + tab("leagues", "Leagues", "#/leagues") + tab("players", "Players", "#/players") + tab("history", "History", "#/history") + tab("more", "More", "#/more");
 }
 const CHEV = '<svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg>';
@@ -2034,8 +2039,10 @@ async function route() {
     $("#view").innerHTML = `<div class="empty">${esc(e.message)}</div>`;
   }
 }
+const GB_ROUTES = new Set(["gambler", "leagues", "league", "club", "player", "players", "matchup", "continent"]);
 async function routeInner(r, a, b) {
   {
+    if (GB.run && r && r !== "start" && !GB_ROUTES.has(r)) { location.replace("#/gambler"); return; }
     if (!r || r === "start") return viewStart();
     if (r === "gambler") return await gbViewHome();
     if (r === "world") return await viewWorld();
@@ -2074,7 +2081,7 @@ async function routeInner(r, a, b) {
   }
 }
 window.addEventListener("hashchange", () => { if (SBOPEN) { SBOPEN = false; try { renderSimBar(); } catch (e) {} } route(); });
-$("#brand").onclick = () => (location.hash = STATUS && STATUS.has_world ? "#/world" : "#/");
+$("#brand").onclick = () => (location.hash = STATUS && STATUS.has_world ? (GB.run ? "#/gambler" : "#/world") : "#/");
 (async () => {
   await SIM.init();
   try { const imp = await SIM.logos.load(); if (imp && LOGO_SECTIONS.some((k) => imp[k])) setLogos(imp); } catch (e) { /* no logos stored */ }

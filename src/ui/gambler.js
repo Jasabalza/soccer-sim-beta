@@ -190,7 +190,7 @@ async function gbViewHome() {
   if (!GBU.slate) await gbLoadSlate();
   await gbEnsureTips();
   const part = (location.hash.replace(/^#\/?/, "").split("/")[1]) || "";
-  GBU.tab = part === "bets" ? "bets" : part === "titles" ? "titles" : part === "loans" ? "loans" : part === "chirp" ? "chirp" : "slate";
+  GBU.tab = part === "bets" ? "bets" : part === "titles" ? "titles" : part === "loans" ? "loans" : part === "chirp" ? "chirp" : part === "menu" ? "menu" : "slate";
   const h = (STATUS && STATUS.header) || {}, L = GBU.slate.leagues, lg = L.find((x) => x.name === GBU.league);
   const over = (r.bankroll < 5 && !gbOpenBets().length && !gbOpenTitles().length) || r.strikes >= GB_MAX_STRIKES;
   const ended = !GBU.slate.leaguesLeft, idle = !ended && !L.length;
@@ -205,6 +205,7 @@ async function gbViewHome() {
   else if (GBU.tab === "titles") body = await gbTitlesHtml();
   else if (GBU.tab === "loans") body = gbLoansHtml();
   else if (GBU.tab === "chirp") body = gbChirpHtml();
+  else if (GBU.tab === "menu") body = gbMenuHtml();
   else {
     const chips = L.map((x) => `<button class="gb-lc${x.name === GBU.league ? " on" : ""}" data-gblg="${esc(x.name)}">${esc(x.name)}<small>${x.left} left</small></button>`).join("");
     const rows = lg ? lg.rows.filter((m) => GBU.slot === "all" || m.slot === GBU.slot) : [];
@@ -258,6 +259,7 @@ function gbWire() {
   on("gb-clear", () => { GBU.slip = []; redraw(); });
   on("gb-place", () => gbPlace(false)); on("gb-singles", () => gbPlace(true));
   q("[data-gbsim]").forEach((b) => b.onclick = () => gbSimSlot(+b.dataset.gbsim));
+  on("gb-save", () => saveDialog()); on("gb-leave", () => { GBU.slate = null; GBU.slip = []; location.hash = "#/start"; route(); });
   on("gb-finish", gbFinishWeek); on("gb-newrun", gbRestart); on("gb-next", gbNextSeason);
 }
 function gbPlace(singles) {
@@ -367,8 +369,15 @@ function gbAfterWeek(r) {
   return out;
 }
 async function gbRollSeason() {
-  await busy("Wrapping up the season...", async () => { await api("/api/sim", { scope: "world", to_end: true }); await api("/api/rollover", {}); await api("/api/flow", { step: "done" }); });
+  GB.allow = true;
+  try { await busy("Wrapping up the season...", async () => { await api("/api/sim", { scope: "world", to_end: true }); await api("/api/rollover", {}); await api("/api/flow", { step: "done" }); }); } finally { GB.allow = false; }
   GB.run.seasons++; await refreshStatus(); await gbLoadSlate(); GBU.slip = [];
 }
 async function gbNextSeason() { await gbRollSeason(); GBU.msg = "New league season."; await gbPersist(); await gbViewHome(); }
+function gbMenuHtml() {
+  const r = GB.run;
+  return `<div class="card"><h3>Run</h3><div class="meta">Level ${r.level} &middot; ${r.t || 0} weeks played &middot; ${r.perks.length} perks &middot; ${r.bets.length} bets</div>
+    <p><button class="wide" id="gb-save">Save this run</button></p><p><button class="wide" id="gb-leave">Leave to the start screen</button></p></div>
+    <div class="card"><h3>How it works</h3><div class="meta">Bet on the slate. Every 4 weeks a bill is due. Every 8 weeks you need the quota, counted after debt. Miss it and you take a strike; three strikes ends the run. Clear it for a perk and a harder quota. Leagues and Players are for scouting: you cannot sim from there.</div></div>`;
+}
 async function gbRestart() { gbSetMode("gambler"); GB.run = null; GBU.slate = null; GBU.slip = []; location.hash = "#/start"; await route(); }
