@@ -1247,3 +1247,7 @@ select { padding-right: 30px; }
 .gb-props{margin-top:8px;border-top:1px solid #ffffff14;padding-top:6px}.gb-gen{font-size:9px;letter-spacing:.05em;text-transform:uppercase;opacity:.5;margin-left:4px}
 .gb-scs{display:grid;grid-template-columns:1fr 1fr;gap:8px}.gb-sc .gb-o{margin-bottom:5px;flex-direction:row;justify-content:space-between;padding:7px 8px;width:100%}
 .gb-bills{display:flex;justify-content:space-between;font-size:12px;opacity:.85;margin:-4px 2px 10px}
+
+.gb-perks{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px}.gb-chip{font-size:11px;padding:4px 8px;border-radius:999px;background:#2a2610;border:1px solid #6b5a1f}.gb-chip.bonus{background:#10302a;border-color:#1f6b57}
+.gb-offer .gb-perk{display:block;width:100%;text-align:left;margin-top:8px;padding:10px;border-radius:12px;border:1px solid #6b5a1f;background:#1d1a0c;color:inherit}
+.gb-perk b{display:block;font-size:15px;color:#f5c542}.gb-perk span{display:block;font-size:13px;margin:2px 0}.gb-perk i{display:block;font-size:11px;opacity:.6}

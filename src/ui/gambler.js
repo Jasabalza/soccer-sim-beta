@@ -62,7 +62,7 @@ async function gbPersist() {
   await gbStore();
   try { await SIM.request("/api/save", { name: "gb_autosave" }); await gbSavedAs("gb_autosave"); } catch (e) { /* the run record is already kept */ }
 }
-async function gbLoadSlate() { GBU.props = {}; GBU.open = null; GBU.slate = await api("/api/gb_slate"); const ls = GBU.slate.leagues; if (!GBU.league || !ls.some((l) => l.name === GBU.league)) GBU.league = ls.length ? ls[0].name : null; }
+async function gbLoadSlate() { GBU.props = {}; GBU.open = null; GBU.slate = await api("/api/gb_slate"); for (const lg of GBU.slate.leagues) for (const m of lg.rows) for (const k of Object.keys(m.odds)) m.odds[k] = gbAdj(m.odds[k]); const ls = GBU.slate.leagues; if (!GBU.league || !ls.some((l) => l.name === GBU.league)) GBU.league = ls.length ? ls[0].name : null; }
 const gbLegLabel = (l) => l.market === "scr" ? (l.pname || "Player") + " to score" : ({ "1x2": { H: l.h + " win", D: "Draw", A: l.a + " win" }, ou: { O: "Over 2.5 goals", U: "Under 2.5 goals" }, btts: { Y: "Both teams score", N: "Not both score" },
   ht: { H: "Half-time: " + l.h, D: "Half-time: draw", A: "Half-time: " + l.a }, cor: { O: "Over 9.5 corners", U: "Under 9.5 corners" }, crd: { O: "Over 3.5 cards", U: "Under 3.5 cards" } }[l.market][l.pick]);
 const gbOpenBets = () => GB.run.bets.filter((b) => b.status === "open");
@@ -95,11 +95,12 @@ function gbMatchHtml(m) {
 }
 function gbSlipHtml() {
   const legs = GBU.slip; if (!legs.length) return "";
-  const comb = legs.reduce((m, l, i) => { const sm = legs.slice(0, i).some((x) => x.id === l.id); return m * l.odds * (sm ? 0.85 : 1); }, 1);
-  const st = Math.max(0, +GBU.stake || 0), win = st * comb, many = legs.length > 1;
+  const comb = gbCombo(legs), free = !!GBU.free && (GB.run.bonus || 0) > 0;
+  const st = Math.max(0, +GBU.stake || 0), win = gbPayout(st, comb, free), many = legs.length > 1;
   const rows = legs.map((l, i) => `<div class="gb-leg"><span><b>${esc(gbLegLabel(l))}</b><i>${esc(l.h)} v ${esc(l.a)}</i></span><span>${gbOdds(l.odds)} <button class="mini" data-gbx="${i}">x</button></span></div>`).join("");
   return `<div class="gb-slip"><div class="gb-sliph"><b>Bet slip (${legs.length})</b><button class="mini" id="gb-clear">Clear</button></div><div class="gb-legs">${rows}</div>
     ${many ? `<div class="gb-sub2">${new Set(legs.map((l) => l.id)).size < legs.length ? "Same-game legs pay x0.85 each. " : ""}Parlay odds <b>${gbOdds(comb)}</b></div>` : ""}
+    ${(GB.run.bonus || 0) > 0 ? `<label class="check"><input type="checkbox" id="gb-free" ${free ? "checked" : ""}> Use bonus bets (${gbMoney(GB.run.bonus)} left, stake not returned)</label>` : ""}
     <div class="gb-stake"><span>Stake $</span><input id="gb-stake" type="number" min="1" value="${esc(GBU.stake)}">${[10, 25, 50, 100].map((v) => `<button class="mini" data-gbs="${v}">${v}</button>`).join("")}<button class="mini" data-gbs="all">All in</button></div>
     <div class="gb-sub2">To win ${many ? "(parlay) " : ""}<b id="gb-win" data-c="${comb}">${gbMoney(win)}</b>${many ? "" : " &middot; pays " + gbMoney(win - st) + " profit"}</div>
     <div class="gb-place"><button class="pri" id="gb-place">${many ? "Place parlay" : "Place bet"}</button>${many ? `<button id="gb-singles">Place ${legs.length} singles</button>` : ""}</div></div>`;
@@ -107,9 +108,9 @@ function gbSlipHtml() {
 function gbBetsHtml() {
   const bets = GB.run.bets.slice().reverse();
   if (!bets.length) return `<div class="empty">No bets yet. Go to the slate and pick something.</div>`;
-  return bets.map((b) => `<div class="gb-bet ${b.status}"><div class="gb-bh"><b>${b.legs.length > 1 ? b.legs.length + "-leg parlay" : "Single"}</b><span class="gb-st">${b.status === "open" ? "Open" : b.status === "won" ? "Won " + gbMoney(b.payout) : "Lost"}</span></div>
+  return bets.map((b) => `<div class="gb-bet ${b.status}"><div class="gb-bh"><b>${b.legs.length > 1 ? b.legs.length + "-leg parlay" : "Single"}</b><span class="gb-st">${b.status === "open" ? "Open" : b.status === "won" ? "Won " + gbMoney(b.payout) : b.status === "refunded" ? "Refunded" : "Lost"}</span></div>
     ${b.legs.map((l, i) => `<div class="gb-leg"><span><b>${esc(gbLegLabel(l))}</b><i>${esc(l.h)} v ${esc(l.a)}${b.res && b.res[i] && b.res[i].hg != null ? " &middot; " + b.res[i].hg + "-" + b.res[i].ag : ""}${b.res && b.res[i] && b.res[i].note ? " &middot; " + esc(b.res[i].note) : ""}</i></span><span class="${b.res && b.res[i] && b.res[i].ok === true ? "gb-w" : b.res && b.res[i] && b.res[i].ok === false ? "gb-l" : ""}">${gbOdds(l.odds)}</span></div>`).join("")}
-    <div class="gb-sub2">Stake ${gbMoney(b.stake)} &middot; odds ${gbOdds(b.odds)} &middot; week ${b.week}</div></div>`).join("");
+    <div class="gb-sub2">${b.free ? "Bonus bet " : "Stake "}${gbMoney(b.stake)} &middot; odds ${gbOdds(b.odds)} &middot; week ${b.week}</div></div>`).join("");
 }
 function gbSlotBar() {
   const L = GBU.slate.leagues, cnt = [0, 0, 0], left = [0, 0, 0];
@@ -128,9 +129,10 @@ async function gbViewHome() {
   const h = (STATUS && STATUS.header) || {}, L = GBU.slate.leagues, lg = L.find((x) => x.name === GBU.league);
   const over = (r.bankroll < 5 && !gbOpenBets().length) || r.strikes >= GB_MAX_STRIKES;
   const ended = !GBU.slate.leaguesLeft, idle = !ended && !L.length;
-  const need = Math.max(0, r.quota - r.bankroll), wl = GB_LEVEL - r.lw, bd = GB_BILL_EVERY - (r.lw % GB_BILL_EVERY), bill = gbBillFor(r.level) + r.owed;
+  const need = Math.max(0, r.quota - r.bankroll), wl = GB_LEVEL - r.lw, bd = GB_BILL_EVERY - (r.lw % GB_BILL_EVERY), bill = gbBill(r) + r.owed;
   let body = "";
   if (over) body = `<div class="card gb-bust"><h3>Busted</h3><div class="meta">${r.strikes >= GB_MAX_STRIKES ? "Three missed quotas. The house has repossessed your account." : "You are out of money and have nothing riding. The house thanks you for your service."}</div><p>Reached level ${r.level}, ${r.week - 1} weeks, best bankroll ${gbMoney(r.best || GB_START)}.</p><button class="pri wide" id="gb-newrun">Start a new run</button></div>`;
+  else if (r.offer && r.offer.length) body = gbOfferHtml(r);
   else if (ended) body = `<div class="card"><h3>Season break</h3><div class="meta">The league season is over. Your level carries on.</div><button class="pri wide" id="gb-next">Start next season</button></div>`;
   else if (idle && GBU.tab !== "bets") body = `<div class="card"><h3>No league games this week</h3><div class="meta">Cups and international games only.</div><button class="pri wide" id="gb-finish">Finish week</button></div>`;
   else if (GBU.tab === "bets") body = gbBetsHtml();
@@ -143,9 +145,10 @@ async function gbViewHome() {
     <div class="gb-top"><div class="gb-brand">BAIT <span>Bets</span></div><div class="gb-sub">Bet Anything, It's Totally fine</div></div>
     <div class="gb-bank"><div><div class="gb-lbl">Bankroll</div><div class="gb-amt">${gbMoney(r.bankroll)}</div></div><div class="gb-q"><div class="gb-lbl">Level ${r.level} quota &middot; ${wl} wk left</div><b>${gbMoney(r.quota)}</b><div class="gb-lbl">${need ? gbMoney(need) + " to go" : "Quota met"}</div></div></div>
     <div class="gb-bills"><span>Bill ${gbMoney(bill)} in ${bd} wk</span><span>${"&#10006;".repeat(r.strikes)}${"&#9675;".repeat(Math.max(0, GB_MAX_STRIKES - r.strikes))} strikes</span></div>
+    ${gbPerksStrip(r)}
     <div class="gb-tabs"><a href="#/gambler" class="${GBU.tab === "slate" ? "on" : ""}">Slate</a><a href="#/gambler/bets" class="${GBU.tab === "bets" ? "on" : ""}">My bets${gbOpenBets().length ? " (" + gbOpenBets().length + ")" : ""}</a><span class="gb-wk">Week ${r.week}${h.season_label ? " &middot; " + esc(h.season_label) : ""}</span></div>
     ${GBU.msg ? `<div class="gb-msg">${GBU.msg}</div>` : ""}${body}
-    ${GBU.tab === "slate" && !over && !ended ? gbSlipHtml() : ""}<div class="gb-note">Play money only. No real gambling.</div></div>`;
+    ${GBU.tab === "slate" && !over && !ended && !(r.offer && r.offer.length) ? gbSlipHtml() : ""}<div class="gb-note">Play money only. No real gambling.</div></div>`;
   GBU.msg = "";
   gbWire();
 }
@@ -160,12 +163,14 @@ function gbWire() {
   });
   q("[data-gbmore]").forEach((b) => b.onclick = async () => {
     const id = b.dataset.gbmore; if (GBU.open === id) { GBU.open = null; return redraw(); }
-    if (!GBU.props[id]) { try { GBU.props[id] = await api("/api/gb_props?id=" + enc(id)); } catch (e) { toast(e.message); return; } }
+    if (!GBU.props[id]) { try { GBU.props[id] = await api("/api/gb_props?id=" + enc(id)); const pp = GBU.props[id]; for (const k of Object.keys(pp.ht)) pp.ht[k] = gbAdj(pp.ht[k]); for (const k of ["corners", "cards"]) { pp[k].over = gbAdj(pp[k].over); pp[k].under = gbAdj(pp[k].under); } for (const sd of ["H", "A"]) for (const x of pp.scorers[sd]) x.odds = gbAdj(x.odds); } catch (e) { toast(e.message); return; } }
     GBU.open = id; redraw();
   });
   q("[data-gbx]").forEach((b) => b.onclick = () => { GBU.slip.splice(+b.dataset.gbx, 1); redraw(); });
   q("[data-gbs]").forEach((b) => b.onclick = () => { GBU.stake = b.dataset.gbs === "all" ? Math.floor(GB.run.bankroll) : +b.dataset.gbs; redraw(); });
-  const si = document.getElementById("gb-stake"); if (si) si.oninput = () => { GBU.stake = Math.max(0, Math.floor(+si.value || 0)); const w = document.getElementById("gb-win"); if (w) w.textContent = gbMoney(GBU.stake * (+w.dataset.c)); };
+  const si = document.getElementById("gb-stake"); if (si) si.oninput = () => { GBU.stake = Math.max(0, Math.floor(+si.value || 0)); const w = document.getElementById("gb-win"); if (w) w.textContent = gbMoney(gbPayout(GBU.stake, +w.dataset.c, !!GBU.free && (GB.run.bonus || 0) > 0)); };
+  const fr = document.getElementById("gb-free"); if (fr) fr.onchange = () => { GBU.free = fr.checked; redraw(); };
+  q("[data-gbperk]").forEach((b) => b.onclick = async () => { gbGivePerk(GB.run, b.dataset.gbperk); GBU.msg = "Perk taken: " + GB_PERKS[b.dataset.gbperk].name + "."; await gbLoadSlate(); await gbPersist(); redraw(); });
   on("gb-clear", () => { GBU.slip = []; redraw(); });
   on("gb-place", () => gbPlace(false)); on("gb-singles", () => gbPlace(true));
   q("[data-gbsim]").forEach((b) => b.onclick = () => gbSimSlot(+b.dataset.gbsim));
@@ -173,14 +178,14 @@ function gbWire() {
 }
 function gbPlace(singles) {
   const r = GB.run, legs = GBU.slip, st = Math.floor(+GBU.stake || 0);
-  const total = singles ? st * legs.length : st;
+  const total = singles ? st * legs.length : st, free = !!GBU.free && (r.bonus || 0) > 0;
   if (!legs.length) return;
   if (st < 1) { GBU.msg = "Pick a stake of at least $1."; return gbViewHome(); }
-  if (total > r.bankroll) { GBU.msg = "You only have " + gbMoney(r.bankroll) + "."; return gbViewHome(); }
-  const mk = (ls) => ({ id: r.nid++, week: r.week, stake: st, legs: ls.map((l) => Object.assign({}, l)), odds: ls.reduce((m, l, i) => m * l.odds * (ls.slice(0, i).some((x) => x.id === l.id) ? 0.85 : 1), 1), status: "open", payout: 0 });
+  if (total > (free ? r.bonus : r.bankroll)) { GBU.msg = "You only have " + gbMoney(free ? r.bonus : r.bankroll) + (free ? " in bonus bets." : "."); return gbViewHome(); }
+  const mk = (ls) => ({ id: r.nid++, week: r.week, stake: st, free, legs: ls.map((l) => Object.assign({}, l)), odds: gbCombo(ls), status: "open", payout: 0 });
   const made = singles ? legs.map((l) => mk([l])) : [mk(legs)];
-  for (const b of made) { b.odds = Math.round(b.odds * 100) / 100; r.bets.push(b); }
-  r.bankroll = Math.round((r.bankroll - total) * 100) / 100; GBU.slip = []; GBU.msg = made.length > 1 ? made.length + " singles placed." : "Bet placed.";
+  for (const b of made) r.bets.push(b);
+  if (free) { r.bonus = Math.round((r.bonus - total) * 100) / 100; if (r.bonus <= 0) GBU.free = false; } else r.bankroll = Math.round((r.bankroll - total) * 100) / 100; GBU.slip = []; GBU.msg = made.length > 1 ? made.length + " singles placed." : "Bet placed.";
   gbStore(); gbViewHome();
 }
 // settle every open bet against the games now played; pays out winners
@@ -191,7 +196,15 @@ async function gbSettleAll() {
   for (const x of res.bets) {
     const b = r.bets.find((y) => y.id === x.id); b.res = x.legs;
     if (x.status === "open") continue;
-    b.status = x.status; if (x.status === "won") { b.payout = x.payout; r.bankroll = Math.round((r.bankroll + x.payout) * 100) / 100; won++; paid += x.payout; } else lost++;
+    if (x.status === "lost" && b.legs.length >= 3 && gbPerkUses("insure") > 0) {         // Parlay Insurance waits until every leg is known
+      if (x.legs.some((l) => l.ok === null)) continue;
+      if (x.legs.filter((l) => l.ok === false).length === 1) {
+        const ins = r.perks.find((p) => p.id === "insure" && p.uses > 0); ins.uses--;
+        b.status = "refunded"; b.payout = b.stake; r.bankroll = Math.round((r.bankroll + (b.free ? 0 : b.stake)) * 100) / 100; if (b.free) r.bonus = (r.bonus || 0) + b.stake; GBU.note = "Parlay Insurance paid out."; continue;
+      }
+    }
+    b.status = x.status;
+    if (x.status === "won") { b.payout = gbPayout(b.stake, b.odds, b.free); r.bankroll = Math.round((r.bankroll + b.payout) * 100) / 100; won++; paid += b.payout; } else lost++;
   }
   r.best = Math.max(r.best || GB_START, r.bankroll);
   return { won, lost, paid };
@@ -216,15 +229,16 @@ async function gbFinishWeek() {
 // bills and quota: called after every finished week
 function gbAfterWeek(r) {
   const out = []; r.lw++;
+  const sp = gbPerkCount("sponsor"); if (sp) { r.bankroll = Math.round((r.bankroll + 60 * sp) * 100) / 100; out.push("Sponsorship: +" + gbMoney(60 * sp) + "."); }
   if (r.lw % GB_BILL_EVERY === 0) {
-    const due = gbBillFor(r.level) + r.owed;
+    const due = gbBill(r) + r.owed;
     if (r.bankroll >= due) { r.bankroll = Math.round((r.bankroll - due) * 100) / 100; r.owed = 0; out.push("Bill paid: " + gbMoney(due) + " (rent, probably)."); }
-    else { r.owed = Math.round(due * (1 + GB_LATE)); out.push("Couldn't cover the " + gbMoney(due) + " bill. Late fee added: it is now " + gbMoney(r.owed) + "."); r.strikes++; out.push("Strike " + r.strikes + " of " + GB_MAX_STRIKES + "."); }
+    else { r.owed = Math.round(due * (1 + GB_LATE)); gbStrike(r, out, "Couldn't cover the " + gbMoney(due) + " bill. Late fee added: it is now " + gbMoney(r.owed) + "."); }
   }
   if (r.lw >= GB_LEVEL) {
     r.lw = 0;
-    if (r.bankroll >= r.quota) { r.level++; r.quota = gbQuotaFor(r.level); out.push("<b>Quota hit.</b> Level " + r.level + " starts now: quota " + gbMoney(r.quota) + "."); }
-    else { r.strikes++; out.push("<b>Quota missed</b> (" + gbMoney(r.quota) + "). Strike " + r.strikes + " of " + GB_MAX_STRIKES + "." + (r.strikes >= GB_MAX_STRIKES ? "" : " Same quota, one more try.")); }
+    if (r.bankroll >= r.quota) { r.level++; r.quota = gbQuotaFor(r.level); out.push("<b>Quota hit.</b> Level " + r.level + " starts now: quota " + gbMoney(r.quota) + "."); r.offer = gbOfferFor(r); }
+    else { gbStrike(r, out, "<b>Quota missed</b> (" + gbMoney(r.quota) + ")."); if (r.strikes < GB_MAX_STRIKES) out.push("Same quota, one more try."); }
   }
   r.best = Math.max(r.best || GB_START, r.bankroll);
   return out;
