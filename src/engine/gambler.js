@@ -96,9 +96,73 @@ $mods["gambler"] = (function () {
     for (const m of rows) if (m[0] === h && m[1] === a) return [m[2], m[3]];
     return null;
   }
+
+  // ---------------------------------------------------------------- match detail and props (milestone 2)
+  // Scorers: the SAME keyed draw comp_stats uses (same seed string, same pool, same order of draws), so a bet on a scorer settles
+  // exactly the way the season's scorer table is built. Everything else (minutes, half-time, corners, cards) is GENERATED here
+  // from a keyed stream and is consistent with the final score by construction.
+  const COR_LINE = 9.5, CRD_LINE = 3.5, FIRST_HALF = 0.45;
+  const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
+  const poisCdf = (lam, k) => { let s2 = 0; for (let i = 0; i <= k; i++) s2 += $mods.rivals.poissonPmf(lam, i); return s2; };
+  function pois(r, lam) { const L = Math.exp(-lam); let k = 0, p = 1; do { k++; p *= r.random(); } while (p > L); return k - 1; }
+  function params(w, c, h, a) {
+    const { o, lab } = matchOdds(w, c, h, a), [hl, al] = o.exp, d = hl - al;
+    return { o, hl, al, corH: clamp(5.4 + 0.9 * d, 3, 8), corA: clamp(4.6 - 0.9 * d, 2.5, 7), cards: 3.5 + 1.6 * (lab ? lab.intensity : 0) };
+  }
+  // one team's scoring pool, built exactly as comp_stats builds it
+  function teamPool(w, team, squads) {
+    const CS = $mods.compstats, sq = $M.get(squads, team, []).slice().sort((x, y) => (y.ovr - x.ovr) || (x.name < y.name ? -1 : x.name > y.name ? 1 : 0));
+    const [xi, bench] = $iter(CS._xi(sq)), pool = xi.map((p) => [p, 1.0]).concat(bench.map((p) => [p, 0.2]));
+    return { pool, gw: pool.map(([p, m]) => CS.GOAL_W.get_(p.pos) * m * Math.pow(p.ovr / 70, 6)), aw: pool.map(([p, m]) => CS.ASSIST_W.get_(p.pos) * m * Math.pow(p.ovr / 70, 4)) };
+  }
+  // who scored for `team` in league matchweek index mi, given that it scored gf goals: [[player, goals], ...]
+  function scorersFor(w, cid, mi, team, gf, squads) {
+    if (gf <= 0) return [];
+    const CS = $mods.compstats, tp = teamPool(w, team, squads);
+    const r = $py.random.Random(String(w.seed) + "|" + w.season + "|cs|" + cid + "|m" + mi + "|" + team);
+    const out = [];
+    for (const [i, n] of $iter($M.items(CS._draw(r, gf, tp.gw)))) out.push([tp.pool[i][0], n]);
+    out.sort((x, y) => (x[0].name < y[0].name ? -1 : 1));
+    return out;
+  }
+  // everything that happened in one finished game
+  function detail(w, league, week, h, a, hg, ag, squads) {
+    const cid = "L:" + league, c = w.comps.get_(cid), P = params(w, c, h, a);
+    squads = squads || w.squads(); w.ensure_uids();
+    const key = [w.seed, w.season, "gbd", cid, week, h, a].join("|"), r = $py.random.Random(key);
+    const goals = [];
+    for (const [team, side, gf] of [[h, "H", hg], [a, "A", ag]]) {
+      const list = []; for (const [p, n] of scorersFor(w, cid, week - 1, team, gf, squads)) for (let i = 0; i < n; i++) list.push(p);
+      for (let i = list.length - 1; i > 0; i--) { const j = Math.floor(r.random() * (i + 1)); [list[i], list[j]] = [list[j], list[i]]; }        // which goal was whose
+      for (const p of list) goals.push({ min: 1 + Math.floor(r.random() * 90), side, uid: p.uid, name: p.name, team });
+    }
+    goals.sort((x, y) => x.min - y.min);
+    const ht = [goals.filter((g) => g.side === "H" && g.min <= 45).length, goals.filter((g) => g.side === "A" && g.min <= 45).length];
+    const corners = [pois(r, P.corH), pois(r, P.corA)], cards = [pois(r, P.cards * 0.52), pois(r, P.cards * 0.48)];
+    return { goals, ht, corners, cards };
+  }
+  // the extra markets of one game, priced (called when a player opens a match)
+  function props(w, league, week, h, a) {
+    const cid = "L:" + league; if (!w.comps.has(cid)) fail("unknown league", 404);
+    const c = w.comps.get_(cid), P = params(w, c, h, a), squads = w.squads(); w.ensure_uids();
+    let ph = 0, pd = 0, pa = 0;
+    for (let i = 0; i <= 8; i++) for (let j = 0; j <= 8; j++) { const q = $mods.rivals.poissonPmf(P.hl * FIRST_HALF, i) * $mods.rivals.poissonPmf(P.al * FIRST_HALF, j); if (i > j) ph += q; else if (i === j) pd += q; else pa += q; }
+    const t = ph + pd + pa; ph /= t; pd /= t; pa /= t;
+    const side = (team, lam) => { const tp = teamPool(w, team, squads), sum = tp.gw.reduce((x, y) => x + y, 0);
+      return tp.pool.map(([p], i) => ({ uid: p.uid, name: p.name, pos: p.pos, ovr: p.ovr, p: 1 - Math.exp(-lam * tp.gw[i] / sum) })).filter((x) => x.p > 0.02).sort((x, y) => y.p - x.p).slice(0, 6).map((x) => ({ uid: x.uid, name: x.name, pos: x.pos, odds: price(x.p) })); };
+    const co = 1 - poisCdf(P.corH + P.corA, Math.floor(COR_LINE)), cd = 1 - poisCdf(P.cards, Math.floor(CRD_LINE));
+    return { id: [league, week, h, a].join("|"), h, a, ht: { H: price(ph), D: price(pd), A: price(pa) },
+      corners: { line: COR_LINE, over: price(co), under: price(1 - co), mean: Math.round((P.corH + P.corA) * 10) / 10 },
+      cards: { line: CRD_LINE, over: price(cd), under: price(1 - cd), mean: Math.round(P.cards * 10) / 10 },
+      scorers: { H: side(h, P.hl), A: side(a, P.al) } };
+  }
   // does one leg win? null = not played yet
-  function settleLeg(leg, hg, ag) {
+  function settleLeg(leg, hg, ag, det) {
     if (hg == null) return null;
+    if (leg.market === "ht") { if (!det) return null; const [x, y] = det.ht; return (leg.pick === "H" && x > y) || (leg.pick === "D" && x === y) || (leg.pick === "A" && x < y); }
+    if (leg.market === "cor") { if (!det) return null; const t2 = det.corners[0] + det.corners[1]; return leg.pick === "O" ? t2 > COR_LINE : t2 < COR_LINE; }
+    if (leg.market === "crd") { if (!det) return null; const t2 = det.cards[0] + det.cards[1]; return leg.pick === "O" ? t2 > CRD_LINE : t2 < CRD_LINE; }
+    if (leg.market === "scr") { if (!det) return null; return det.goals.some((g) => String(g.uid) === String(leg.uid)); }
     const t = hg + ag;
     if (leg.market === "1x2") return (leg.pick === "H" && hg > ag) || (leg.pick === "D" && hg === ag) || (leg.pick === "A" && hg < ag);
     if (leg.market === "ou") return leg.pick === "O" ? t > LINE : t < LINE;
@@ -111,24 +175,35 @@ $mods["gambler"] = (function () {
     for (const l of legs) { const k = l.league + "|" + l.week + "|" + l.h + "|" + l.a; const n = seen.get(k) || 0; seen.set(k, n + 1); m *= l.odds * (n ? SAME_MATCH : 1); }
     return r2(m);
   }
+  const NEED_DETAIL = new Set(["ht", "cor", "crd", "scr"]);
   function settle(w, bets) {
+    const memo = new Map(); let squads = null;
+    const det = (l, r) => { const k = [l.league, l.week, l.h, l.a].join("|"); if (!memo.has(k)) { squads = squads || w.squads(); memo.set(k, detail(w, l.league, l.week, l.h, l.a, r[0], r[1], squads)); } return memo.get(k); };
     return bets.map((b) => {
       let lost = false, pending = false;
       const legs = b.legs.map((l) => {
-        const r = result(w, l.league, l.week, l.h, l.a), ok = r ? settleLeg(l, r[0], r[1]) : null;
+        const r = result(w, l.league, l.week, l.h, l.a), ok = r ? settleLeg(l, r[0], r[1], NEED_DETAIL.has(l.market) ? det(l, r) : null) : null;
         if (ok === null) pending = true; else if (!ok) lost = true;
-        return { hg: r ? r[0] : null, ag: r ? r[1] : null, ok };
+        return { hg: r ? r[0] : null, ag: r ? r[1] : null, ok, ...(r && NEED_DETAIL.has(l.market) ? { note: noteFor(l, det(l, r)) } : {}) };
       });
       const status = lost ? "lost" : pending ? "open" : "won";
       return { id: b.id, status, legs, payout: status === "won" ? r2(b.stake * combine(b.legs)) : 0 };
     });
   }
+  function noteFor(l, d) {
+    if (l.market === "ht") return "HT " + d.ht[0] + "-" + d.ht[1];
+    if (l.market === "cor") return d.corners[0] + d.corners[1] + " corners";
+    if (l.market === "crd") return d.cards[0] + d.cards[1] + " cards";
+    return d.goals.length ? "Goals: " + d.goals.map((g) => g.name + " " + g.min + "'").join(", ") : "No goals";
+  }
   function api(w, path, q, body) {
+    if (path === "/api/gb_props") { const [lg, wk, h, a] = String(q.id).split("|"); return props(w, lg, +wk, h, a); }
+    if (path === "/api/gb_detail") { const [lg, wk, h, a] = String(q.id).split("|"), r = result(w, lg, +wk, h, a); if (!r) fail("not played yet", 409); return detail(w, lg, +wk, h, a, r[0], r[1]); }
     if (path === "/api/gb_slate") return slate(w);
     if (path === "/api/gb_slot") return playSlot(w, body.slot === "all" ? "all" : +body.slot);
     if (path === "/api/gb_finish") return finishWeek(w, body.wk);
     if (path === "/api/gb_settle") return { bets: settle(w, body.bets || []) };
     return null;
   }
-  return { api, slate, playSlot, settle, settleLeg, combine, price, markets, slotFor, slotWeights, h01, SLOTS, MARGIN, LINE };
+  return { api, props, detail, scorersFor, slate, playSlot, settle, settleLeg, combine, price, markets, slotFor, slotWeights, h01, SLOTS, MARGIN, LINE };
 })();
