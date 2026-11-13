@@ -115,10 +115,11 @@ function gbMatchHtml(m) {
 }
 function gbSlipHtml() {
   const legs = GBU.slip; if (!legs.length) return "";
+  if (!GBU.slipOpen) return `<button class="gb-slipbar" id="gb-slipopen"><span>Bet slip &middot; ${legs.length} pick${legs.length > 1 ? "s" : ""}</span><b>${gbOdds(gbCombo(legs))} &rarr;</b></button>`;
   const comb = gbCombo(legs), free = !!GBU.free && (GB.run.bonus || 0) > 0;
   const st = Math.max(0, +GBU.stake || 0), win = gbPayout(st, comb, free), many = legs.length > 1;
   const rows = legs.map((l, i) => `<div class="gb-leg"><span><b>${esc(gbLegLabel(l))}</b><i>${esc(l.h)} v ${esc(l.a)}</i></span><span>${gbOdds(l.odds)} <button class="mini" data-gbx="${i}">x</button></span></div>`).join("");
-  return `<div class="gb-slip"><div class="gb-sliph"><b>Bet slip (${legs.length})</b><button class="mini" id="gb-clear">Clear</button></div><div class="gb-legs">${rows}</div>
+  return `<div class="gb-slip"><div class="gb-sliph"><b>Bet slip &middot; ${legs.length}</b><span><button class="mini" id="gb-clear">Clear</button> <button class="mini" id="gb-slipclose">Close</button></span></div><div class="gb-legs">${rows}</div>
     ${many ? `<div class="gb-sub2">${new Set(legs.map((l) => l.id)).size < legs.length ? "Same-game legs pay x0.85 each. " : ""}Parlay odds <b>${gbOdds(comb)}</b></div>` : ""}
     ${(GB.run.bonus || 0) > 0 ? `<label class="check"><input type="checkbox" id="gb-free" ${free ? "checked" : ""}> Use bonus bets (${gbMoney(GB.run.bonus)} left, stake not returned)</label>` : ""}
     <div class="gb-stake"><span>Stake $</span><input id="gb-stake" type="number" min="1" value="${esc(GBU.stake)}">${[10, 25, 50, 100].map((v) => `<button class="mini" data-gbs="${v}">${v}</button>`).join("")}<button class="mini" data-gbs="all">All in</button></div>
@@ -183,46 +184,7 @@ function gbSlotBar() {
   return `<div class="gb-slots"><button class="gb-sl${GBU.slot === "all" ? " on" : ""}" data-gbslot="all">All</button>${GB_SLOTS.map((n, i) => `<button class="gb-sl${GBU.slot === i ? " on" : ""}" data-gbslot="${i}">${GB_ICON[i]} ${n}<small>${left[i] ? left[i] + " games" : "played"}${mine[i] ? " &middot; " + mine[i] + " bet" + (mine[i] > 1 ? "s" : "") : ""}</small></button>`).join("")}</div>
     <div class="gb-sim">${GB_SLOTS.map((n, i) => left[i] ? `<button class="mini pri" data-gbsim="${i}">Sim ${n}</button>` : "").join("")}<button class="mini" id="gb-finish">Finish week</button></div>`;
 }
-async function gbViewHome() {
-  const r = GB.run;
-  if (!r) { location.hash = "#/world"; return; }
-  gbSetMode("gambler");
-  if (!GBU.slate) await gbLoadSlate();
-  await gbEnsureTips();
-  const part = (location.hash.replace(/^#\/?/, "").split("/")[1]) || "";
-  GBU.tab = part === "bets" ? "bets" : part === "titles" ? "titles" : part === "loans" ? "loans" : part === "chirp" ? "chirp" : part === "menu" ? "menu" : "slate";
-  const h = (STATUS && STATUS.header) || {}, L = GBU.slate.leagues, lg = L.find((x) => x.name === GBU.league);
-  const over = (r.bankroll < 5 && !gbOpenBets().length && !gbOpenTitles().length) || r.strikes >= GB_MAX_STRIKES;
-  const ended = !GBU.slate.leaguesLeft, idle = !ended && !L.length;
-  if (over) gbRecordRun(r, r.strikes >= GB_MAX_STRIKES ? "three strikes" : "broke");
-  const need = Math.max(0, r.quota - gbNet(r)), wl = GB_LEVEL - r.lw, bd = GB_BILL_EVERY - (r.lw % GB_BILL_EVERY), bill = gbBill(r) + r.owed;
-  let body = "";
-  if (over) body = `<div class="card gb-bust"><h3>Busted</h3><div class="meta">${r.strikes >= GB_MAX_STRIKES ? "Three missed quotas. The house has repossessed your account." : "You are out of money and have nothing riding. The house thanks you for your service."}</div><p>Reached level ${r.level}, ${r.week - 1} weeks, best bankroll ${gbMoney(r.best || GB_START)}.</p><button class="pri wide" id="gb-newrun">Start a new run</button></div>`;
-  else if (r.offer && r.offer.length) body = gbOfferHtml(r);
-  else if (ended) body = `<div class="card"><h3>Season break</h3><div class="meta">The league season is over. Your level carries on.</div><button class="pri wide" id="gb-next">Start next season</button></div>`;
-  else if (idle && GBU.tab !== "bets") body = `<div class="card"><h3>No league games this week</h3><div class="meta">Cups and international games only.</div><button class="pri wide" id="gb-finish">Finish week</button></div>`;
-  else if (GBU.tab === "bets") body = gbBetsHtml();
-  else if (GBU.tab === "titles") body = await gbTitlesHtml();
-  else if (GBU.tab === "loans") body = gbLoansHtml();
-  else if (GBU.tab === "chirp") body = gbChirpHtml();
-  else if (GBU.tab === "menu") body = gbMenuHtml();
-  else {
-    const chips = L.map((x) => `<button class="gb-lc${x.name === GBU.league ? " on" : ""}" data-gblg="${esc(x.name)}">${esc(x.name)}<small>${x.left} left</small></button>`).join("");
-    const rows = lg ? lg.rows.filter((m) => GBU.slot === "all" || m.slot === GBU.slot) : [];
-    body = gbSlotBar() + `<div class="gb-leagues">${chips}</div>` + (rows.length ? rows.map(gbMatchHtml).join("") : `<div class="empty">No games in this slot.</div>`);
-  }
-  $("#view").innerHTML = `<div class="gb-home${(GBU.slip.length && GBU.tab === "slate") || (GBU.tab === "titles" && GBU.tpick) ? " hasslip" : ""}">
-    <div class="gb-top"><div class="gb-brand">${esc(gbApp().brand)}${(r.app || "bait") === "bait" ? " <span>Bets</span>" : ""}</div><div class="gb-sub">${esc(gbApp().tag)}</div></div>
-    <div class="gb-bank"><div><div class="gb-lbl">Bankroll</div><div class="gb-amt">${gbMoney(r.bankroll)}</div></div><div class="gb-q"><div class="gb-lbl">Level ${r.level} quota &middot; ${wl} wk left</div><b>${gbMoney(r.quota)}</b><div class="gb-lbl">${need ? gbMoney(need) + " to go" : "Quota met"}</div></div></div>
-    <div class="gb-bills"><span>Wk ${r.week}${h.season_label ? " &middot; " + esc(h.season_label) : ""} &middot; bill ${gbMoney(bill)} in ${bd}${gbDebt(r) ? " &middot; debt " + gbMoney(gbDebt(r)) : ""}</span><span>${"&#10006;".repeat(r.strikes)}${"&#9675;".repeat(Math.max(0, GB_MAX_STRIKES - r.strikes))} strikes</span></div>
-    ${GBU.tab === "slate" || GBU.tab === "titles" ? gbAppsHtml() : ""}
-    ${gbPerksStrip(r)}
-    <div class="gb-tabs"><a href="#/gambler" class="${GBU.tab === "slate" ? "on" : ""}">Slate</a><a href="#/gambler/titles" class="${GBU.tab === "titles" ? "on" : ""}">Titles</a><a href="#/gambler/loans" class="${GBU.tab === "loans" ? "on" : ""}">Loans${r.loans && r.loans.length ? " (" + r.loans.length + ")" : ""}</a><a href="#/gambler/chirp" class="${GBU.tab === "chirp" ? "on" : ""}">Chirp</a><a href="#/gambler/bets" class="${GBU.tab === "bets" ? "on" : ""}">Bets${gbOpenBets().length + gbOpenTitles().length ? " (" + (gbOpenBets().length + gbOpenTitles().length) + ")" : ""}</a></div>
-    ${GBU.msg ? `<div class="gb-msg">${GBU.msg}</div>` : ""}${body}
-    ${GBU.tab === "slate" && !over && !ended && !(r.offer && r.offer.length) ? gbSlipHtml() : ""}<div class="gb-note">Play money only. No real gambling.</div></div>`;
-  GBU.msg = "";
-  gbWire();
-}
+// gbViewHome lives in gambler_shell.js (the phone home screen and the app screens)
 function gbWire() {
   const q = (s) => document.querySelectorAll(s), on = (id, f) => { const e = document.getElementById(id); if (e) e.onclick = f; };
   const redraw = () => gbViewHome();
@@ -242,8 +204,8 @@ function gbWire() {
     const t = GB.run.tips.find((x) => x.n === +b.dataset.gbtipbet), lg = GBU.slate.leagues.find((x) => x.name === t.league), m = lg && lg.rows.find((x) => x.id === t.id); if (!m) return;
     const o = t.market === "1x2" ? { H: m.odds.home, D: m.odds.draw, A: m.odds.away }[t.pick] : t.market === "ou" ? { O: m.odds.over, U: m.odds.under }[t.pick] : { Y: m.odds.yes, N: m.odds.no }[t.pick];
     if (!GBU.slip.some((l) => l.id === m.id && l.market === t.market && l.pick === t.pick)) gbSlipToggle(m, t.market, t.pick, o, null);
-    GBU.league = t.league; location.hash = "#/gambler"; });
-  q("[data-gbapp]").forEach((b) => b.onclick = async () => { GB.run.app = b.dataset.gbapp; GBU.slip = []; await gbLoadSlate(); await gbStore(); redraw(); });
+    GBU.league = t.league; location.hash = "#/gambler/slate"; });
+  q("[data-gbapp]").forEach((b) => b.onclick = async (e) => { e.preventDefault(); if (b.dataset.gbapp !== (GB.run.app || "bait")) { GB.run.app = b.dataset.gbapp; GBU.slip = []; await gbLoadSlate(); await gbStore(); } if (location.hash !== "#/gambler/slate") location.hash = "#/gambler/slate"; else redraw(); });
   q("[data-gbone]").forEach((b) => b.onclick = () => gbSimGame(b.dataset.gbone));
   q("[data-gbcash]").forEach((b) => b.onclick = () => gbCashOut(+b.dataset.gbcash));
   q("[data-gbmore]").forEach((b) => b.onclick = async () => {
@@ -256,7 +218,8 @@ function gbWire() {
   const si = document.getElementById("gb-stake"); if (si) si.oninput = () => { GBU.stake = Math.max(0, Math.floor(+si.value || 0)); const w = document.getElementById("gb-win"); if (w) w.textContent = gbMoney(gbPayout(GBU.stake, +w.dataset.c, !!GBU.free && (GB.run.bonus || 0) > 0)); };
   const fr = document.getElementById("gb-free"); if (fr) fr.onchange = () => { GBU.free = fr.checked; redraw(); };
   q("[data-gbperk]").forEach((b) => b.onclick = async () => { gbGivePerk(GB.run, b.dataset.gbperk); GBU.msg = "Perk taken: " + GB_PERKS[b.dataset.gbperk].name + "."; await gbLoadSlate(); await gbPersist(); redraw(); });
-  on("gb-clear", () => { GBU.slip = []; redraw(); });
+  on("gb-clear", () => { GBU.slip = []; GBU.slipOpen = false; redraw(); });
+  on("gb-slipopen", () => { GBU.slipOpen = true; redraw(); }); on("gb-slipclose", () => { GBU.slipOpen = false; redraw(); });
   on("gb-place", () => gbPlace(false)); on("gb-singles", () => gbPlace(true));
   q("[data-gbsim]").forEach((b) => b.onclick = () => gbSimSlot(+b.dataset.gbsim));
   on("gb-save", () => saveDialog()); on("gb-leave", () => { GBU.slate = null; GBU.slip = []; location.hash = "#/start"; route(); });
@@ -352,7 +315,7 @@ async function gbFinishWeek() {
 }
 // bills and quota: called after every finished week
 function gbAfterWeek(r) {
-  const out = []; r.lw++; gbSusDecay(r); r.t = (r.t || 0) + 1;
+  const out = []; r.wkDelta = Math.round((r.bankroll - (r.wkMark == null ? GB_START : r.wkMark)) * 100) / 100; r.wkMark = r.bankroll; r.lw++; gbSusDecay(r); r.t = (r.t || 0) + 1;
   const sp = gbPerkCount("sponsor"); if (sp) { r.bankroll = Math.round((r.bankroll + 40 * sp) * 100) / 100; out.push("Sponsorship: +" + gbMoney(40 * sp) + "."); }
   if (r.lw % GB_BILL_EVERY === 0) {
     const due = gbBill(r) + r.owed;

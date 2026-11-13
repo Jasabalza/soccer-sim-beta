@@ -46,14 +46,21 @@ async function gbResolveTips() {
   r.srcRec = r.srcRec || {};
   for (const x of res.bets) { if (x.status === "open") continue; const t = r.tips.find((y) => y.n === x.id); t.status = x.status === "won" ? "hit" : "miss"; const rec = r.srcRec[t.src] || [0, 0]; rec[1]++; if (x.status === "won") rec[0]++; r.srcRec[t.src] = rec; }
 }
+const GB_AV = ["#FFD166", "#9BE7C4", "#F4A6C0", "#A5C8FF", "#D9C2FF"];
+const gbInit = (s) => String(s).replace(/[^A-Za-z ]/g, "").split(" ").filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join("") || "?";
 function gbChirpHtml() {
   const r = GB.run, tips = (r.tips || []).slice().reverse();
-  const shop = Object.keys(GB_SHOP).map((k) => `<div class="gb-lender"><div class="gb-bh"><b>${esc(GB_SHOP[k].name)}</b><span>${gbMoney(gbShopPrice(k))}</span></div><div class="gb-sub2">${esc(GB_SHOP[k].blurb)} Record: ${esc(gbRec(k))}.</div><button class="mini pri" data-gbbuy="${k}">Buy a tip</button></div>`).join("");
-  const feed = tips.map((t) => {
+  const post = (name, handle, badge, text, note, action, i, cls) => `<div class="ch-p ${cls || ""}"><span class="ch-av" style="background:${GB_AV[i % GB_AV.length]}">${esc(gbInit(name))}</span><div class="ch-b"><div class="ch-n"><b>${esc(name)}</b><span>${esc(handle)}</span>${badge ? `<em>${esc(badge)}</em>` : ""}</div><div class="ch-t">${text}</div>${note ? `<div class="ch-note">${esc(note)}</div>` : ""}${action || ""}</div></div>`;
+  const feed = tips.map((t, i) => {
     const lg = GBU.slate.leagues.find((x) => x.name === t.league), m = lg && lg.rows.find((x) => x.id === t.id), live = m && !m.done && t.status === "open";
-    return `<div class="gb-post ${t.status}"><div class="gb-bh"><b>${esc(t.name)}</b><span class="gb-st">${t.status === "hit" ? "Hit" : t.status === "miss" ? "Missed" : t.paid ? "Paid " + gbMoney(t.paid) : "Open"}</span></div>
-      <div class="gb-sub2">${esc(GB_ACCTS[t.src] ? GB_ACCTS[t.src].handle : "paid tip")} &middot; ${esc(gbRec(t.src))}</div><div><b>${esc(gbTipLabel(t))}</b> in ${esc(t.h)} v ${esc(t.a)} <i>(${esc(t.league)})</i></div>
-      ${live ? `<button class="mini" data-gbtipbet="${t.n}">Add to slip</button>` : ""}</div>`; }).join("");
-  const noise = (r.noise || []).map((n) => `<div class="gb-post ad">${esc(n)}<div class="gb-sub2">Sponsored</div></div>`).join("");
-  return `<h3 class="gb-h">Tip shop</h3>${shop}<h3 class="gb-h">Chirp</h3><div class="gb-sub2">Free accounts post once a week. Nobody tells you who is any good.</div>${noise}${feed || '<div class="empty">No posts yet.</div>'}`;
+    return post(t.name, GB_ACCTS[t.src] ? GB_ACCTS[t.src].handle : "@paid_tip", t.status === "hit" ? "HIT" : t.status === "miss" ? "MISSED" : t.paid ? "PAID " + gbMoney(t.paid) : "", `<b>${esc(gbTipLabel(t))}</b> in ${esc(t.h)} v ${esc(t.a)} <i>(${esc(t.league)})</i>`, gbRec(t.src), live ? `<button class="ch-act" data-gbtipbet="${t.n}">Add to slip</button>` : "", i, t.status);
+  }).join("");
+  const noise = (r.noise || []).map((n, i) => post("BAIT Bets", "@bait_bets", "AD", esc(n), "Sponsored", "", i + 2, "ad")).join("");
+  return `<div class="ch-tabs"><span class="on">For You</span><a href="#/gambler/shop">Tips</a><span>Following</span></div>${noise}${feed || '<div class="ch-empty">No posts yet.</div>'}<div class="ch-foot">Free accounts post once a week. Nobody tells you who is any good.</div>`;
+}
+function gbShopHtml() {
+  const marks = { bar: ["#FDE68A", "BAR"], insider: ["#BAE6FD", "r/"], notcheat: ["#FBCFE8", "???"] };
+  return `<div class="sh-sale"><span><b>FLASH SALE: 40% OFF TIPS</b><small>Ends in 59:59. Resets at 59:59.</small></span><em>LIMITED*</em></div>
+    <div class="sh-grid">${Object.keys(GB_SHOP).map((k) => `<div class="sh-it"><div class="sh-m" style="background:${marks[k][0]}"><b>${marks[k][1]}</b><em>TIP</em></div><div class="sh-n">${esc(GB_SHOP[k].name)}</div><div class="sh-d">${esc(GB_SHOP[k].blurb)} Record: ${esc(gbRec(k))}.</div><div class="sh-pr"><b>${gbMoney(gbShopPrice(k))}</b><button data-gbbuy="${k}">Buy</button></div></div>`).join("")}</div>
+    <div class="sh-foot">All sales final. Results not guaranteed. "Guaranteed" is a type of word.</div>`;
 }

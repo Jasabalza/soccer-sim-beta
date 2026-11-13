@@ -1265,6 +1265,80 @@ select { padding-right: 30px; }
 .gb-tabs{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none}.gb-tabs a{flex:0 0 auto}.gb-wk{flex:0 0 auto;padding-left:8px}
 .gb-run .lgtabs{display:none}
 
+/* ---- BAIT Bets phone UI (matches the mock-ups): dark home + apps, white Chirp, cream Hustle Shop ---- */
+body.gb-app{background:#0E1117}body.gb-app.gb-lt{background:#fff}body.gb-app.gb-cr{background:#FFF4E6}
+body.gb-app #top,body.gb-app #simbar{display:none}
+body.gb-app #view{padding:0;max-width:none;margin:0}
+.gbx{--lime:#B6FF3C;--card:#171C26;--raise:#202737;--line:#2B3345;--mut:#A3AEC2;--ink:#F2F5FA;min-height:100dvh;box-sizing:border-box;max-width:480px;margin:0 auto;background:#0E1117;color:#F2F5FA;font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif;padding:calc(env(safe-area-inset-top,0px) + 18px) 16px 120px;position:relative}
+.gbx.light{background:#fff;color:#0F1419;padding:calc(env(safe-area-inset-top,0px) + 18px) 0 110px}.gbx.cream{background:#FFF4E6;color:#1A1208}
+.gbx .gbh-top,.gbx .gbh-amt,.gbx .gbpill,.gbx .gbhd-t,.gbx .gb-o b,.gbx .gbq-a,.gbx .gbbust-t,.gbx .gbstats b,.gbx .sh-pr b,.gbx .sh-m b{font-family:"Space Grotesk","Avenir Next","Trebuchet MS",system-ui,sans-serif}
+.gbh-top{display:flex;justify-content:space-between;font-size:12px;letter-spacing:.08em;color:var(--mut);padding-top:18px}
+.gbh-amt{font-weight:700;font-size:56px;line-height:1;letter-spacing:-.02em;margin-top:18px}
+.gbh-sub{font-size:14px;margin:6px 0 18px}.gbh-sub.up{color:var(--lime)}.gbh-sub.dn{color:#FF8A3D}
+.gbq{background:var(--card);border-radius:20px;padding:16px;display:flex;flex-direction:column;gap:10px;margin-bottom:14px}.gbq.dashed{border:2px dashed #3A445A}
+.gbq-h{display:flex;justify-content:space-between;font-size:12px;letter-spacing:.08em;color:var(--mut)}.gbq-h .lime{color:var(--lime);font-size:20px;letter-spacing:0;font-weight:700}
+.gbq-a{font-weight:700;font-size:22px}.gbq-a small{font-weight:500;color:var(--mut);font-size:16px}
+.gbq-bar{height:10px;border-radius:5px;background:var(--line)}.gbq-bar i{display:block;height:10px;border-radius:5px;background:var(--lime)}
+.gbq-f{display:flex;justify-content:space-between;font-size:13px;gap:8px}.gbq-f .warn{color:#FF8A3D;text-align:right}.gbq-f .mut,.mut{color:var(--mut)}
+.gbmsg{display:flex;gap:12px;align-items:center;background:var(--raise);border-radius:16px;padding:12px 14px;color:var(--ink);text-decoration:none;margin-bottom:18px}
+.gbmsg .av{width:36px;height:36px;border-radius:50%;background:#FF8A3D;color:#0E1117;display:flex;align-items:center;justify-content:center;font-weight:700;flex:none}.gbmsg small{display:block;font-size:12px;color:var(--mut);margin-bottom:2px}.gbmsg>span:last-child{font-size:14px;min-width:0}
+.gbgrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));row-gap:16px;column-gap:8px}
+.gbt{display:flex;flex-direction:column;align-items:center;gap:6px;color:#DCE3F0;font-size:12px;text-decoration:none;text-align:center}
+.gbt-i{position:relative;width:64px;height:64px;border-radius:18px;color:#0E1117;display:flex;align-items:center;justify-content:center}.gbt-l{font-family:"Space Grotesk",system-ui,sans-serif;font-size:30px}
+.gbt-i em{position:absolute;top:-6px;right:-6px;min-width:22px;height:22px;border-radius:11px;background:#FF5C6C;color:#0E1117;font-weight:700;font-size:12px;font-style:normal;display:flex;align-items:center;justify-content:center;padding:0 5px;box-sizing:border-box}
+.gbt:nth-child(10) .gbt-i{color:#F2F5FA}.gbt.lockd{color:var(--mut)}.gbt.lockd .gbt-i{border:2px dashed #3A445A;color:var(--mut)}.gbt.lockd small{font-size:10px;margin-top:-4px}
+.gbbanner{display:block;margin-top:18px;background:#FF8A3D;color:#0E1117;border-radius:14px;padding:12px;text-align:center;font-weight:700;text-decoration:none}
+.gbx .gb-note{color:var(--mut);opacity:.7}
+.gbhd{display:flex;align-items:center;gap:12px;padding:10px 0 8px}.gbhd-t{font-weight:700;font-size:24px;letter-spacing:-.02em}.gbhd-t span{font-weight:500;color:#F2F5FA}
+.gbx.dark .gbhd-t{color:var(--lime)}.gbx.dark .gbhd-t span{color:#F2F5FA;font-weight:500}.gbx.dark .t-bets .gbhd-t{color:#F2F5FA}
+.gbback{width:44px;height:44px;border-radius:22px;background:var(--card);color:#F2F5FA;display:flex;align-items:center;justify-content:center;flex:none;text-decoration:none}
+.gbpill{margin-left:auto;background:var(--card);border-radius:20px;padding:8px 14px;font-weight:700;font-size:16px;white-space:nowrap}.gbpill.pur{background:#2A2347;color:#C4B5FD;font-size:12px;font-family:Inter,system-ui,sans-serif;font-weight:600;border-radius:16px}.gbpill.ink{background:#0F1419;color:#fff;font-size:13px;border-radius:22px;width:44px;height:44px;padding:0;display:flex;align-items:center;justify-content:center}
+.gbtabs{display:flex;gap:20px;border-bottom:1px solid var(--line);font-size:14px;font-weight:600;margin:6px 0 10px}.gbtabs a{padding-bottom:10px;color:var(--mut);text-decoration:none}.gbtabs a.on{color:#F2F5FA;border-bottom:3px solid var(--lime)}.gbtabs span{margin-left:auto;color:var(--mut);padding-bottom:10px;font-weight:500}
+.gbline{font-size:12px;color:var(--mut);margin:0 0 10px}.gbq+.gbbody{margin-top:4px}
+.gbx .gb-msg{background:var(--raise);color:#F2F5FA;border-radius:12px}
+.gbx .gb-h{color:var(--mut);font-size:12px;letter-spacing:.08em;text-transform:uppercase;font-weight:600}
+.gbx .gb-sub2,.gbx .meta{color:var(--mut)}
+.gbx .card{background:var(--card);border-radius:18px;border:0;color:#F2F5FA}.gbx .card h3{color:#F2F5FA}
+.gbx .empty{color:var(--mut);text-align:center;padding:24px 0}
+.gbx button.pri,.gbx .mini.pri{background:var(--lime);color:#0E1117;border:0;font-weight:700;border-radius:12px}.gbx button.wide{border-radius:14px;min-height:46px}
+.gbx button.mini,.gbx .gb-one{background:var(--raise);color:#F2F5FA;border:0;border-radius:10px}.gbx .gb-more{border-color:#3A445A;color:var(--mut);border-radius:10px}
+.gbx input{background:#0E1117;color:#F2F5FA;border:1px solid var(--line);border-radius:10px}
+.gbbig{margin-top:18px;min-height:54px;font-size:16px}
+.gbx .gb-match{background:var(--card);border-radius:16px;padding:14px;margin-bottom:12px}
+.gbx .gb-teams b{font-size:16px}.gbx .gb-slotchip{background:#FBBF24;color:#0E1117;border-radius:8px;padding:3px 8px;font-weight:700;font-size:11px}
+.gbx .gb-o{background:var(--raise);border:0;border-radius:12px;color:#F2F5FA;padding:9px 2px}.gbx .gb-o b{font-size:17px}.gbx .gb-o.on{background:var(--lime);color:#0E1117}
+.gbx .gb-sl{background:var(--card);border:0;border-radius:12px;color:#F2F5FA}.gbx .gb-sl.on{background:var(--lime);color:#0E1117}.gbx .gb-sl small{opacity:.75}
+.gbx .gb-lc{background:transparent;border:1px solid #3A445A;border-radius:18px;color:#DCE3F0}.gbx .gb-lc.on{background:var(--lime);border-color:var(--lime);color:#0E1117}
+.gbx .gb-bet,.gbx .gb-lender,.gbx .gb-trow{background:var(--card);border-radius:16px;border-left:0}.gbx .gb-bet.won{box-shadow:inset 4px 0 0 #34D399}.gbx .gb-bet.lost{box-shadow:inset 4px 0 0 #FF5C6C}
+.gbx .gb-cash{background:var(--lime);color:#0E1117;border-radius:12px;border:0}.gbx .gb-one{background:var(--raise);color:#DCE3F0;border:0;border-radius:12px;min-height:40px}.gbx .gb-w{color:#34D399}.gbx .gb-l{color:#FF5C6C}
+.gbx .gb-perk{background:#2B1A27;border:1.5px solid #F472B6;border-radius:16px}.gbx .gb-perk b{color:#F472B6}.gbx .gb-chip{background:var(--raise);border:0;color:#F2F5FA}
+.gbx .gb-slipbar{position:fixed;left:12px;right:12px;bottom:84px;max-width:456px;margin:0 auto;background:var(--lime);color:#0E1117;border:0;border-radius:16px;min-height:52px;padding:0 16px;display:flex;justify-content:space-between;align-items:center;font-weight:700;font-size:15px;z-index:30}.gbx .gb-slipbar b{font-family:"Space Grotesk",system-ui,sans-serif;font-size:20px}
+.gbx .gb-slip{left:0;right:0;bottom:0;max-width:480px;border:0;border-radius:24px 24px 0 0;background:var(--card);padding:16px 16px 24px;z-index:40;max-height:78vh;overflow-y:auto;box-shadow:0 -10px 40px #000a}.gbx .gb-leg{border-top:1px solid var(--line)}
+.gbx .gb-place button{border-radius:14px;min-height:50px;border:0;background:var(--raise);color:#F2F5FA;font-weight:700}.gbx .gb-place .pri{background:var(--lime);color:#0E1117}
+.gbx.hasslip{padding-bottom:170px}
+.gbnav{position:fixed;left:0;right:0;bottom:0;max-width:480px;margin:0 auto;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));background:var(--card);padding:8px 4px calc(env(safe-area-inset-bottom,0px) + 14px);z-index:35}
+.gbnav a{display:flex;flex-direction:column;align-items:center;gap:3px;font-size:11px;color:var(--mut);text-decoration:none}.gbnav a.on{color:var(--lime);font-weight:600}
+.gbbust{padding-top:6px}.gbbust-t{font-weight:700;font-size:44px;line-height:1;margin:10px 0;color:#FF5C6C;letter-spacing:-.02em}.gbbust p{color:#DCE3F0;font-size:15px;line-height:1.4}.gbbust .mut{font-size:11px}
+.gbstats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;text-align:center}.gbstats>div{background:#0E1117;border-radius:12px;padding:10px 4px}.gbstats b{display:block;font-size:20px}.gbstats small{color:var(--mut);font-size:11px}
+/* Chirp: white, like the other feed */
+.gbx.light .gbhd{padding:10px 16px 0}.gbx.light .gbback{background:#E8F0FD;color:#1D6FE0}.gbx.light .gbhd-t{color:#1D6FE0;margin:0 auto}.gbx.light .gbbody{padding:0}
+.ch-tabs{display:grid;grid-template-columns:repeat(3,1fr);border-bottom:1px solid #E1E8ED;margin-top:6px;font-size:14px;font-weight:600;text-align:center;color:#536471}.ch-tabs>*{padding:12px 0;text-decoration:none;color:#536471}.ch-tabs .on{color:#0F1419;border-bottom:3px solid #1D6FE0}
+.ch-p{display:flex;gap:10px;padding:12px 16px;border-bottom:1px solid #E1E8ED}.ch-av{width:40px;height:40px;border-radius:20px;color:#0F1419;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;flex:none}.ch-b{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px}
+.ch-n{display:flex;align-items:center;gap:6px;font-size:14px;flex-wrap:wrap}.ch-n span{color:#536471}.ch-n em{background:#1D6FE0;color:#fff;border-radius:8px;padding:1px 6px;font-size:10px;font-weight:700;font-style:normal}.ch-p.hit .ch-n em{background:#16A34A}.ch-p.miss .ch-n em{background:#DC2626}.ch-p.ad{background:#F7F9FA}
+.ch-t{font-size:15px;line-height:1.35}.ch-note{font-size:11px;color:#536471}.ch-act{align-self:flex-start;background:#0F1419;color:#fff;border:0;border-radius:18px;padding:10px 16px;font-size:13px;font-weight:600;margin-top:4px}
+.ch-empty,.ch-foot{padding:20px 16px;color:#536471;font-size:12px;text-align:center}
+.gbnav.chn{background:#fff;border-top:1px solid #E1E8ED;grid-template-columns:repeat(4,1fr)}.gbnav.chn a{color:#536471;font-size:12px;padding:6px 0}.gbnav.chn a.on{color:#1D6FE0}
+/* Hustle Shop: cream */
+.gbx.cream .gbback{background:#1A1208;color:#FFF4E6}.gbx.cream .gbhd-t{color:#1A1208;font-size:22px}.gbx.cream .gbpill{background:#1A1208;color:#FFF4E6}
+.sh-sale{display:flex;justify-content:space-between;align-items:center;gap:10px;background:#FF8A3D;border-radius:14px;padding:10px 14px;margin:6px 0 12px;color:#1A1208}.sh-sale span{display:flex;flex-direction:column}.sh-sale small{font-size:12px}.sh-sale em{background:#1A1208;color:#FFF4E6;border-radius:10px;padding:6px 10px;font-weight:700;font-size:12px;font-style:normal}
+.sh-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.sh-it{background:#fff;border:1.5px solid #F0DCC4;border-radius:16px;padding:12px;display:flex;flex-direction:column;gap:8px}
+.sh-m{height:58px;border-radius:12px;display:flex;align-items:center;justify-content:space-between;padding:0 10px}.sh-m b{font-size:20px}.sh-m em{background:#1A1208;color:#FFF4E6;border-radius:8px;padding:3px 7px;font-size:10px;font-weight:700;font-style:normal}
+.sh-n{font-weight:700;font-size:14px;line-height:1.2}.sh-d{font-size:12px;line-height:1.3;color:#5B4A36;min-height:64px}.sh-pr{display:flex;justify-content:space-between;align-items:center}.sh-pr b{font-size:18px}.sh-pr button{background:#1A1208;color:#FFF4E6;border:0;border-radius:12px;min-height:44px;padding:0 14px;font-weight:700;font-size:13px}
+.sh-foot{padding:16px 0 0;text-align:center;font-size:11px;color:#5B4A36}.gbx.cream .gb-msg{background:#1A1208;color:#FFF4E6}
+
+.gbq-a small{display:inline}
+.gbx .gb-sim .mini.pri{background:var(--raise);color:var(--lime)}
+
 </style>
 
 <div id="top">
@@ -12025,10 +12099,11 @@ function gbMatchHtml(m) {
 }
 function gbSlipHtml() {
   const legs = GBU.slip; if (!legs.length) return "";
+  if (!GBU.slipOpen) return `<button class="gb-slipbar" id="gb-slipopen"><span>Bet slip &middot; ${legs.length} pick${legs.length > 1 ? "s" : ""}</span><b>${gbOdds(gbCombo(legs))} &rarr;</b></button>`;
   const comb = gbCombo(legs), free = !!GBU.free && (GB.run.bonus || 0) > 0;
   const st = Math.max(0, +GBU.stake || 0), win = gbPayout(st, comb, free), many = legs.length > 1;
   const rows = legs.map((l, i) => `<div class="gb-leg"><span><b>${esc(gbLegLabel(l))}</b><i>${esc(l.h)} v ${esc(l.a)}</i></span><span>${gbOdds(l.odds)} <button class="mini" data-gbx="${i}">x</button></span></div>`).join("");
-  return `<div class="gb-slip"><div class="gb-sliph"><b>Bet slip (${legs.length})</b><button class="mini" id="gb-clear">Clear</button></div><div class="gb-legs">${rows}</div>
+  return `<div class="gb-slip"><div class="gb-sliph"><b>Bet slip &middot; ${legs.length}</b><span><button class="mini" id="gb-clear">Clear</button> <button class="mini" id="gb-slipclose">Close</button></span></div><div class="gb-legs">${rows}</div>
     ${many ? `<div class="gb-sub2">${new Set(legs.map((l) => l.id)).size < legs.length ? "Same-game legs pay x0.85 each. " : ""}Parlay odds <b>${gbOdds(comb)}</b></div>` : ""}
     ${(GB.run.bonus || 0) > 0 ? `<label class="check"><input type="checkbox" id="gb-free" ${free ? "checked" : ""}> Use bonus bets (${gbMoney(GB.run.bonus)} left, stake not returned)</label>` : ""}
     <div class="gb-stake"><span>Stake $</span><input id="gb-stake" type="number" min="1" value="${esc(GBU.stake)}">${[10, 25, 50, 100].map((v) => `<button class="mini" data-gbs="${v}">${v}</button>`).join("")}<button class="mini" data-gbs="all">All in</button></div>
@@ -12093,46 +12168,7 @@ function gbSlotBar() {
   return `<div class="gb-slots"><button class="gb-sl${GBU.slot === "all" ? " on" : ""}" data-gbslot="all">All</button>${GB_SLOTS.map((n, i) => `<button class="gb-sl${GBU.slot === i ? " on" : ""}" data-gbslot="${i}">${GB_ICON[i]} ${n}<small>${left[i] ? left[i] + " games" : "played"}${mine[i] ? " &middot; " + mine[i] + " bet" + (mine[i] > 1 ? "s" : "") : ""}</small></button>`).join("")}</div>
     <div class="gb-sim">${GB_SLOTS.map((n, i) => left[i] ? `<button class="mini pri" data-gbsim="${i}">Sim ${n}</button>` : "").join("")}<button class="mini" id="gb-finish">Finish week</button></div>`;
 }
-async function gbViewHome() {
-  const r = GB.run;
-  if (!r) { location.hash = "#/world"; return; }
-  gbSetMode("gambler");
-  if (!GBU.slate) await gbLoadSlate();
-  await gbEnsureTips();
-  const part = (location.hash.replace(/^#\/?/, "").split("/")[1]) || "";
-  GBU.tab = part === "bets" ? "bets" : part === "titles" ? "titles" : part === "loans" ? "loans" : part === "chirp" ? "chirp" : part === "menu" ? "menu" : "slate";
-  const h = (STATUS && STATUS.header) || {}, L = GBU.slate.leagues, lg = L.find((x) => x.name === GBU.league);
-  const over = (r.bankroll < 5 && !gbOpenBets().length && !gbOpenTitles().length) || r.strikes >= GB_MAX_STRIKES;
-  const ended = !GBU.slate.leaguesLeft, idle = !ended && !L.length;
-  if (over) gbRecordRun(r, r.strikes >= GB_MAX_STRIKES ? "three strikes" : "broke");
-  const need = Math.max(0, r.quota - gbNet(r)), wl = GB_LEVEL - r.lw, bd = GB_BILL_EVERY - (r.lw % GB_BILL_EVERY), bill = gbBill(r) + r.owed;
-  let body = "";
-  if (over) body = `<div class="card gb-bust"><h3>Busted</h3><div class="meta">${r.strikes >= GB_MAX_STRIKES ? "Three missed quotas. The house has repossessed your account." : "You are out of money and have nothing riding. The house thanks you for your service."}</div><p>Reached level ${r.level}, ${r.week - 1} weeks, best bankroll ${gbMoney(r.best || GB_START)}.</p><button class="pri wide" id="gb-newrun">Start a new run</button></div>`;
-  else if (r.offer && r.offer.length) body = gbOfferHtml(r);
-  else if (ended) body = `<div class="card"><h3>Season break</h3><div class="meta">The league season is over. Your level carries on.</div><button class="pri wide" id="gb-next">Start next season</button></div>`;
-  else if (idle && GBU.tab !== "bets") body = `<div class="card"><h3>No league games this week</h3><div class="meta">Cups and international games only.</div><button class="pri wide" id="gb-finish">Finish week</button></div>`;
-  else if (GBU.tab === "bets") body = gbBetsHtml();
-  else if (GBU.tab === "titles") body = await gbTitlesHtml();
-  else if (GBU.tab === "loans") body = gbLoansHtml();
-  else if (GBU.tab === "chirp") body = gbChirpHtml();
-  else if (GBU.tab === "menu") body = gbMenuHtml();
-  else {
-    const chips = L.map((x) => `<button class="gb-lc${x.name === GBU.league ? " on" : ""}" data-gblg="${esc(x.name)}">${esc(x.name)}<small>${x.left} left</small></button>`).join("");
-    const rows = lg ? lg.rows.filter((m) => GBU.slot === "all" || m.slot === GBU.slot) : [];
-    body = gbSlotBar() + `<div class="gb-leagues">${chips}</div>` + (rows.length ? rows.map(gbMatchHtml).join("") : `<div class="empty">No games in this slot.</div>`);
-  }
-  $("#view").innerHTML = `<div class="gb-home${(GBU.slip.length && GBU.tab === "slate") || (GBU.tab === "titles" && GBU.tpick) ? " hasslip" : ""}">
-    <div class="gb-top"><div class="gb-brand">${esc(gbApp().brand)}${(r.app || "bait") === "bait" ? " <span>Bets</span>" : ""}</div><div class="gb-sub">${esc(gbApp().tag)}</div></div>
-    <div class="gb-bank"><div><div class="gb-lbl">Bankroll</div><div class="gb-amt">${gbMoney(r.bankroll)}</div></div><div class="gb-q"><div class="gb-lbl">Level ${r.level} quota &middot; ${wl} wk left</div><b>${gbMoney(r.quota)}</b><div class="gb-lbl">${need ? gbMoney(need) + " to go" : "Quota met"}</div></div></div>
-    <div class="gb-bills"><span>Wk ${r.week}${h.season_label ? " &middot; " + esc(h.season_label) : ""} &middot; bill ${gbMoney(bill)} in ${bd}${gbDebt(r) ? " &middot; debt " + gbMoney(gbDebt(r)) : ""}</span><span>${"&#10006;".repeat(r.strikes)}${"&#9675;".repeat(Math.max(0, GB_MAX_STRIKES - r.strikes))} strikes</span></div>
-    ${GBU.tab === "slate" || GBU.tab === "titles" ? gbAppsHtml() : ""}
-    ${gbPerksStrip(r)}
-    <div class="gb-tabs"><a href="#/gambler" class="${GBU.tab === "slate" ? "on" : ""}">Slate</a><a href="#/gambler/titles" class="${GBU.tab === "titles" ? "on" : ""}">Titles</a><a href="#/gambler/loans" class="${GBU.tab === "loans" ? "on" : ""}">Loans${r.loans && r.loans.length ? " (" + r.loans.length + ")" : ""}</a><a href="#/gambler/chirp" class="${GBU.tab === "chirp" ? "on" : ""}">Chirp</a><a href="#/gambler/bets" class="${GBU.tab === "bets" ? "on" : ""}">Bets${gbOpenBets().length + gbOpenTitles().length ? " (" + (gbOpenBets().length + gbOpenTitles().length) + ")" : ""}</a></div>
-    ${GBU.msg ? `<div class="gb-msg">${GBU.msg}</div>` : ""}${body}
-    ${GBU.tab === "slate" && !over && !ended && !(r.offer && r.offer.length) ? gbSlipHtml() : ""}<div class="gb-note">Play money only. No real gambling.</div></div>`;
-  GBU.msg = "";
-  gbWire();
-}
+// gbViewHome lives in gambler_shell.js (the phone home screen and the app screens)
 function gbWire() {
   const q = (s) => document.querySelectorAll(s), on = (id, f) => { const e = document.getElementById(id); if (e) e.onclick = f; };
   const redraw = () => gbViewHome();
@@ -12152,8 +12188,8 @@ function gbWire() {
     const t = GB.run.tips.find((x) => x.n === +b.dataset.gbtipbet), lg = GBU.slate.leagues.find((x) => x.name === t.league), m = lg && lg.rows.find((x) => x.id === t.id); if (!m) return;
     const o = t.market === "1x2" ? { H: m.odds.home, D: m.odds.draw, A: m.odds.away }[t.pick] : t.market === "ou" ? { O: m.odds.over, U: m.odds.under }[t.pick] : { Y: m.odds.yes, N: m.odds.no }[t.pick];
     if (!GBU.slip.some((l) => l.id === m.id && l.market === t.market && l.pick === t.pick)) gbSlipToggle(m, t.market, t.pick, o, null);
-    GBU.league = t.league; location.hash = "#/gambler"; });
-  q("[data-gbapp]").forEach((b) => b.onclick = async () => { GB.run.app = b.dataset.gbapp; GBU.slip = []; await gbLoadSlate(); await gbStore(); redraw(); });
+    GBU.league = t.league; location.hash = "#/gambler/slate"; });
+  q("[data-gbapp]").forEach((b) => b.onclick = async (e) => { e.preventDefault(); if (b.dataset.gbapp !== (GB.run.app || "bait")) { GB.run.app = b.dataset.gbapp; GBU.slip = []; await gbLoadSlate(); await gbStore(); } if (location.hash !== "#/gambler/slate") location.hash = "#/gambler/slate"; else redraw(); });
   q("[data-gbone]").forEach((b) => b.onclick = () => gbSimGame(b.dataset.gbone));
   q("[data-gbcash]").forEach((b) => b.onclick = () => gbCashOut(+b.dataset.gbcash));
   q("[data-gbmore]").forEach((b) => b.onclick = async () => {
@@ -12166,7 +12202,8 @@ function gbWire() {
   const si = document.getElementById("gb-stake"); if (si) si.oninput = () => { GBU.stake = Math.max(0, Math.floor(+si.value || 0)); const w = document.getElementById("gb-win"); if (w) w.textContent = gbMoney(gbPayout(GBU.stake, +w.dataset.c, !!GBU.free && (GB.run.bonus || 0) > 0)); };
   const fr = document.getElementById("gb-free"); if (fr) fr.onchange = () => { GBU.free = fr.checked; redraw(); };
   q("[data-gbperk]").forEach((b) => b.onclick = async () => { gbGivePerk(GB.run, b.dataset.gbperk); GBU.msg = "Perk taken: " + GB_PERKS[b.dataset.gbperk].name + "."; await gbLoadSlate(); await gbPersist(); redraw(); });
-  on("gb-clear", () => { GBU.slip = []; redraw(); });
+  on("gb-clear", () => { GBU.slip = []; GBU.slipOpen = false; redraw(); });
+  on("gb-slipopen", () => { GBU.slipOpen = true; redraw(); }); on("gb-slipclose", () => { GBU.slipOpen = false; redraw(); });
   on("gb-place", () => gbPlace(false)); on("gb-singles", () => gbPlace(true));
   q("[data-gbsim]").forEach((b) => b.onclick = () => gbSimSlot(+b.dataset.gbsim));
   on("gb-save", () => saveDialog()); on("gb-leave", () => { GBU.slate = null; GBU.slip = []; location.hash = "#/start"; route(); });
@@ -12262,7 +12299,7 @@ async function gbFinishWeek() {
 }
 // bills and quota: called after every finished week
 function gbAfterWeek(r) {
-  const out = []; r.lw++; gbSusDecay(r); r.t = (r.t || 0) + 1;
+  const out = []; r.wkDelta = Math.round((r.bankroll - (r.wkMark == null ? GB_START : r.wkMark)) * 100) / 100; r.wkMark = r.bankroll; r.lw++; gbSusDecay(r); r.t = (r.t || 0) + 1;
   const sp = gbPerkCount("sponsor"); if (sp) { r.bankroll = Math.round((r.bankroll + 40 * sp) * 100) / 100; out.push("Sponsorship: +" + gbMoney(40 * sp) + "."); }
   if (r.lw % GB_BILL_EVERY === 0) {
     const due = gbBill(r) + r.owed;
@@ -12450,16 +12487,23 @@ async function gbResolveTips() {
   r.srcRec = r.srcRec || {};
   for (const x of res.bets) { if (x.status === "open") continue; const t = r.tips.find((y) => y.n === x.id); t.status = x.status === "won" ? "hit" : "miss"; const rec = r.srcRec[t.src] || [0, 0]; rec[1]++; if (x.status === "won") rec[0]++; r.srcRec[t.src] = rec; }
 }
+const GB_AV = ["#FFD166", "#9BE7C4", "#F4A6C0", "#A5C8FF", "#D9C2FF"];
+const gbInit = (s) => String(s).replace(/[^A-Za-z ]/g, "").split(" ").filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join("") || "?";
 function gbChirpHtml() {
   const r = GB.run, tips = (r.tips || []).slice().reverse();
-  const shop = Object.keys(GB_SHOP).map((k) => `<div class="gb-lender"><div class="gb-bh"><b>${esc(GB_SHOP[k].name)}</b><span>${gbMoney(gbShopPrice(k))}</span></div><div class="gb-sub2">${esc(GB_SHOP[k].blurb)} Record: ${esc(gbRec(k))}.</div><button class="mini pri" data-gbbuy="${k}">Buy a tip</button></div>`).join("");
-  const feed = tips.map((t) => {
+  const post = (name, handle, badge, text, note, action, i, cls) => `<div class="ch-p ${cls || ""}"><span class="ch-av" style="background:${GB_AV[i % GB_AV.length]}">${esc(gbInit(name))}</span><div class="ch-b"><div class="ch-n"><b>${esc(name)}</b><span>${esc(handle)}</span>${badge ? `<em>${esc(badge)}</em>` : ""}</div><div class="ch-t">${text}</div>${note ? `<div class="ch-note">${esc(note)}</div>` : ""}${action || ""}</div></div>`;
+  const feed = tips.map((t, i) => {
     const lg = GBU.slate.leagues.find((x) => x.name === t.league), m = lg && lg.rows.find((x) => x.id === t.id), live = m && !m.done && t.status === "open";
-    return `<div class="gb-post ${t.status}"><div class="gb-bh"><b>${esc(t.name)}</b><span class="gb-st">${t.status === "hit" ? "Hit" : t.status === "miss" ? "Missed" : t.paid ? "Paid " + gbMoney(t.paid) : "Open"}</span></div>
-      <div class="gb-sub2">${esc(GB_ACCTS[t.src] ? GB_ACCTS[t.src].handle : "paid tip")} &middot; ${esc(gbRec(t.src))}</div><div><b>${esc(gbTipLabel(t))}</b> in ${esc(t.h)} v ${esc(t.a)} <i>(${esc(t.league)})</i></div>
-      ${live ? `<button class="mini" data-gbtipbet="${t.n}">Add to slip</button>` : ""}</div>`; }).join("");
-  const noise = (r.noise || []).map((n) => `<div class="gb-post ad">${esc(n)}<div class="gb-sub2">Sponsored</div></div>`).join("");
-  return `<h3 class="gb-h">Tip shop</h3>${shop}<h3 class="gb-h">Chirp</h3><div class="gb-sub2">Free accounts post once a week. Nobody tells you who is any good.</div>${noise}${feed || '<div class="empty">No posts yet.</div>'}`;
+    return post(t.name, GB_ACCTS[t.src] ? GB_ACCTS[t.src].handle : "@paid_tip", t.status === "hit" ? "HIT" : t.status === "miss" ? "MISSED" : t.paid ? "PAID " + gbMoney(t.paid) : "", `<b>${esc(gbTipLabel(t))}</b> in ${esc(t.h)} v ${esc(t.a)} <i>(${esc(t.league)})</i>`, gbRec(t.src), live ? `<button class="ch-act" data-gbtipbet="${t.n}">Add to slip</button>` : "", i, t.status);
+  }).join("");
+  const noise = (r.noise || []).map((n, i) => post("BAIT Bets", "@bait_bets", "AD", esc(n), "Sponsored", "", i + 2, "ad")).join("");
+  return `<div class="ch-tabs"><span class="on">For You</span><a href="#/gambler/shop">Tips</a><span>Following</span></div>${noise}${feed || '<div class="ch-empty">No posts yet.</div>'}<div class="ch-foot">Free accounts post once a week. Nobody tells you who is any good.</div>`;
+}
+function gbShopHtml() {
+  const marks = { bar: ["#FDE68A", "BAR"], insider: ["#BAE6FD", "r/"], notcheat: ["#FBCFE8", "???"] };
+  return `<div class="sh-sale"><span><b>FLASH SALE: 40% OFF TIPS</b><small>Ends in 59:59. Resets at 59:59.</small></span><em>LIMITED*</em></div>
+    <div class="sh-grid">${Object.keys(GB_SHOP).map((k) => `<div class="sh-it"><div class="sh-m" style="background:${marks[k][0]}"><b>${marks[k][1]}</b><em>TIP</em></div><div class="sh-n">${esc(GB_SHOP[k].name)}</div><div class="sh-d">${esc(GB_SHOP[k].blurb)} Record: ${esc(gbRec(k))}.</div><div class="sh-pr"><b>${gbMoney(gbShopPrice(k))}</b><button data-gbbuy="${k}">Buy</button></div></div>`).join("")}</div>
+    <div class="sh-foot">All sales final. Results not guaranteed. "Guaranteed" is a type of word.</div>`;
 }
 </script>
 <script>// BAIT Bets: more places to bet. Each app changes the prices and the rules. The easy app gets suspicious fast; the shady ones do not care.
@@ -12486,6 +12530,121 @@ function gbAppsHtml() {
   return `<div class="gb-apps">${Object.keys(GB_APPS).map((k) => { const A = GB_APPS[k], open = gbAppOpen(k), sus = Math.round((r.sus || {})[k] || 0);
     return `<button class="gb-app${k === cur ? " on" : ""}" ${open ? "" : "disabled"} data-gbapp="${k}"><b>${esc(A.brand)}</b><small>${open ? (A.susAt < 1e8 ? "suspicion " + sus + "/" + A.susAt : "no limits") : "level " + A.unlock}</small></button>`; }).join("")}</div>
     <div class="gb-sub2">${esc(gbApp().blurb)}${gbLimited() ? " <b>You are limited here: max stake $20 until the heat drops.</b>" : gbApp().max < 1e5 ? " Max stake " + gbMoney(gbApp().max) + "." : ""}</div>`;
+}
+</script>
+<script>// BAIT Bets: the phone. A run opens on a home screen of app tiles; each app is its own screen with its own look
+// (dark BAIT Bets and Bank, a white Chirp feed, a cream Hustle Shop). The sim's header and tab bar are not used here.
+const GB_SVG = {
+  chirp: '<path d="M5 19c0-9 5-14 14-14 0 9-5 14-14 14zM5 19l8-8"/>', shop: '<path d="M6 8h12l1 12H5zM9 8a3 3 0 0 1 6 0"/>',
+  bank: '<path d="M3 10l9-6 9 6M5 10v8M10 10v8M14 10v8M19 10v8M3 20h18"/>', bets: '<path d="M6 3h12v18l-3-2-3 2-3-2-3 2zM9 8h6M9 12h6"/>',
+  teams: '<path d="M12 3l8 3v6c0 5-4 8-8 9-4-1-8-4-8-9V6z"/>', players: '<path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21c0-4 4-6 8-6s8 2 8 6"/>',
+  perks: '<path d="M3 12l9-9h8v8l-9 9zM16 8h.01"/>', gear: '<circle cx="12" cy="12" r="3.5"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/>',
+  mail: '<path d="M3 6h18v12H3zM3 7l9 7 9-7"/>', lock: '<path d="M6 11h12v9H6zM9 11V8a3 3 0 0 1 6 0v3"/>', back: '<path d="M15 5l-7 7 7 7"/>', slate: '<path d="M4 6h16M4 12h16M4 18h10"/>',
+};
+const gbSvg = (k, s) => `<svg width="${s || 24}" height="${s || 24}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${GB_SVG[k]}</svg>`;
+const gbTile = (href, label, color, inner, badge, attr) => `<a class="gbt" href="${href}" ${attr || ""}><span class="gbt-i" style="background:${color}">${inner}${badge ? `<em>${badge}</em>` : ""}</span>${label}</a>`;
+const GB_APP_COLORS = { predict: "#7DD3FC", offshore: "#F59E0B", wild: "#EC4899" };
+const gbBillLine = (r) => {
+  const bd = GB_BILL_EVERY - (r.lw % GB_BILL_EVERY), bill = gbBill(r) + r.owed;
+  const l = (r.loans || [])[0];
+  return l ? `Owe ${gbMoney(l.balance)} to ${GB_LENDERS[l.lender].name} &middot; due in ${Math.max(0, l.due - (r.t || 0))} wk` : `Bill ${gbMoney(bill)} in ${bd} wk`;
+};
+function gbQuotaCard(r) {
+  const net = gbNet(r), pct = Math.max(0, Math.min(100, Math.round(net / r.quota * 100))), wl = GB_LEVEL - r.lw;
+  return `<div class="gbq"><div class="gbq-h"><span>QUOTA &middot; END OF LEVEL ${r.level}</span><span>${pct}%</span></div>
+    <div class="gbq-a">${gbMoney(net)} <small>of ${gbMoney(r.quota)}</small></div><div class="gbq-bar"><i style="width:${pct}%"></i></div>
+    <div class="gbq-f"><span>${wl} week${wl === 1 ? "" : "s"} left</span><span class="warn">${gbBillLine(r)}</span></div>
+    <div class="gbq-f"><span class="mut">${"&#10006;".repeat(r.strikes)}${"&#9675;".repeat(Math.max(0, GB_MAX_STRIKES - r.strikes))} strikes</span>${gbDebt(r) ? `<span class="mut">debt ${gbMoney(gbDebt(r))}</span>` : ""}</div></div>`;
+}
+function gbHomeHtml(r) {
+  const d = r.wkDelta || 0, tips = (r.tips || []).filter((t) => t.status === "open"), dv = tips.slice().reverse().find((t) => t.src === "dave");
+  const nOpen = gbOpenBets().length + gbOpenTitles().length, offers = r.offer && r.offer.length ? r.offer.length : 0;
+  const alt = Object.keys(GB_APPS).filter((k) => k !== "bait").map((k) => { const A = GB_APPS[k];
+    return gbAppOpen(k) ? gbTile("#/gambler/slate", A.brand.length > 9 ? A.brand.slice(0, 9) : A.brand, GB_APP_COLORS[k], `<b class="gbt-l">${esc(A.brand[0])}</b>`, 0, `data-gbapp="${k}"`)
+      : `<div class="gbt lockd"><span class="gbt-i">${gbSvg("lock", 26)}</span>${esc(A.brand.length > 9 ? A.brand.slice(0, 9) : A.brand)}<small>level ${A.unlock}</small></div>`; }).join("");
+  return `<div class="gbh-top"><span>WEEK ${r.week} &middot; LEVEL ${r.level}</span><span>SEED ${esc(String(r.seed))}</span></div>
+    <div class="gbh-amt">${gbMoney(r.bankroll)}</div><div class="gbh-sub ${d >= 0 ? "up" : "dn"}">Bankroll &middot; ${d >= 0 ? "up " : "down "}${gbMoney(Math.abs(d))} last week</div>
+    ${gbQuotaCard(r)}
+    <a class="gbmsg" href="#/gambler/chirp"><span class="av">D</span><span><small>Messages &middot; Dave</small>${dv ? `"${esc(gbTipLabel(dv))} in ${esc(dv.h)} v ${esc(dv.a)}. Trust me."` : `"${esc(GB_ACCTS.dave.line)}"`}</span></a>
+    ${GBU.msg ? `<div class="gb-msg">${GBU.msg}</div>` : ""}
+    <div class="gbgrid">
+      ${gbTile("#/gambler/slate", "BAIT Bets", "#B6FF3C", '<b class="gbt-l">B</b>', 0, 'data-gbapp="bait"')}
+      ${gbTile("#/gambler/chirp", "Chirp", "#3B82F6", gbSvg("chirp", 30), tips.length)}
+      ${gbTile("#/gambler/shop", "Hustle Shop", "#FF8A3D", gbSvg("shop", 30))}
+      ${gbTile("#/gambler/chirp", "Messages", "#34D399", gbSvg("mail", 30), dv ? 1 : 0)}
+      ${gbTile("#/gambler/loans", "Bank", "#A78BFA", gbSvg("bank", 30), (r.loans || []).length)}
+      ${gbTile("#/gambler/bets", "My Bets", "#F2F5FA", gbSvg("bets", 30), nOpen)}
+      ${gbTile("#/leagues", "Teams", "#2DD4BF", gbSvg("teams", 30))}
+      ${gbTile("#/players", "Players", "#FBBF24", gbSvg("players", 30))}
+      ${gbTile("#/gambler/perks", "Perks", "#F472B6", gbSvg("perks", 30), offers || (r.perks || []).length)}
+      ${gbTile("#/gambler/menu", "Settings", "#2B3345", gbSvg("gear", 30))}
+      ${alt}
+    </div>${offers ? `<a class="gbbanner" href="#/gambler/perks">${offers} perk offers waiting. Pick one.</a>` : ""}<div class="gb-note">Play money only. No real gambling.</div>`;
+}
+const gbHead = (title, right, back) => `<div class="gbhd"><a class="gbback" href="${back || "#/gambler"}" aria-label="Back">${gbSvg("back", 22)}</a><div class="gbhd-t">${title}</div>${right === undefined ? `<div class="gbpill">${gbMoney(GB.run.bankroll)}</div>` : right}</div>`;
+function gbNav(cur) {
+  const it = [["slate", "#/gambler/slate", "Slate", "slate"], ["bets", "#/gambler/bets", "My Bets", "bets"], ["teams", "#/leagues", "Teams", "teams"], ["players", "#/players", "Players", "players"], ["loans", "#/gambler/loans", "Bank", "bank"]];
+  return `<nav class="gbnav">${it.map(([k, h, t, ic]) => `<a href="${h}" class="${cur === k ? "on" : ""}">${gbSvg(ic, 22)}${t}</a>`).join("")}</nav>`;
+}
+function gbPerksHtml(r) {
+  const have = {}; for (const p of r.perks || []) have[p.id] = (have[p.id] || 0) + 1;
+  const own = Object.keys(have).map((id) => `<div class="gb-lender"><div class="gb-bh"><b>${esc(GB_PERKS[id].name)}${have[id] > 1 ? " x" + have[id] : ""}${id === "insure" ? " (" + gbPerkUses("insure") + " left)" : id === "shield" ? " (" + gbPerkUses("shield") + " left)" : ""}</b></div><div class="gb-sub2">${esc(GB_PERKS[id].text)}</div></div>`).join("");
+  return (r.offer && r.offer.length ? gbOfferHtml(r) : "") + `<h3 class="gb-h">Your perks</h3>` + (own || '<div class="empty">No perks yet. Clear a level to pick one.</div>') + (r.bonus ? `<div class="gb-chip bonus">Bonus bets ${gbMoney(r.bonus)}</div>` : "");
+}
+async function gbViewHome() {
+  const r = GB.run;
+  if (!r) { location.hash = "#/world"; return; }
+  gbSetMode("gambler");
+  if (!GBU.slate) await gbLoadSlate();
+  await gbEnsureTips();
+  const part = (location.hash.replace(/^#\/?/, "").split("/")[1]) || "";
+  const tabs = ["slate", "titles", "bets", "loans", "chirp", "shop", "perks", "menu"], tab = tabs.includes(part) ? part : "home";
+  GBU.tab = tab === "home" ? "home" : tab;
+  const L = GBU.slate.leagues, lg = L.find((x) => x.name === GBU.league);
+  const over = (r.bankroll < 5 && !gbOpenBets().length && !gbOpenTitles().length) || r.strikes >= GB_MAX_STRIKES;
+  const ended = !GBU.slate.leaguesLeft, idle = !ended && !L.length, offerP = !!(r.offer && r.offer.length);
+  document.body.classList.toggle("gb-lt", tab === "chirp"); document.body.classList.toggle("gb-cr", tab === "shop");
+  let html = "", theme = "dark";
+  if (over) {
+    gbRecordRun(r, r.strikes >= GB_MAX_STRIKES ? "three strikes" : "broke");
+    html = `<div class="gbbust"><div class="gbh-top"><span>LEVEL ${r.level} &middot; WEEK ${r.t || 0}</span><span>SEED ${esc(String(r.seed))}</span></div>
+      <div class="gbbust-t">${r.strikes >= GB_MAX_STRIKES ? "THREE STRIKES" : "BUSTED"}</div>
+      <p>${r.strikes >= GB_MAX_STRIKES ? "Three missed quotas. Congratulations! As a thank you for playing, here is <b>10% off your next deposit.*</b>" : "You are out of money and have nothing riding. The house thanks you for your service."}</p><p class="mut">*There is still no deposit. It is a game.</p>
+      <div class="gbq dashed"><div class="gbq-h"><span class="lime">BAIT</span><span>RUN CARD &middot; SEED ${esc(String(r.seed))}</span></div>
+      <div class="gbstats"><div><b>${r.level}</b><small>level</small></div><div><b>${r.t || 0}</b><small>weeks</small></div><div><b>${gbMoney(r.best || GB_START)}</b><small>best bankroll</small></div></div>
+      <div class="gbq-f"><span class="mut">${(r.perks || []).length} perks &middot; ${r.bets.length} bets</span></div></div>
+      <button class="pri wide gbbig" id="gb-newrun">Start a new run</button></div>`;
+  } else if (tab === "home") {
+    html = gbHomeHtml(r);
+  } else {
+    let body = "", title = "", right, cur = "", extra = "";
+    const slateLike = tab === "slate" || tab === "titles";
+    if (slateLike && offerP) { body = gbOfferHtml(r); title = "Perks"; cur = ""; }
+    else if (tab === "slate" || tab === "titles") {
+      title = esc(gbApp().brand) + ((r.app || "bait") === "bait" ? ' <span>Bets</span>' : ""); cur = "slate";
+      const sub = `<div class="gbtabs"><a href="#/gambler/slate" class="${tab === "slate" ? "on" : ""}">Matches</a><a href="#/gambler/titles" class="${tab === "titles" ? "on" : ""}">Titles</a><span>Week ${r.week} &middot; Match day</span></div>`;
+      if (ended) body = `<div class="card"><h3>Season break</h3><div class="meta">The league season is over. Your level carries on.</div><button class="pri wide" id="gb-next">Start next season</button></div>`;
+      else if (idle && tab === "slate") body = `<div class="card"><h3>No league games this week</h3><div class="meta">Cups and international games only.</div><button class="pri wide" id="gb-finish">Finish week</button></div>`;
+      else if (tab === "titles") body = await gbTitlesHtml();
+      else {
+        const chips = L.map((x) => `<button class="gb-lc${x.name === GBU.league ? " on" : ""}" data-gblg="${esc(x.name)}">${esc(x.name)}<small>${x.left} left</small></button>`).join("");
+        const rows = lg ? lg.rows.filter((m) => GBU.slot === "all" || m.slot === GBU.slot) : [];
+        body = gbSlotBar() + `<div class="gb-leagues">${chips}</div>` + (rows.length ? rows.map(gbMatchHtml).join("") : `<div class="empty">No games in this slot.</div>`);
+      }
+      extra = `${sub}<div class="gbline">${esc(gbApp().blurb)}${gbLimited() ? " <b>You are limited here: max stake $20 until the heat drops.</b>" : gbApp().max < 1e5 ? " Max stake " + gbMoney(gbApp().max) + "." : ""} &middot; ${gbBillLine(r)} &middot; ${"&#10006;".repeat(r.strikes)}${"&#9675;".repeat(Math.max(0, GB_MAX_STRIKES - r.strikes))}</div>`;
+    } else if (tab === "bets") { title = "My Bets"; cur = "bets"; body = gbBetsHtml(); }
+    else if (tab === "loans") { title = "Bank"; cur = "loans"; right = `<div class="gbpill pur">Credit ${r.credit == null ? 720 : r.credit}</div>`; extra = gbQuotaCard(r); body = gbLoansHtml(); }
+    else if (tab === "chirp") { theme = "light"; title = "Chirp"; right = `<div class="gbpill ink">You</div>`; body = gbChirpHtml(); }
+    else if (tab === "shop") { theme = "cream"; title = "The Hustle Shop"; body = gbShopHtml(); }
+    else if (tab === "perks") { title = "Perks"; body = gbPerksHtml(r); }
+    else if (tab === "menu") { title = "Settings"; body = gbMenuHtml(); }
+    html = gbHead(title, right) + extra + (GBU.msg ? `<div class="gb-msg">${GBU.msg}</div>` : "") + `<div class="gbbody">${body}</div>`
+      + ((tab === "slate" && !ended && !idle && !offerP) ? gbSlipHtml() : "") + (cur ? gbNav(cur) : "");
+    if (theme === "light") html += `<nav class="gbnav chn"><a href="#/gambler/chirp" class="on">Feed</a><a href="#/gambler/shop">Shop</a><a href="#/gambler/slate">BAIT Bets</a><a href="#/gambler">Home</a></nav>`;
+  }
+  $("#view").innerHTML = `<div class="gbx ${theme} t-${tab}${GBU.slip.length && tab === "slate" ? " hasslip" : ""}${GBU.tab === "titles" && GBU.tpick ? " hasslip" : ""}">${html}</div>`;
+  GBU.msg = "";
+  gbWire();
 }
 </script>
 <script>"use strict";
@@ -12559,6 +12718,8 @@ function renderShell() {
   document.body.classList.toggle("inapp", !!has);
   document.body.classList.toggle("nosim", !has || !SIM_ROUTES.has(route) || !!GB.run);
   document.body.classList.toggle("gb-run", !!(has && GB.run));
+  document.body.classList.toggle("gb-app", !!(has && GB.run && route === "gambler"));
+  if (!(has && GB.run && route === "gambler")) { document.body.classList.remove("gb-lt"); document.body.classList.remove("gb-cr"); }
   const h = STATUS && STATUS.header;
   $("#season-info").innerHTML = h
     ? (h.flow
@@ -12582,10 +12743,10 @@ const TAB_OF = { more: "more", history: "history", leagues: "leagues", world: "s
 function renderTabbar(has, route) {
   const el = $("#tabbar"); if (!el) return;
   if (!has) { el.innerHTML = ""; el.hidden = true; return; }
-  el.hidden = false;
+  el.hidden = !!(GB.run && route === "gambler");
   const cur = route === "gambler" ? "bets" : (TAB_OF[route] || "season");
   const tab = (k, t, href) => `<a data-tab="${k}" href="${href || "#"}" class="${cur === k ? "on" : ""}"><svg width="22" height="22" viewBox="0 0 24 24" fill="${k === "more" ? "currentColor" : "none"}" stroke="${k === "more" ? "none" : "currentColor"}" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${TAB_ICONS[k]}</svg><span>${t}</span></a>`;
-  if (GB.run) { const g = location.hash.split("/")[1] === "gambler" ? "bets" : cur; el.innerHTML = tab("bets", "Bets", "#/gambler").replace(`class="${cur === "bets" ? "on" : ""}"`, `class="${g === "bets" ? "on" : ""}"`) + tab("leagues", "Leagues", "#/leagues") + tab("players", "Players", "#/players") + tab("more", "Menu", "#/gambler/menu"); return; }
+  if (GB.run) { const g = location.hash.split("/")[1] === "gambler" ? "bets" : cur; el.innerHTML = tab("bets", "Home", "#/gambler").replace(`class="${cur === "bets" ? "on" : ""}"`, `class="${g === "bets" ? "on" : ""}"`) + tab("leagues", "Leagues", "#/leagues") + tab("players", "Players", "#/players") + tab("more", "Menu", "#/gambler/menu"); return; }
   el.innerHTML = (GB.run ? tab("bets", "Bets", "#/gambler") : "") + tab("season", "Season", "#/world") + tab("leagues", "Leagues", "#/leagues") + tab("players", "Players", "#/players") + tab("history", "History", "#/history") + tab("more", "More", "#/more");
 }
 const CHEV = '<svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg>';

@@ -69,6 +69,8 @@ function renderShell() {
   document.body.classList.toggle("inapp", !!has);
   document.body.classList.toggle("nosim", !has || !SIM_ROUTES.has(route) || !!GB.run);
   document.body.classList.toggle("gb-run", !!(has && GB.run));
+  document.body.classList.toggle("gb-app", !!(has && GB.run && route === "gambler"));
+  if (!(has && GB.run && route === "gambler")) { document.body.classList.remove("gb-lt"); document.body.classList.remove("gb-cr"); }
   const h = STATUS && STATUS.header;
   $("#season-info").innerHTML = h
     ? (h.flow
@@ -92,10 +94,10 @@ const TAB_OF = { more: "more", history: "history", leagues: "leagues", world: "s
 function renderTabbar(has, route) {
   const el = $("#tabbar"); if (!el) return;
   if (!has) { el.innerHTML = ""; el.hidden = true; return; }
-  el.hidden = false;
+  el.hidden = !!(GB.run && route === "gambler");
   const cur = route === "gambler" ? "bets" : (TAB_OF[route] || "season");
   const tab = (k, t, href) => `<a data-tab="${k}" href="${href || "#"}" class="${cur === k ? "on" : ""}"><svg width="22" height="22" viewBox="0 0 24 24" fill="${k === "more" ? "currentColor" : "none"}" stroke="${k === "more" ? "none" : "currentColor"}" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${TAB_ICONS[k]}</svg><span>${t}</span></a>`;
-  if (GB.run) { const g = location.hash.split("/")[1] === "gambler" ? "bets" : cur; el.innerHTML = tab("bets", "Bets", "#/gambler").replace(`class="${cur === "bets" ? "on" : ""}"`, `class="${g === "bets" ? "on" : ""}"`) + tab("leagues", "Leagues", "#/leagues") + tab("players", "Players", "#/players") + tab("more", "Menu", "#/gambler/menu"); return; }
+  if (GB.run) { const g = location.hash.split("/")[1] === "gambler" ? "bets" : cur; el.innerHTML = tab("bets", "Home", "#/gambler").replace(`class="${cur === "bets" ? "on" : ""}"`, `class="${g === "bets" ? "on" : ""}"`) + tab("leagues", "Leagues", "#/leagues") + tab("players", "Players", "#/players") + tab("more", "Menu", "#/gambler/menu"); return; }
   el.innerHTML = (GB.run ? tab("bets", "Bets", "#/gambler") : "") + tab("season", "Season", "#/world") + tab("leagues", "Leagues", "#/leagues") + tab("players", "Players", "#/players") + tab("history", "History", "#/history") + tab("more", "More", "#/more");
 }
 const CHEV = '<svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg>';
