@@ -1335,3 +1335,6 @@ body.gb-app #view{padding:0;max-width:none;margin:0}
 
 .gbq-a small{display:inline}
 .gbx .gb-sim .mini.pri{background:var(--raise);color:var(--lime)}
+.gbt-i.lt{color:#F2F5FA}.gbt:nth-child(10) .gbt-i:not(.lt){color:#0E1117}
+.gbx .gbnav{grid-template-columns:1fr 1fr 1.25fr 1fr 1fr;align-items:end}.gbnav .gbsim{background:var(--lime);color:#0E1117;border:0;border-radius:18px;font-weight:700;font-size:12px;display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 4px;margin:-18px 4px 0;box-shadow:0 6px 18px #B6FF3C33}.gbsim span{font-size:15px}
+.gbx.t-bets .gb-bet{padding:12px}

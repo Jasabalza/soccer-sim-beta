@@ -171,11 +171,12 @@ function gbTitleBetHtml(b) {
     <div class="gb-sub2">To win the ${esc(b.league)} &middot; stake ${gbMoney(b.stake)} at ${gbOdds(b.odds)} &middot; placed week ${b.week}</div>${b.status === "open" ? `<div class="gb-sub2">Chance now ${(b.p * 100).toFixed(b.p < 0.1 ? 1 : 0)}% (price ${fair})</div>${gbCashHtml(b)}` : ""}</div>`;
 }
 function gbBetsHtml() {
-  const bets = GB.run.bets.slice().reverse();
+  const all = GB.run.bets.slice().reverse(), bets = all.filter((b) => b.status === "open").concat(all.filter((b) => b.status !== "open"));
   if (!bets.length) return `<div class="empty">No bets yet. Go to the slate and pick something.</div>`;
-  return bets.map((b) => b.kind === "title" ? gbTitleBetHtml(b) : `<div class="gb-bet ${b.status}"><div class="gb-bh"><b>${b.legs.length > 1 ? b.legs.length + "-leg parlay" : "Single"}</b><span class="gb-st">${b.status === "open" ? "Open" : b.status === "won" ? "Won " + gbMoney(b.payout) : b.status === "refunded" ? "Refunded" : b.status === "cashed" ? "Cashed out " + gbMoney(b.payout) : "Lost"}</span></div>
+  const firstDone = bets.findIndex((b) => b.status !== "open"), hd = (s) => `<h3 class="gb-h">${s}</h3>`;
+  return (firstDone !== 0 ? hd("Open") : "") + bets.map((b, i) => (i === firstDone ? hd("Settled") : "") + (b.kind === "title" ? gbTitleBetHtml(b) : `<div class="gb-bet ${b.status}"><div class="gb-bh"><b>${b.legs.length > 1 ? b.legs.length + "-leg parlay" : "Single"}</b><span class="gb-st">${b.status === "open" ? "Open" : b.status === "won" ? "Won " + gbMoney(b.payout) : b.status === "refunded" ? "Refunded" : b.status === "cashed" ? "Cashed out " + gbMoney(b.payout) : "Lost"}</span></div>
     ${b.legs.map((l, i) => `<div class="gb-leg"><span><b>${esc(gbLegLabel(l))}</b><i>${esc(l.h)} v ${esc(l.a)}${b.res && b.res[i] && b.res[i].hg != null ? " &middot; " + b.res[i].hg + "-" + b.res[i].ag : ""}${b.res && b.res[i] && b.res[i].note ? " &middot; " + esc(b.res[i].note) : ""}</i></span><span class="${b.res && b.res[i] && b.res[i].ok === true ? "gb-w" : b.res && b.res[i] && b.res[i].ok === false ? "gb-l" : ""}">${gbOdds(l.odds)}</span></div>`).join("")}
-    <div class="gb-sub2">${b.free ? "Bonus bet " : "Stake "}${gbMoney(b.stake)} &middot; odds ${gbOdds(b.odds)} &middot; week ${b.week}</div>${b.status === "open" ? gbCashHtml(b) : ""}</div>`).join("");
+    <div class="gb-sub2">${b.free ? "Bonus bet " : "Stake "}${gbMoney(b.stake)} &middot; odds ${gbOdds(b.odds)} &middot; week ${b.week}</div>${b.status === "open" ? gbCashHtml(b) : ""}</div>`)).join("");
 }
 function gbSlotBar() {
   const L = GBU.slate.leagues, cnt = [0, 0, 0], left = [0, 0, 0];
@@ -223,6 +224,7 @@ function gbWire() {
   on("gb-place", () => gbPlace(false)); on("gb-singles", () => gbPlace(true));
   q("[data-gbsim]").forEach((b) => b.onclick = () => gbSimSlot(+b.dataset.gbsim));
   on("gb-save", () => saveDialog()); on("gb-leave", () => { GBU.slate = null; GBU.slip = []; location.hash = "#/start"; route(); });
+  on("gb-navsim", () => { const s = +document.getElementById("gb-navsim").dataset.slot; if (s < 0) gbFinishWeek(); else gbSimSlot(s); });
   on("gb-finish", gbFinishWeek); on("gb-newrun", gbRestart); on("gb-next", gbNextSeason);
 }
 function gbPlace(singles) {

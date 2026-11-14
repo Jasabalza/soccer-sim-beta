@@ -40,17 +40,21 @@ function gbHomeHtml(r) {
       ${gbTile("#/gambler/chirp", "Messages", "#34D399", gbSvg("mail", 30), dv ? 1 : 0)}
       ${gbTile("#/gambler/loans", "Bank", "#A78BFA", gbSvg("bank", 30), (r.loans || []).length)}
       ${gbTile("#/gambler/bets", "My Bets", "#F2F5FA", gbSvg("bets", 30), nOpen)}
-      ${gbTile("#/leagues", "Teams", "#2DD4BF", gbSvg("teams", 30))}
-      ${gbTile("#/players", "Players", "#FBBF24", gbSvg("players", 30))}
       ${gbTile("#/gambler/perks", "Perks", "#F472B6", gbSvg("perks", 30), offers || (r.perks || []).length)}
-      ${gbTile("#/gambler/menu", "Settings", "#2B3345", gbSvg("gear", 30))}
+      ${gbTile("#/gambler/menu", "Settings", "#2B3345", gbSvg("gear", 30)).replace("gbt-i","gbt-i lt")}
       ${alt}
     </div>${offers ? `<a class="gbbanner" href="#/gambler/perks">${offers} perk offers waiting. Pick one.</a>` : ""}<div class="gb-note">Play money only. No real gambling.</div>`;
 }
 const gbHead = (title, right, back) => `<div class="gbhd"><a class="gbback" href="${back || "#/gambler"}" aria-label="Back">${gbSvg("back", 22)}</a><div class="gbhd-t">${title}</div>${right === undefined ? `<div class="gbpill">${gbMoney(GB.run.bankroll)}</div>` : right}</div>`;
+function gbNextSim() {
+  const L = (GBU.slate && GBU.slate.leagues) || [];
+  for (let s = 0; s < 3; s++) if (L.some((lg) => lg.rows.some((m) => m.slot === s && !m.done))) return { slot: s, label: GB_SLOTS[s] };
+  return { slot: -1, label: "Next week" };
+}
 function gbNav(cur) {
-  const it = [["slate", "#/gambler/slate", "Slate", "slate"], ["bets", "#/gambler/bets", "My Bets", "bets"], ["teams", "#/leagues", "Teams", "teams"], ["players", "#/players", "Players", "players"], ["loans", "#/gambler/loans", "Bank", "bank"]];
-  return `<nav class="gbnav">${it.map(([k, h, t, ic]) => `<a href="${h}" class="${cur === k ? "on" : ""}">${gbSvg(ic, 22)}${t}</a>`).join("")}</nav>`;
+  const n = gbNextSim(), it = [["slate", "#/gambler/slate", "Slate", "slate"], ["bets", "#/gambler/bets", "My Bets", "bets"]], it2 = [["chirp", "#/gambler/chirp", "Chirp", "chirp"], ["loans", "#/gambler/loans", "Bank", "bank"]];
+  const a = ([k, h, tx, ic]) => `<a href="${h}" class="${cur === k ? "on" : ""}">${gbSvg(ic, 22)}${tx}</a>`;
+  return `<nav class="gbnav">${it.map(a).join("")}<button class="gbsim" id="gb-navsim" data-slot="${n.slot}"><span>&#9654;</span>${n.slot < 0 ? "Next week" : "Sim " + n.label}</button>${it2.map(a).join("")}</nav>`;
 }
 function gbPerksHtml(r) {
   const have = {}; for (const p of r.perks || []) have[p.id] = (have[p.id] || 0) + 1;
@@ -98,7 +102,7 @@ async function gbViewHome() {
         body = gbSlotBar() + `<div class="gb-leagues">${chips}</div>` + (rows.length ? rows.map(gbMatchHtml).join("") : `<div class="empty">No games in this slot.</div>`);
       }
       extra = `${sub}<div class="gbline">${esc(gbApp().blurb)}${gbLimited() ? " <b>You are limited here: max stake $20 until the heat drops.</b>" : gbApp().max < 1e5 ? " Max stake " + gbMoney(gbApp().max) + "." : ""} &middot; ${gbBillLine(r)} &middot; ${"&#10006;".repeat(r.strikes)}${"&#9675;".repeat(Math.max(0, GB_MAX_STRIKES - r.strikes))}</div>`;
-    } else if (tab === "bets") { title = "My Bets"; cur = "bets"; body = gbBetsHtml(); }
+    } else if (tab === "bets") { title = "My Bets"; cur = "bets"; const ob = gbOpenBets().length + gbOpenTitles().length, at = [...gbOpenBets(), ...gbOpenTitles()].reduce((s, b) => s + (b.free ? 0 : b.stake), 0); extra = `<div class="gbline"><b>${ob}</b> open &middot; <b>${gbMoney(at)}</b> riding &middot; sim from the button below</div>`; body = gbBetsHtml(); }
     else if (tab === "loans") { title = "Bank"; cur = "loans"; right = `<div class="gbpill pur">Credit ${r.credit == null ? 720 : r.credit}</div>`; extra = gbQuotaCard(r); body = gbLoansHtml(); }
     else if (tab === "chirp") { theme = "light"; title = "Chirp"; right = `<div class="gbpill ink">You</div>`; body = gbChirpHtml(); }
     else if (tab === "shop") { theme = "cream"; title = "The Hustle Shop"; body = gbShopHtml(); }
