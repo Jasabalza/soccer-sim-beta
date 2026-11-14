@@ -167,16 +167,27 @@ async function gbTitlesHtml() {
 function gbTitleBetHtml(b) {
   const fair = b.p > 0 ? gbOdds(0.9 / b.p) : "-";
   const q = b.status === "open" ? gbCashQuote(b) : null;
-  return `<div class="gb-bet ${b.status}"><div class="gb-bh"><b>Title: ${esc(b.club)}</b><span class="gb-st">${b.status === "open" ? "Open" : b.status === "won" ? "Won " + gbMoney(b.payout) : b.status === "cashed" ? "Cashed out " + gbMoney(b.payout) : "Lost"}</span></div>
+  return `<div class="gb-bet ${b.status}"><div class="gb-bh"><b><span class="gb-bn">#${b.id}</span> Title: ${esc(b.club)}</b><span class="gb-st">${b.status === "open" ? "Open" : b.status === "won" ? "Won " + gbMoney(b.payout) : b.status === "cashed" ? "Cashed out " + gbMoney(b.payout) : "Lost"}</span></div>
     <div class="gb-sub2">To win the ${esc(b.league)} &middot; stake ${gbMoney(b.stake)} at ${gbOdds(b.odds)} &middot; placed week ${b.week}</div>${b.status === "open" ? `<div class="gb-sub2">Chance now ${(b.p * 100).toFixed(b.p < 0.1 ? 1 : 0)}% (price ${fair})</div>${gbCashHtml(b)}` : ""}</div>`;
+}
+// one leg of a bet: a status dot (waiting, won, lost), the pick, the match with the picked side in bold, and the score once played
+function gbLegRow(b, l, i) {
+  const rs = b.res && b.res[i], st = rs && rs.ok === true ? "won" : rs && rs.ok === false ? "lost" : (b.status === "open" || !rs ? "wait" : "void");
+  const home = l.market === "1x2" && l.pick === "H", away = l.market === "1x2" && l.pick === "A";
+  const m = `${home ? "<b>" + esc(l.h) + "</b>" : esc(l.h)} v ${away ? "<b>" + esc(l.a) + "</b>" : esc(l.a)}`;
+  const sc = rs && rs.hg != null ? `<span class="gb-fts">FT ${rs.hg}-${rs.ag}</span>` : `<span class="gb-fts wait">not played</span>`;
+  const id = [l.league, l.week, l.h, l.a].join("|"), lg = GBU.slate && GBU.slate.leagues.find((x) => x.name === l.league), mm = lg && lg.rows.find((x) => x.id === id);
+  const can = st === "wait" && mm && !mm.done && typeof gbNextSim === "function" && mm.slot === gbNextSim().slot;
+  const play = can ? `<button class="gb-play" data-gbone="${esc(id)}" aria-label="Sim this game" title="Sim just this game">&#9654;</button>` : "";
+  return `<div class="gb-leg ${st}"><span class="gb-dot ${st}">${st === "won" ? "&#10003;" : st === "lost" ? "&#10005;" : "&middot;"}</span><span class="gb-lm"><b>${esc(gbLegLabel(l))}</b><i>${m}</i><i class="lg">${esc(l.league || "")} ${sc}${rs && rs.note ? " &middot; " + esc(rs.note) : ""}</i></span><span class="gb-lo ${st}">${gbOdds(l.odds)}</span>${play}</div>`;
 }
 function gbBetsHtml() {
   const all = GB.run.bets.slice().reverse(), bets = all.filter((b) => b.status === "open").concat(all.filter((b) => b.status !== "open"));
   if (!bets.length) return `<div class="empty">No bets yet. Go to the slate and pick something.</div>`;
   const firstDone = bets.findIndex((b) => b.status !== "open"), hd = (s) => `<h3 class="gb-h">${s}</h3>`;
-  return (firstDone !== 0 ? hd("Open") : "") + bets.map((b, i) => (i === firstDone ? hd("Settled") : "") + (b.kind === "title" ? gbTitleBetHtml(b) : `<div class="gb-bet ${b.status}"><div class="gb-bh"><b>${b.legs.length > 1 ? b.legs.length + "-leg parlay" : "Single"}</b><span class="gb-st">${b.status === "open" ? "Open" : b.status === "won" ? "Won " + gbMoney(b.payout) : b.status === "refunded" ? "Refunded" : b.status === "cashed" ? "Cashed out " + gbMoney(b.payout) : "Lost"}</span></div>
-    ${b.legs.map((l, i) => `<div class="gb-leg"><span><b>${esc(gbLegLabel(l))}</b><i>${esc(l.h)} v ${esc(l.a)}${b.res && b.res[i] && b.res[i].hg != null ? " &middot; " + b.res[i].hg + "-" + b.res[i].ag : ""}${b.res && b.res[i] && b.res[i].note ? " &middot; " + esc(b.res[i].note) : ""}</i></span><span class="${b.res && b.res[i] && b.res[i].ok === true ? "gb-w" : b.res && b.res[i] && b.res[i].ok === false ? "gb-l" : ""}">${gbOdds(l.odds)}</span></div>`).join("")}
-    <div class="gb-sub2">${b.free ? "Bonus bet " : "Stake "}${gbMoney(b.stake)} &middot; odds ${gbOdds(b.odds)} &middot; week ${b.week}</div>${b.status === "open" ? gbCashHtml(b) : ""}</div>`)).join("");
+  return (firstDone !== 0 ? hd("Open") : "") + bets.map((b, i) => (i === firstDone ? hd("Settled") : "") + (b.kind === "title" ? gbTitleBetHtml(b) : `<div class="gb-bet ${b.status}"><div class="gb-bh"><b><span class="gb-bn">#${b.id}</span> ${b.legs.length > 1 ? b.legs.length + "-leg parlay" : "Single"}</b><span class="gb-st">${b.status === "open" ? "Open" : b.status === "won" ? "Won " + gbMoney(b.payout) : b.status === "refunded" ? "Refunded" : b.status === "cashed" ? "Cashed out " + gbMoney(b.payout) : "Lost"}</span></div>
+    ${b.legs.map((l, i) => gbLegRow(b, l, i)).join("")}
+    <div class="gb-sub2">${b.free ? "Bonus bet " : "Stake "}${gbMoney(b.stake)} &middot; odds ${gbOdds(b.odds)} &middot; to win ${gbMoney(Math.round(b.stake * b.odds))} &middot; week ${b.week}</div>${b.status === "open" ? gbCashHtml(b) : ""}</div>`)).join("");
 }
 function gbSlotBar() {
   const L = GBU.slate.leagues, cnt = [0, 0, 0], left = [0, 0, 0];
