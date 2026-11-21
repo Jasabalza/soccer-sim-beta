@@ -1218,6 +1218,17 @@ select { padding-right: 30px; }
 .ow a.btn { display: inline-flex; align-items: center; text-decoration: none; padding: 4px 10px; min-height: 30px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel2); color: var(--text); font-size: 12px; }
 #ow-pill { position: fixed; left: 12px; bottom: calc(76px + env(safe-area-inset-bottom)); z-index: 20; background: var(--accent); color: #06210f; font-weight: 800; padding: 10px 16px; border-radius: 999px; text-decoration: none; box-shadow: 0 4px 16px rgba(0,0,0,.5); font-size: 14px; } #ow-pill[hidden] { display: none; }
 
+.ow .owt { display: inline-flex; align-items: center; gap: 6px; } .ow .owt .crest { flex: none; }
+.ow .owg .owd { min-width: 78px; } .ow .owbig { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-size: 16px; margin: 6px 0 2px; }
+.ow .owres { padding: 2px 8px; border-radius: 8px; background: var(--panel2, #1b2a22); } .ow .owres.w { color: #4fbf7a; } .ow .owres.l { color: #e05a4f; } .ow .owres.d { color: #e0b44f; }
+.ow .chips button { display: inline-flex; align-items: center; gap: 6px; } .ow .bk-box { margin-top: 6px; }
+.ow .owmon { margin: 12px 0 2px; font-weight: 700; color: var(--accent, #3ddc84); font-size: 13px; text-transform: uppercase; letter-spacing: .04em; } .ow .owres { white-space: nowrap; } .ow .owdone summary { cursor: pointer; padding: 6px 0; }
+.ow .owsd { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; } .ow .owagg { white-space: nowrap; margin-left: 6px; }
+
+.fmtag { font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 10px; background: var(--panel2, #1b2a22); white-space: nowrap; } .fmtag.hot { color: #ff9a4d; } .fmtag.cold { color: #6cc4ff; }
+.fmline { margin: 8px 0; display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; } .fmline .meta { flex-basis: 100%; }
+.scr { margin: 8px 0; } .scr-h { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 15px; } .scr-c { display: flex; justify-content: space-between; gap: 12px; margin-top: 6px; font-size: 13px; } .scr-c > div:last-child { text-align: right; }
+
 </style>
 
 <div id="top">
@@ -3013,6 +3024,38 @@ $mods["rivals"] = (function () {
     const s = h + d + a;
     return { home: h / s, draw: d / s, away: a / s, exp: [hl, al] };
   }
+
+  // ---- team form: a small, capped rating nudge from how a club's last results compare with what was expected of it ----
+  // Off unless the world was made with form (w.fm). Uses only finished matchweeks, so it never depends on the order games are simmed in.
+  const FXC = new WeakMap(), FX_K = 1.5, FX_N = 5;
+  function formfx(w, n) {
+    const fm = w.fm; if (!fm || !w.clubs.has(n)) return 0;
+    const lc = w.comps.get_("L:" + w.clubs.get_(n).get_("league")); if (!lc || !lc.results || !lc.eff) return 0;
+    const key = w.season + "|" + lc.results.length;
+    let c = FXC.get(w); if (!c || c.w !== w) { c = { w, m: new Map() }; FXC.set(w, c); }
+    const hit = c.m.get(n); if (hit && hit.key === key) return hit.v;
+    const got = [];
+    for (let i = lc.results.length - 1; i >= 0 && got.length < FX_N; i--) for (const m of lc.results[i]) if (m[0] === n || m[1] === n) { got.push(m); break; }
+    let v = 0;
+    if (got.length >= 3) {
+      let sum = 0;
+      for (const m of got) {
+        const home = m[0] === n, o = odds(gv(lc.eff, m[0]), gv(lc.eff, m[1]), 0, false), pw = home ? o.home : o.away, e = 3 * pw + o.draw;
+        const gf = home ? m[2] : m[3], ga = home ? m[3] : m[2];
+        sum += (gf > ga ? 3 : gf === ga ? 1 : 0) - e;
+      }
+      v = Math.max(-fm.cap, Math.min(fm.cap, FX_K * sum / got.length));
+    }
+    v = Math.round(v * 10) / 10; c.m.set(n, { key, v });
+    return v;
+  }
+  // the strength table with form added for the two clubs about to play (the same table when form is off or both are level)
+  function fxEff(w, eff, a, b) {
+    if (!w.fm) return eff;
+    const da = formfx(w, a), db = formfx(w, b); if (!da && !db) return eff;
+    const e2 = $dict(eff); $setidx(e2, a, gv(eff, a) + da); $setidx(e2, b, gv(eff, b) + db);
+    return e2;
+  }
   function form(c, name) {
     const out = [], weeks = (c.results || []).concat(c.partial && c.partial.length ? [c.partial] : []);
     for (let i = weeks.length - 1; i >= 0 && out.length < 5; i--) for (const m of weeks[i]) {
@@ -3038,8 +3081,9 @@ $mods["rivals"] = (function () {
     const comp = cid && w.comps.has(cid) ? w.comps.get_(cid) : null;
     const lab = label(w, h, a), stakes = 1.0;
     const effH = comp && comp.eff ? gv(comp.eff, h) : C(h).get_("eff"), effA = comp && comp.eff ? gv(comp.eff, a) : C(a).get_("eff");
+    const fh = formfx(w, h), fa = formfx(w, a), rvv = lab ? lab.intensity * stakes : 0, o0 = odds(effH, effA, rvv, false), o1 = fh || fa ? odds(effH + fh, effA + fa, rvv, false) : o0;
     return { home: side(h, comp), away: side(a, comp), h2h: h2h(w, h, a), rivalry: lab, stakes, comp: comp ? { id: cid, title: comp.title, kind: comp.kind } : null,
-      odds: odds(effH, effA, lab ? lab.intensity * stakes : 0, false) };
+      odds: o1, form: w.fm ? { home: fh, away: fa, shift: Math.round((o1.home - o0.home) * 1000) / 10 } : null };
   }
   function list(w, club) {
     load();
@@ -3128,7 +3172,7 @@ $mods["rivals"] = (function () {
     if (path === "/api/rivalry_name") return rename(w, q.a, q.b, q.name);
     return null;
   }
-  return { odds, poissonPmf, effect, intensity, derby, derby_fx, update_season, label, h2h, matchup, list, rename, transfer_heat, api, key, known: () => { load(); return KN; } };
+  return { formfx, fxEff, odds, poissonPmf, effect, intensity, derby, derby_fx, update_season, label, h2h, matchup, list, rename, transfer_heat, api, key, known: () => { load(); return KN; } };
 })();
 
 // Tournament games: the games of the current round of any cup, qualifying group, play-off, World Cup, continental
@@ -3258,11 +3302,14 @@ $mods["tourney"] = (function () {
     const lab = nation ? $mods.rivals.label(w, home, away) : $mods.rivals.label(w, home, away);
     const st = game ? game.stakes : 1.0, hv = game ? game.home : null;
     const neutral = !hv, flip = hv === away;
-    const o = $mods.rivals.odds(flip ? eff(away) : eff(home), flip ? eff(home) : eff(away), lab ? lab.intensity * st : 0, neutral);
+    const fxh = nation ? 0 : $mods.rivals.formfx(w, home), fxa = nation ? 0 : $mods.rivals.formfx(w, away), rvx = lab ? lab.intensity * st : 0;
+    const o0 = $mods.rivals.odds(flip ? eff(away) : eff(home), flip ? eff(home) : eff(away), rvx, neutral);
+    const o = fxh || fxa ? $mods.rivals.odds((flip ? eff(away) + fxa : eff(home) + fxh), (flip ? eff(home) + fxh : eff(away) + fxa), rvx, neutral) : o0;
     const odds = flip ? { home: o.away, draw: o.draw, away: o.home, exp: [o.exp[1], o.exp[0]] } : o;
     const past = !game ? pastTie(c, home, away) : null;
     const leg1 = c.leg1 && c.leg1.has && game && game.leg === 2 ? gv(c.leg1, [game.a, game.b]) : null;
-    return { nation, home: side(home), away: side(away), h2h: $mods.rivals.h2h(w, home, away), rivalry: lab, stakes: st, odds,
+    const form = w.fm && !nation ? { home: fxh, away: fxa, shift: Math.round(((flip ? o.away - o0.away : o.home - o0.home)) * 1000) / 10 } : null;
+    return { nation, home: side(home), away: side(away), h2h: $mods.rivals.h2h(w, home, away), rivalry: lab, stakes: st, odds, form,
       comp: { id: cid, title: c.title, kind: c.kind },
       game: game ? { key: game.key, round: info ? info.label : "", date: info ? info.date : null, venue: hv, neutral, leg: game.leg, leg1, done: game.done, text: game.text, winner: game.winner, playable: !game.done, why: null }
         : { key: home + "|" + away, round: info ? info.label : "", venue: null, neutral: true, done: !!past, winner: past ? gv(past, "winner") : null, text: past ? (gv(past, "legs").map((l) => l[0] + "-" + l[1]).join(", ") + (gv(past, "how") ? " " + gv(past, "how") : "")) : null,
@@ -3580,7 +3627,45 @@ function comp_stats(w, cid, squads = null) {
 function public_(s) {
   return (() => { const $r = new $Dict(); let k, v; for (const $c0 of $iter($M.items(s))) { [k, v] = $iter($c0); if (!(!$M.startswith(k, "_"))) continue; $r.set(k, v); } return $r; })();
 }
-return {ASSIST_W: ASSIST_W, Counter: Counter, FORMATION: FORMATION, GOAL_W: GOAL_W, KIND_NAME: KIND_NAME, MVP_BALLOT: MVP_BALLOT, NATION_KINDS: NATION_KINDS, _draw: _draw, _xi: _xi, comp_kind: comp_kind, comp_stats: comp_stats, defaultdict: defaultdict, public: public_, random: random, team_data: team_data};
+
+// Goalscorers of the games two teams have played in one competition this season. Nothing here changes a result: the goals are the real ones, and
+// the scorers are drawn after the fact from the squad with the same seeded draw the competition's goal tables use, so a game always shows the
+// same scorers and the totals agree with the top-scorer lists.
+function scorers_between(w, cid, A, B) {
+  const comp = w.comps.get_(cid), kind = comp_kind(cid), nation = NATION_KINDS.includes(kind), meet = [];
+  const cap = (x) => String(x || "").charAt(0).toUpperCase() + String(x || "").slice(1);
+  if (kind === "league") {
+    comp.all_results().forEach((md, mi) => { for (const [h, a, hg, ag] of md) if ((h === A && a === B) || (h === B && a === A)) meet.push({ key: "m" + mi, h, a, hg, ag, label: "Matchweek " + (mi + 1) }); });
+  } else {
+    (comp.tlog || []).forEach((t, ti) => {
+      const ta = $idx(t, "a"), tb = $idx(t, "b"), legs = $idx(t, "legs");
+      if (!((ta === A && tb === B) || (ta === B && tb === A))) return;
+      legs.forEach((l, li) => { const flip = legs.length > 1 && li === 1; meet.push({ key: "t" + ti + "." + li, h: flip ? tb : ta, a: flip ? ta : tb, hg: flip ? l[1] : l[0], ag: flip ? l[0] : l[1], label: cap($idx(t, "name")) + (legs.length > 1 ? ", leg " + (li + 1) : "") }); });
+    });
+    (comp.glog || []).forEach(([md, a, b, sa, sb], gi) => { if ((a === A && b === B) || (a === B && b === A)) meet.push({ key: "g" + gi, h: a, a: b, hg: sa, ag: sb, label: "Group stage" }); });
+  }
+  if (!meet.length) return [];
+  w.ensure_uids();
+  let squads = null, by_nat = null; const cache = {};
+  const prep = (n) => {
+    if (cache[n]) return cache[n];
+    let pl;
+    if (nation) { if (!by_nat) { by_nat = {}; for (const p of w.players) if (p.club) (by_nat[p.nat] = by_nat[p.nat] || []).push(p); } pl = (by_nat[n] || []).slice().sort((x, y) => (y.ovr - x.ovr) || (x.name < y.name ? -1 : 1)).slice(0, 23); }
+    else { if (!squads) squads = w.squads(); pl = $sorted($M.get(squads, n, []), $kw({"key": ((p) => [(-p.ovr), p.name])})); }
+    const [xi, bench] = _xi(pl), pool = xi.map((p) => [p, 1.0]).concat(bench.map((p) => [p, 0.2]));
+    return (cache[n] = { pool, gw: pool.map(([p, m]) => $idx(GOAL_W, p.pos) * m * Math.pow(p.ovr / 70, 6)) });
+  };
+  const draw = (m, n, g) => {
+    if (g <= 0) return [];
+    const { pool, gw } = prep(n), r = random.Random($str(w.seed) + "|" + $str(w.season) + "|cs|" + $str(cid) + "|" + $str(m.key) + "|" + $str(n));
+    const out = [];
+    for (const [i, c] of $iter($M.items(_draw(r, g, gw)))) { const p = pool[i][0]; for (let k = 0; k < c; k++) out.push({ uid: p.uid, name: p.name, pos: p.pos }); }
+    const rm = random.Random($str(w.seed) + "|" + $str(w.season) + "|cs|" + $str(cid) + "|" + $str(m.key) + "|" + $str(n) + "|min");
+    return out.map((o) => ({ ...o, min: 1 + Math.floor(rm.random() * 90) })).sort((x, y) => (x.min - y.min) || (x.name < y.name ? -1 : 1));
+  };
+  return meet.map((m) => ({ label: m.label, h: m.h, a: m.a, hg: m.hg, ag: m.ag, hs: draw(m, m.h, m.hg), as: draw(m, m.a, m.ag) }));
+}
+return {scorers_between: scorers_between, ASSIST_W: ASSIST_W, Counter: Counter, FORMATION: FORMATION, GOAL_W: GOAL_W, KIND_NAME: KIND_NAME, MVP_BALLOT: MVP_BALLOT, NATION_KINDS: NATION_KINDS, _draw: _draw, _xi: _xi, comp_kind: comp_kind, comp_stats: comp_stats, defaultdict: defaultdict, public: public_, random: random, team_data: team_data};
 })();
 
 $mods["stops"] = (function() {
@@ -3998,7 +4083,7 @@ class LeagueComp extends Comp {
   }
   _fixture(h, a) {
     const self = this, st = self.st;
-    const [hg, ag] = score(self.fixture_rng(h, a), self.eff.get_(h), self.eff.get_(a), false, 1.0, $mods.rivals.effect(self.w, h, a, 1.0));
+    const fe = $mods.rivals.fxEff(self.w, self.eff, h, a), [hg, ag] = score(self.fixture_rng(h, a), fe.get_(h), fe.get_(a), false, 1.0, $mods.rivals.effect(self.w, h, a, 1.0));
     const sh = st.get_(h), sa = st.get_(a);
     sh.set("p", sh.get_("p") + 1); sa.set("p", sa.get_("p") + 1);
     sh.set("gf", sh.get_("gf") + hg); sh.set("ga", sh.get_("ga") + ag);
@@ -4110,7 +4195,7 @@ class CupComp extends Comp {
     return pairs.map(([a, b]) => ({ key: a + "|" + b, a, b, leg, left }));
   }
   _sim(ev, g, rng) {
-    const self = this, eff = self.eff, { a, b, leg, left } = g;
+    const self = this, { a, b, leg, left } = g, eff = $mods.rivals.fxEff(self.w, self.eff, a, b);
     const stk = left <= 2 ? 1.7 : left <= 4 ? 1.45 : left <= 8 ? 1.3 : 1.2;       // bigger stakes, bigger rivalry effect
     const rv = $mods.rivals.effect(self.w, a, b, stk);
     if (leg === 1) return { legs: [score(rng, $idx(eff, a), $idx(eff, b), false, 1.0, rv)] };
@@ -4479,7 +4564,7 @@ class WorldCup extends Comp {
     return out;
   }
   _sim(ev, g, rng) {
-    const self = this, eff = self.eff, { a, b } = g;
+    const self = this, { a, b } = g, eff = $mods.rivals.fxEff(self.w, self.eff, a, b);
     const n = g.n || 0, rv = self.rvfx(a, b, g.phase === "grp" ? 1.0 : n <= 2 ? 1.7 : n <= 4 ? 1.45 : n <= 8 ? 1.3 : 1.2);
     const [sa, sb] = pair_score(rng, eff, a, b, self.host, 1.0, true, rv);
     if (g.phase === "grp") return { sa, sb };
@@ -6456,7 +6541,56 @@ $mods["owner"] = (function () {
   function afterFlowDone(w) { const o = w.ow; if (!o) return; if (o.club) staffAuto(w); if (o.reneg && !o.reneg.done) finishReneg(w, false); if (o.win && o.win.open) closeWindow(w); squadRules(w); }
   // stays out of the owner's way: the AI market must not buy from, or sell to, the owner's club
   const blocked = (w, ...names) => !!(w && w.ow && w.ow.club && names.includes(w.ow.club));
-  return { create, buy, priceList, dividend, inject, lifestyle, sponsorOffers, takeSponsor, market, bid, release, sell, sellReply, dealAct, inboxAct, nextRound, renegAct, persuade, staffView, coachAct, beforeRollover, closeWindow, afterRollover, buyoutAct, retire, view, squadView, setSpeed, afterFlowDone, blocked, BACK, ROUNDS, openWindow };
+  
+// ---- schedule helpers: every game of the owner's club in a cup (played, and still to come) ----
+function cupGames(w, c, me, dateOf) {
+  const g_ = (o, k) => (o && typeof o.get === "function" ? o.get(k) : o && o[k]), evs = c.events || [], two = !!c.two_leg, games = [];
+  const evDate = (rnd, leg) => { const ev = evs.find((e) => g_(e, "rnd") === rnd && (g_(e, "leg") || 1) === leg); return ev ? dateOf(c, ev) : null; };
+  const cap = (x) => String(x || "").charAt(0).toUpperCase() + String(x || "").slice(1);
+  let out = false;
+  for (const t0 of c.tlog || []) {
+    const t = { season: g_(t0, "season"), a: g_(t0, "a"), b: g_(t0, "b"), legs: g_(t0, "legs") || [], name: g_(t0, "name"), round: g_(t0, "round"), date: g_(t0, "date"), winner: g_(t0, "winner") };
+    if (t.season !== w.season || (t.a !== me && t.b !== me)) continue;
+    (t.legs || []).forEach((l, i) => {
+      const flip = two && t.legs.length > 1 && i === 1;
+      games.push({ h: flip ? t.b : t.a, a: flip ? t.a : t.b, hg: flip ? l[1] : l[0], ag: flip ? l[0] : l[1], played: true, neutral: !two || t.legs.length < 2, agg: t.legs.length > 1 && i === t.legs.length - 1 && g_(t0, "agg") ? (flip ? [g_(t0, "agg")[1], g_(t0, "agg")[0]] : [g_(t0, "agg")[0], g_(t0, "agg")[1]]) : null, how: i === t.legs.length - 1 ? g_(t0, "how") || "" : "", label: cap(t.name) + (t.legs.length > 1 ? ", leg " + (i + 1) : ""), date: evDate(t.round, i + 1) || (i === t.legs.length - 1 && t.date ? { iso: t.date, text: t.date } : null) });
+    });
+    if (t.winner && t.winner !== me) out = true;
+  }
+  const mid = c.ptr > 0 && evs[c.ptr - 1] && g_(evs[c.ptr - 1], "leg") === 1 && evs[c.ptr] && g_(evs[c.ptr], "leg") === 2;
+  let opp = null;
+  if (mid && c.leg1) for (const [k, v] of c.leg1.itemsArr()) {
+    if (k[0] !== me && k[1] !== me) continue;
+    opp = k[0] === me ? k[1] : k[0];
+    games.push({ h: k[0], a: k[1], hg: v[0], ag: v[1], played: true, label: String(g_(evs[c.ptr - 1], "label")), date: dateOf(c, evs[c.ptr - 1]) });
+  }
+  if (!out && !c.winner) {
+    for (let k = c.ptr; k < evs.length; k++) {
+      const ev = evs[k]; let o = null;
+      if (k === c.ptr && mid) o = opp;
+      else { const exp = Math.floor((c.size || 0) / Math.pow(2, g_(ev, "rnd") + 1)); if (c.pairs && c.pairs.length === exp && (g_(ev, "leg") || 1) <= 2) { const pr = c.pairs.find((x) => x[0] === me || x[1] === me); if (pr) o = pr[0] === me ? pr[1] : pr[0]; } }
+      const evl = g_(ev, "leg") || 1, e = { label: String(g_(ev, "label")), date: dateOf(c, ev), tentative: !o };
+      if (o) { const meHome = true, pr = c.pairs.find((x) => x[0] === me || x[1] === me), aIsMe = pr ? pr[0] === me : true; const homeMe = two ? (aIsMe ? evl === 1 : evl === 2) : true; e.h = homeMe ? me : o; e.a = homeMe ? o : me; e.neutral = !two; void meHome; }
+      games.push(e);
+    }
+  }
+  const iso = (g) => (g.date && g.date.iso) || "9";
+  games.sort((x, y) => (iso(x) < iso(y) ? -1 : iso(x) > iso(y) ? 1 : 0));
+  return { games, out };
+}
+// how many games of his the world has played so far (league and cups): the play-one-game button waits for this to change
+function gameCount(w) {
+  const me = w.ow && w.ow.club; if (!me) return 0;
+  const MC = w.clubs.get(me), lc = w.comps.get("L:" + MC.get("league")); let n = 0;
+  for (const r of (lc && lc.results) || []) for (const g of r) if (g[0] === me || g[1] === me) n++;
+  for (const [, c] of w.comps.itemsArr()) {
+    if (c.kind !== "cup" || !c.field || !Array.from(c.field).includes(me)) continue;
+    for (const t of c.tlog || []) { const gg = (k) => (t && typeof t.get === "function" ? t.get(k) : t[k]); if (gg("season") === w.season && (gg("a") === me || gg("b") === me)) n += (gg("legs") || []).length; }
+    if (c.leg1) for (const [k] of c.leg1.itemsArr()) if (k[0] === me || k[1] === me) n++;
+  }
+  return n;
+}
+return { cupGames, gameCount, create, buy, priceList, dividend, inject, lifestyle, sponsorOffers, takeSponsor, market, bid, release, sell, sellReply, dealAct, inboxAct, nextRound, renegAct, persuade, staffView, coachAct, beforeRollover, closeWindow, afterRollover, buyoutAct, retire, view, squadView, setSpeed, afterFlowDone, blocked, BACK, ROUNDS, openWindow };
 })();
 
 $mods["sim_core"] = (function() {
@@ -10319,6 +10453,7 @@ function review(rec, why) {
   p = $M.get(rec, "potY");
   return $dict($kw({"season": $idx(rec, "season"), "champs": $idx(rec, "champs"), "cups": (() => { const $r = new $Dict(); let a, b, c, $t1; for (const $c0 of $iter($M.items($idx(rec, "cups")))) { ($t1 = $iter($c0), c = $t1[0], [a, b] = $iter($t1[1])); $r.set(c, $dict($kw({"name": $idx($idx(w.cups, c), "name"), "winner": a, "runner_up": b}))); } return $r; })(), "cwc": $idx(rec, "cwc"), "wc": $idx(rec, "wc"), "potY": ($T(p) ? $dict($kw({"name": $idx(p, 0), "ovr": $idx(p, 1), "club": $idx(p, 2), "nat": $idx(p, 3)})) : null), "news": (() => { const $r = []; let _, k, t; for (const $c0 of $iter(news)) { [_, _, k, t] = $iter($c0); $r.push($dict($kw({"kind": k, "text": t}))); } return $r; })(), "reasons": why, "awards": awards_brief($M.get(rec, "awards")), "transfers": $dict($kw({"n": $idx($idx(rec, "transfers"), "n"), "total": mx($idx($idx(rec, "transfers"), "total"))}))}));
 }
+const FORM_CAP = 2;
 function a_new(body) {
   let cfg, cur, k, seed, v, val, $t1, $t2;
   cfg = $new(S.Settings, [$kw({"label": "game"})]);
@@ -10347,6 +10482,7 @@ function a_new(body) {
     else throw $e1;
   }
   ST.world = $new(S.World, [cfg, seed]);
+  if ($T($M.get(body, "form")) && ["1", "true", "yes", "on"].includes($M.lower($str($idx(body, "form"))))) ST.world.fm = { cap: FORM_CAP };      // team form is chosen when the world is made
   ST.stops = $new(Stops, []);
   ST.last_review = null;
   return $dict($kw({"ok": true}));
@@ -10613,6 +10749,7 @@ POST = $lit_dict([["/api/favs", a_favs], ["/api/favnations", a_favnations], ["/a
   const O = $mods.owner, pl = (q) => $plain(q), bad = (m, c = 409) => { throw $new(ApiError, [m, c]); };
   const own = () => { const w = need_world(); if (!w.ow) bad("This world has no owner run. Start one from New game > Owner mode."); return w; };
   const R = (f) => (q) => { const w = own(); const r = f(w, pl(q)); return $dict($kw(Object.assign({ ok: true }, r || {}))); };
+  GET.set("/api/match_scorers", (q) => { const w = need_world(), cid = $plain(q).comp; if (!cid || !w.comps.has(cid)) bad("unknown competition", 404); return $dict($kw({ games: $mods.compstats.scorers_between(w, cid, $plain(q).home, $plain(q).away) })); });
   GET.set("/api/ow_state", (q) => { const w = need_world(); return $dict($kw(O.view(w))); });
   GET.set("/api/ow_clubs", (q) => { const w = own(); return $dict($kw({ rows: O.priceList(w) })); });
   GET.set("/api/ow_market", (q) => { const w = own(); return $dict($kw({ rows: O.market(w, pl(q)) })); });
@@ -10624,17 +10761,21 @@ POST = $lit_dict([["/api/favs", a_favs], ["/api/favnations", a_favnations], ["/a
     const MC = w.clubs.get(me), lg = MC.get("league"), confed = MC.get("confed"), lc = w.comps.get("L:" + lg), mine = (h, a) => h === me || a === me;
     const dateOf = (c, ev) => { try { return ev_date(w, c, ev); } catch (e) { return null; } };
     const past = [], next = [], all = [], comps = [];
-    const res = lc.results || [];
-    for (let i = 0; i < res.length; i++) for (const g of res[i]) if (mine(g[0], g[1])) past.push({ h: g[0], a: g[1], hg: g[2], ag: g[3], date: dateOf(lc, lc.events[i]), md: i + 1 });
-    for (let i = lc.ptr; i < lc.rounds.length; i++) for (const g of lc.rounds[i]) if (mine(g[0], g[1])) { const it = { h: g[0], a: g[1], date: dateOf(lc, lc.events[i]), md: i + 1 }; next.push(it); all.push({ comp: lg, kind: "league", h: g[0], a: g[1], date: it.date, label: "Matchday " + (i + 1) }); }
-    comps.push({ id: "L:" + lg, title: lg, kind: "league", progress: comp_progress(w, lc), past: past.slice(-8).reverse(), next: next.slice(0, 10) });
+    const res = lc.results || [], emb = (cid, c) => { try { return comp_emblem(cid, c); } catch (e) { return null; } };
+    for (let i = 0; i < res.length; i++) for (const g of res[i]) if (mine(g[0], g[1])) { const it = { h: g[0], a: g[1], hg: g[2], ag: g[3], date: dateOf(lc, lc.events[i]), md: i + 1 }; past.push(it); all.push({ comp: lg, cid: "L:" + lg, kind: "league", h: g[0], a: g[1], hg: g[2], ag: g[3], played: true, date: it.date, label: "Matchday " + (i + 1) }); }
+    for (let i = lc.ptr; i < lc.rounds.length; i++) for (const g of lc.rounds[i]) if (mine(g[0], g[1])) { const it = { h: g[0], a: g[1], date: dateOf(lc, lc.events[i]), md: i + 1 }; next.push(it); all.push({ comp: lg, cid: "L:" + lg, kind: "league", h: g[0], a: g[1], date: it.date, label: "Matchday " + (i + 1) }); }
+    comps.push({ id: "L:" + lg, title: lg, kind: "league", emblem: emb("L:" + lg, lc), progress: comp_progress(w, lc), past: past.slice(-8).reverse(), next: next.slice(0, 10) });
     for (const [cid, c] of w.comps.itemsArr()) {
       if (!(c.kind === "cup" || c.kind === "cwc" || c.kind === "ic") || !c.field || !Array.from(c.field).includes(me)) continue;
       const ties = (c.ties || []).filter((t) => t[1] === me || t[2] === me).map((t) => ({ round: t[0], a: t[1], b: t[2], text: t[3], winner: t[4] }));
-      const out = ties.some((t) => t.winner && t.winner !== me);
-      const upcoming = [];
-      if (!out && c.events) for (let k = c.ptr; k < c.events.length; k++) { const d = dateOf(c, c.events[k]); upcoming.push({ label: c.events[k].label, date: d }); all.push({ comp: c.title, kind: c.kind, label: c.events[k].label, date: d, tentative: c.kind === "cup" || (c.events[k].phase === "ko") }); }
-      comps.push({ id: cid, title: c.title, kind: c.kind, progress: comp_progress(w, c), ties, winner: c.winner || null, runner_up: c.runner_up || null, out, upcoming });
+      let games = [], out = ties.some((t) => t.winner && t.winner !== me);
+      if (c.kind === "cup" && c.tlog) {
+        const g = O.cupGames(w, c, me, dateOf); games = g.games; out = g.out;
+      } else if (!out && c.events) {
+        for (let k = c.ptr; k < c.events.length; k++) games.push({ label: String(c.events[k].get ? c.events[k].get("label") : c.events[k].label), date: dateOf(c, c.events[k]), tentative: true });
+      }
+      for (const g of games) all.push({ comp: c.title, cid, kind: c.kind, ...g });
+      comps.push({ id: cid, title: c.title, kind: c.kind, emblem: emb(cid, c), progress: comp_progress(w, c), ties, winner: c.winner || null, runner_up: c.runner_up || null, out, games });
     }
     {   // the continental cup of your confederation, even when you are not in it yet: how you qualify and where you stand
       const cc = w.comps.get("C:" + confed);
@@ -10654,8 +10795,10 @@ POST = $lit_dict([["/api/favs", a_favs], ["/api/favnations", a_favnations], ["/a
     stance = { season: nextYear, this_season: nextYear === w.season, confed, cup: comp ? comp.title : "", score: Math.round((sc.get(me) || 0) * 10) / 10, rank, slots, gap, champion: !!champ, field_set: !!prepared, in_field: !!inField,
       status: prepared ? (inField ? "qualified" : "not qualified") : (champ || rank <= slots ? "in a qualifying place" : rank <= slots + 3 ? "just outside" : "outside"),
       top: pool.slice(0, slots + 3).map((n) => ({ club: n, score: Math.round(sc.get(n) * 10) / 10, in: pool.indexOf(n) < slots })) };
-    all.sort((a, b) => ((a.date && a.date.iso) || "9") < ((b.date && b.date.iso) || "9") ? -1 : 1);
-    return $dict($kw({ comps, all: all.slice(0, 30), cwc: stance, season: w.season }));
+    const iso = (g) => (g.date && g.date.iso) || "9";
+    all.sort((a, b) => (iso(a) < iso(b) ? -1 : iso(a) > iso(b) ? 1 : 0));
+    const up = all.filter((g) => !g.played), pd = all.filter((g) => g.played);
+    return $dict($kw({ comps, all, next: up[0] || null, last: pd[pd.length - 1] || null, cwc: stance, season: w.season }));
   });
   POST.set("/api/ow_new", (body) => { a_new(body); const w = need_world(); O.create(w, pl(body)); return $dict($kw({ ok: true })); });
   POST.set("/api/ow_buy", R((w, b) => O.buy(w, b.club)));
@@ -10678,6 +10821,17 @@ POST = $lit_dict([["/api/favs", a_favs], ["/api/favnations", a_favnations], ["/a
   POST.set("/api/ow_settings", R((w, b) => O.setSpeed(w, b)));
   POST.set("/api/ow_buyout", R((w, b) => O.buyoutAct(w, b.action)));
   POST.set("/api/ow_retire", R((w, b) => ({ ended: O.retire(w) })));
+  // play to his next game: whole weeks, stopping as soon as his club has played
+  POST.set("/api/ow_playgame", R((w, b) => {
+    if (w.ow.state === "ended") bad("This run is over.");
+    if (w.ow.win && w.ow.win.open) bad("Finish the transfer window first (End window).");
+    if (w.flow) bad("Finish the off-season steps first.");
+    const before = O.gameCount(w);
+    let rolled = false, n = 0;
+    while (n < 14 && !w.season_done() && O.gameCount(w) === before) { a_sim($dict($kw({ scope: "world", weeks: 1 }))); n++; }
+    if (w.season_done()) { a_rollover($dict($kw({}))); rolled = true; }
+    return { rolled, weeks: n, header: header(w) };
+  }));
   // play on at the owner's speed: a week, a month (4 weeks) or to the end of the season; at season end the year rolls over and the window opens
   POST.set("/api/ow_advance", R((w, b) => {
     if (w.ow.state === "ended") bad("This run is over.");
@@ -12793,6 +12947,7 @@ async function viewStart() {
       <div class="field"><label for="start-year">First season starts in</label><input type="number" id="start-year" value="${esc((st.rules || {}).start_year ?? 2026)}" min="1900" max="2200" style="width:90px"></div>
       <details class="opts"><summary>Options</summary>
         <label class="check"><input type="checkbox" id="su-anim" ${animOn() ? "checked" : ""}> Winner animation when a league or cup finishes</label>
+        <label class="check"><input type="checkbox" id="su-form" checked> Team form: clubs on a hot or cold run get a small nudge (set when the world is made)</label>
         <label class="check"><input type="checkbox" id="su-god" ${st.god ? "checked" : ""}> God mode (commissioner editor)</label>
         <label class="check"><input type="checkbox" id="rules-on"> Change rules before starting</label>
         <div class="rules" id="rules" hidden>${rules.map(([k, v]) => `<div class="field"><span>${esc(k)}</span><input data-rule="${esc(k)}" data-def="${esc(v)}" value="${esc(v)}" style="width:130px"></div>`).join("")}</div>
@@ -12813,7 +12968,7 @@ async function viewStart() {
     if ($("#start-year").value && $("#start-year").value !== String((st.rules || {}).start_year ?? 2026)) rules.start_year = $("#start-year").value;
     try { localStorage.setItem("ssb_anim", $("#su-anim").checked ? "1" : "0"); } catch (e) {}
     await api("/api/settings_set", { god: $("#su-god").checked });
-    const ok = await busy("Building the world (about 2 seconds)...", () => api("/api/new", { seed: $("#seed").value, rules }));
+    const ok = await busy("Building the world (about 2 seconds)...", () => api("/api/new", { seed: $("#seed").value, rules, form: $("#su-form") && $("#su-form").checked ? "1" : "" }));
     if (ok) { PICK_ASKED = false; location.hash = "#/world"; await refreshStatus(); await route(); }
   };
   wireSaves(false); wireSaveTools(false); wireLogoPanel(); storageNote(); if (typeof owWireStart === "function") owWireStart();
@@ -13917,8 +14072,9 @@ async function viewMatchup(cid, h, a) {
   if (tour) { h = m.home.name; a = m.away.name; }               // the tournament game's own home / first team goes on the left
   let fx = null;
   if (m.comp && m.comp.kind === "league") { const f = await api("/api/fixtures?name=" + enc(m.comp.title)).catch(() => null); fx = f && f.rows.find((r) => r.h === h && r.a === a); }
-  const side = (s) => `<div class="card"><h3>${L(s.name)} <small>${esc(nat ? s.confed : s.league)}</small></h3>
-    <div class="row"><span>${nat ? "Rating" : "Team OVR"}</span><b>${nat ? s.ovr : ovr(s.ovr)}</b></div>
+  const FM = m.form || null, fmTag = (v) => (Math.abs(v) >= 1 ? `<span class="fmtag ${v > 0 ? "hot" : "cold"}" title="${v > 0 ? "Hot: results better than expected lately" : "Cold: results worse than expected lately"}">${v > 0 ? "\u{1F525}" : "\u2744\uFE0F"} ${v > 0 ? "+" : ""}${v.toFixed(1)} form</span>` : "");
+  const side = (s, fv) => `<div class="card"><h3>${L(s.name)} <small>${esc(nat ? s.confed : s.league)}</small></h3>
+    <div class="row"><span>${nat ? "Rating" : "Team OVR"}</span><b>${nat ? s.ovr : ovr(s.ovr)}</b></div>${fv && Math.abs(fv) >= 1 ? `<div class="row"><span>Form</span>${fmTag(fv)}</div>` : ""}
     ${s.pos && s.group ? `<div class="row"><span>${esc(s.group)}</span><b>${s.pos}${["st", "nd", "rd"][s.pos - 1] || "th"} of ${s.size}</b></div><div class="row"><span>Points / played</span><b>${s.pts} / ${s.p}</b></div><div class="row"><span>Goals for / against</span><b>${s.gf} / ${s.ga}</b></div>` : ""}
     ${s.pos && !s.group ? `<div class="row"><span>League position</span><b>${s.pos}</b></div><div class="row"><span>Points / played</span><b>${s.pts} / ${s.p}</b></div><div class="row"><span>Goals for / against</span><b>${s.gf} / ${s.ga}</b></div><div class="row"><span>Form</span><span>${chips(s.form)}</span></div>` : ""}
     ${s.reached != null ? `<div class="row"><span>Rounds won so far</span><b>${s.reached}</b></div>` : ""}</div>`;
@@ -13935,8 +14091,15 @@ async function viewMatchup(cid, h, a) {
     ${gameCard}
     ${fx && fx.done ? `<div class="card" style="text-align:center"><div class="meta">Full time this matchweek</div><div style="font-size:30px;font-weight:800">${fx.hg} - ${fx.ag}</div></div>` : fx ? `<p><button class="pri" id="mu-sim">Sim this game</button> <span class="meta">${esc(m.comp.title)}, matchweek ${(await api("/api/fixtures?name=" + enc(m.comp.title))).week}</span></p>` : ""}
     <div class="odds"><div class="o-h" style="flex:${m.odds.home}"><b>${pct(m.odds.home)}</b><span>${esc(h)}</span></div><div class="o-d" style="flex:${m.odds.draw}"><b>${pct(m.odds.draw)}</b><span>${tour && g.playable && g.leg !== 1 && g.leg !== 2 && m.comp.kind !== "qual" && /^(cup|cwc|wc|ct|ic)$/.test(m.comp.kind) ? "draw after 90" : "draw"}</span></div><div class="o-a" style="flex:${m.odds.away}"><b>${pct(m.odds.away)}</b><span>${esc(a)}</span></div></div>
-    <div class="cols" style="margin-top:14px">${side(m.home)}${side(m.away)}</div>
+    ${FM && (Math.abs(FM.home) >= 1 || Math.abs(FM.away) >= 1) ? `<div class="fmline">${Math.abs(FM.home) >= 1 ? esc(h) + " " + fmTag(FM.home) : ""} ${Math.abs(FM.away) >= 1 ? esc(a) + " " + fmTag(FM.away) : ""}<div class="meta">${Math.abs(FM.shift) >= 1 ? "Form moves the " + esc(FM.shift > 0 ? h : a) + " win chance by about " + Math.abs(Math.round(FM.shift)) + " points. It is a tiebreaker, not a promise." : "Form is a small nudge: here it barely changes the odds."}</div></div>` : ""}
+    <div id="mu-scorers"></div>
+    <div class="cols" style="margin-top:14px">${side(m.home, FM && FM.home)}${side(m.away, FM && FM.away)}</div>
     <h2>Head to head</h2>${h2hBlock(m.h2h, h, a)}`;
+  if (m.comp) api(`/api/match_scorers?comp=${enc(m.comp.id)}&home=${enc(h)}&away=${enc(a)}`).then((r) => {
+    const box = $("#mu-scorers"); if (!box || !r.games.length) return;
+    const lines = (arr) => (arr.length ? arr.map((x) => `${esc(x.name)} ${x.min}'`).join("<br>") : '<span class="meta">-</span>');
+    box.innerHTML = `<h2>Goalscorers</h2>` + r.games.map((x) => `<div class="card scr"><div class="meta">${esc(x.label)}</div><div class="scr-h"><span>${L(x.h)}</span><b>${x.hg} - ${x.ag}</b><span>${L(x.a)}</span></div><div class="scr-c"><div>${lines(x.hs)}</div><div>${lines(x.as)}</div></div></div>`).join("");
+  }).catch(() => {});
   if ($("#mu-sim")) $("#mu-sim").onclick = async () => { await simComp(m.comp.id, { fixture: { h, a } }); };
   if ($("#mu-gsim")) $("#mu-gsim").onclick = async () => { await simComp(m.comp.id, { game: g.key }); await route(); };
   if ($("#rv-rename")) $("#rv-rename").onclick = () => renameRivalry(h, a, rv.name, () => route());
@@ -14324,18 +14487,22 @@ async function viewOwner(tab) {
   if (st.state === "start" || st.state === "between") return await owBuy(st);
   const tabs = [["hub", "Hub"], ["sched", "Schedule"], ["window", "Window"], ["squad", "Squad"], ["staff", "Staff"], ["money", "Money"], ["board", "Board"]];
   OWT.tab = tabs.some((t) => t[0] === tab) ? tab : OWT.tab || "hub";
-  const body = OWT.tab === "hub" ? owHub(st) : OWT.tab === "sched" ? await owSched(st) : OWT.tab === "window" ? await owWindow(st) : OWT.tab === "squad" ? await owSquad(st) : OWT.tab === "staff" ? await owStaff(st) : OWT.tab === "money" ? await owMoney(st) : owBoard(st);
+  const sched0 = OWT.tab === "hub" && st.state !== "ended" ? await api("/api/ow_schedule").catch(() => null) : null;
+  if (sched0 && sched0.last) { const l = sched0.last; try { const r = await api(`/api/match_scorers?comp=${enc(l.cid)}&home=${enc(l.h)}&away=${enc(l.a)}`); sched0.lastScorers = (r.games || []).find((x) => x.hg === l.hg && x.ag === l.ag && x.h === l.h && (x.label === l.label || (/^Matchweek/.test(x.label) && l.kind === "league"))) || null; } catch (e) { /* no scorers */ } }
+  const body = OWT.tab === "hub" ? owHub(st, sched0) : OWT.tab === "sched" ? await owSched(st) : OWT.tab === "window" ? await owWindow(st) : OWT.tab === "squad" ? await owSquad(st) : OWT.tab === "staff" ? await owStaff(st) : OWT.tab === "money" ? await owMoney(st) : owBoard(st);
   $("#view").innerHTML = `<div class="v2 ow"><div class="dim small">${esc(st.name)} &middot; ${esc(st.back)} &middot; age ${st.age} &middot; ${st.mode === "sandbox" ? "Sandbox" : "Classic"}</div>
     <h1>${esc(st.club.name)}</h1>
     <div class="owtop"><div><span class="dim small">Your money</span><b>${owM(st.wealth)}</b></div><div><span class="dim small">Club cash</span><b>${owM(st.club.cash)}</b></div><div><span class="dim small">Debt</span><b>${st.club.debt ? owM(st.club.debt) : "none"}</b></div></div>
     <nav class="tabs2 lgtabs">${tabs.map(([k, t]) => `<a href="#/owner/${k}" class="${OWT.tab === k ? "on" : ""}">${t}${k === "window" && (st.window || st.reneg) ? " &bull;" : ""}</a>`).join("")}</nav>${body}</div>`;
   owWire(st);
+  if (OWT.tab === "sched") { try { wireBrackets($("#view")); } catch (e) { /* no bracket on this tab */ } }
 }
 // ---- start (new owner world) ----
 function owStartCard() {
   return `<div class="card"><h3>Owner mode <small>beta</small></h3><div class="dim small" style="margin-bottom:8px">You are the owner. Buy or inherit a club, hire the right people, run the transfer window, answer to the board. Your career ends when you die, go broke or retire.</div>
     <div class="field"><label>Name</label><input id="ow-name" value="The Owner" maxlength="30" style="width:170px"></div>
     <div class="field"><label>Seed</label><input type="number" id="ow-seed" value="1" min="1" style="width:90px"></div>
+    <div class="field"><label>Form</label><label class="check"><input type="checkbox" id="ow-form" checked> Hot and cold runs (small nudge)</label></div>
     <div class="field"><label>Mode</label><select id="ow-mode"><option value="classic">Classic (injections capped)</option><option value="sandbox">Sandbox (no caps)</option></select></div>
     <div class="ow-back" id="ow-back">${[["selfmade", "Self-made", 32, "700M", "Little money, lots of time"], ["trust", "Trust fund", 35, "1.2B", "A family club, handed down"], ["founder", "Founder", 42, "2B", "A big exit and a big ego"], ["fan", "Local fan", 48, "500M", "Save the club you grew up with"], ["veteran", "Veteran", 62, "4B", "Rich, with little time left"]]
       .map(([k, t, a, m, d], i) => `<label class="owb"><input type="radio" name="owb" value="${k}" ${i === 0 ? "checked" : ""}><span><b>${t}</b> &middot; age ${a} &middot; ${m}<br><span class="dim small">${d}</span></span></label>`).join("")}</div>
@@ -14345,7 +14512,7 @@ function owWireStart() {
   const go = $("#ow-go"); if (!go) return;
   go.onclick = async () => {
     const back = document.querySelector("input[name=owb]:checked").value;
-    const ok = await busy("Building the world (about 2 seconds)...", () => api("/api/ow_new", { seed: $("#ow-seed").value, backstory: back, name: $("#ow-name").value, mode: $("#ow-mode").value }));
+    const ok = await busy("Building the world (about 2 seconds)...", () => api("/api/ow_new", { seed: $("#ow-seed").value, backstory: back, name: $("#ow-name").value, mode: $("#ow-mode").value, form: $("#ow-form") && $("#ow-form").checked ? "1" : "" }));
     if (ok) { PICK_ASKED = false; await refreshStatus(); location.hash = "#/owner"; await route(); }
   };
 }
@@ -14378,33 +14545,66 @@ function owEnded(st) {
 }
 // ---- schedule: your games in the league and in every other competition your club is in ----
 OWT.sc = "";
+const owGoals = (arr) => (arr.length ? arr.map((x) => esc(x.name) + " " + x.min + "'").join("<br>") : '<span class="dim small">-</span>');
+const owEmb = (c, size) => { try { return compEmb(c.title, c.emblem, size || 16); } catch (e) { return ""; } };
+const owTeam = (n, me, size) => `<span class="owt">${crest(n, size || 18)}<span>${n === me ? "<b>" + esc(n) + "</b>" : esc(n)}</span></span>`;
+const owTeams = (g, me) => (g.h ? `${owTeam(g.h, me)}<span class="dim small"> v </span>${owTeam(g.a, me)}` : `<span>${esc(g.label)}</span>`);
+const owScore = (g, me, ext) => { const mine = g.h === me ? g.hg - g.ag : g.ag - g.hg, x = g.agg ? `<span class="dim small owagg">agg ${g.agg[0]}-${g.agg[1]}${g.how ? " " + esc(g.how) : ""}</span>` : g.how ? `<span class="dim small owagg">${esc(g.how)}</span>` : ""; return `<b class="owres ${mine > 0 ? "w" : mine < 0 ? "l" : "d"}">${g.hg}-${g.ag}</b>${ext === false ? "" : x}`; };
+// one game of the owner's club: date, competition, both teams with crests, and either the score or home/away
+function owGameRow(g, me, emb, showComp) {
+  const side = g.played ? `<span class="owsd">${owScore(g, me)}</span>` : g.tentative && !g.h ? '<span class="dim small">if still in</span>' : `<span class="dim small">${g.neutral ? "neutral" : g.h === me ? "home" : "away"}</span>`;
+  return `<div class="row owg"><span class="small owd">${esc(g.date ? g.date.text : "")}</span><span class="rt"><span class="dim small">${showComp ? (emb || "") + " " + esc(g.comp) + " &middot; " : ""}${esc(g.label || "")}</span>${g.h ? `<div>${owTeam(g.h, me)}</div><div>${owTeam(g.a, me)}</div>` : ""}</span>${side}</div>`;
+}
+const OW_MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+// games grouped under a month heading, like a calendar
+function owByMonth(list, me, embOf, showComp) {
+  let out = "", cur = "";
+  for (const g of list) {
+    const iso = g.date && g.date.iso, m = iso ? OW_MONTHS[+iso.slice(5, 7) - 1] + " " + iso.slice(0, 4) : "Date to be set";
+    if (m !== cur) { cur = m; out += `<div class="owmon">${m}</div>`; }
+    out += owGameRow(g, me, embOf && embOf[g.cid], showComp);
+  }
+  return out;
+}
 async function owSched(st) {
   const d = await api("/api/ow_schedule"), me = st.club.name, W = d.cwc;
-  const chips = [["ALL", "All"], ...d.comps.map((c) => [c.id, c.title]), ["CWC", "Club World Cup"]];
+  const chips = [["ALL", "All"], ...d.comps.map((c) => [c.id, c.title, owEmb(c, 16)]), ["CWC", "Club World Cup"]];
   if (!OWT.sc || !chips.some((c) => c[0] === OWT.sc)) OWT.sc = "ALL";
-  const dt = (x) => (x ? x.text : "");
-  const game = (g, past) => { const home = g.h === me; return `<div class="row"><span class="small">${dt(g.date) || "md " + g.md}</span><span class="rt">${home ? "<b>" + esc(g.h) + "</b> v " + esc(g.a) : esc(g.h) + " v <b>" + esc(g.a) + "</b>"}</span>${past ? `<b>${g.hg}-${g.ag}</b>` : `<span class="dim small">${home ? "home" : "away"}</span>`}</div>`; };
+  const embOf = {}; d.comps.forEach((c) => (embOf[c.id] = owEmb(c, 14)));
   let body;
-  if (OWT.sc === "ALL") body = `<div class="dim small" style="margin-bottom:6px">Every competition in date order. Cup rounds marked <i>if still in</i> only happen if your club keeps winning.</div>` +
-    (d.all.map((g) => `<div class="row"><span class="small" style="min-width:92px">${dt(g.date)}</span><span class="rt"><span class="dim small">${esc(g.comp)}</span><br>${g.h ? (g.h === me ? "<b>" + esc(g.h) + "</b> v " + esc(g.a) : esc(g.h) + " v <b>" + esc(g.a) + "</b>") : esc(g.label)}${g.tentative ? ' <span class="dim small">if still in</span>' : ""}</span><span class="dim small">${g.kind === "league" ? (g.h === me ? "home" : "away") : ""}</span></div>`).join("") || '<div class="dim small">Nothing left this season.</div>');
-  else if (OWT.sc === "CWC") {
+  if (OWT.sc === "ALL") {
+    const up = d.all.filter((g) => !g.played), pl = d.all.filter((g) => g.played).reverse();
+    body = `<div class="dim small" style="margin-bottom:6px">Every competition in date order. Cup rounds marked <i>if still in</i> only happen if your club keeps winning.</div>
+      <h3>Coming up</h3>${owByMonth(up, me, embOf, true) || '<div class="dim small">Nothing left this season.</div>'}
+      <details class="owdone" style="margin-top:12px"><summary><b>Played</b> <span class="dim small">${pl.length} game${pl.length === 1 ? "" : "s"}, tap to open</span></summary>${owByMonth(pl, me, embOf, true) || '<div class="dim small">No games played yet.</div>'}</details>`;
+  } else if (OWT.sc === "CWC") {
     const f = W, tag = f.status === "qualified" || f.status === "in a qualifying place" ? "#4fbf7a" : f.status === "just outside" ? "#e0b44f" : "#e05a4f";
     body = `<div class="row"><span>Next Club World Cup</span><b>Season ${f.season}${f.this_season ? " (this season)" : ""}</b></div>
       <div class="row"><span>Your status</span><b style="color:${tag}">${esc(f.status)}</b></div>
       <div class="row"><span>${esc(f.confed)} places</span><span>${f.slots}${f.champion ? " &middot; you hold the continental cup" : ""}</span></div>
       <div class="row"><span>Your ranking</span><span>#${f.rank} in ${esc(f.confed)} (score ${f.score})${f.gap > 0 ? ", " + f.gap + " behind the last place" : ""}</span></div>
       <div class="dim small" style="margin:6px 0">${esc(f.cup)} winners go in. The other places go to the best four-season records (league finishes and continental cup runs) in ${esc(f.confed)}.${f.field_set ? "" : " The field is set after the continental cups end."}</div>
-      <h3>Who is in the places</h3>${f.top.map((t) => `<div class="row"><span ${t.club === me ? 'style="font-weight:800"' : ""}>${esc(t.club)}</span><span class="dim small">${t.score}${t.in ? " &middot; in" : ""}</span></div>`).join("")}`;
+      <h3>Who is in the places</h3>${f.top.map((t) => `<div class="row"><span class="owt">${crest(t.club, 18)}<span ${t.club === me ? 'style="font-weight:800"' : ""}>${esc(t.club)}</span></span><span class="dim small">${t.score}${t.in ? " &middot; in" : ""}</span></div>`).join("")}`;
   } else {
-    const c = d.comps.find((x) => x.id === OWT.sc);
-    if (c.kind === "league") body = `${await owTable(st, true)}<h3 style="margin-top:12px">Next games</h3>${c.next.map((g) => game(g, false)).join("") || '<div class="dim small">No games left this season.</div>'}<h3 style="margin-top:12px">Results</h3>${c.past.map((g) => game(g, true)).join("") || '<div class="dim small">No games played yet.</div>'}`;
-    else if (c.notIn) body = `<div class="row"><span>Your status</span><b style="color:${c.pos && c.pos <= c.slots ? "#4fbf7a" : "#e0b44f"}">${c.pos && c.pos <= c.slots ? "in a qualifying place" : "not in this season's field"}</b></div><div class="dim small" style="margin-top:6px">The top ${c.slots} of ${esc(c.league)} qualify for the ${esc(c.title)}. ${c.pos ? "You are " + c.pos + (["th", "st", "nd", "rd"][(c.pos % 100 > 10 && c.pos % 100 < 14) ? 0 : (c.pos % 10 < 4 ? c.pos % 10 : 0)]) + " this season." : ""} The field is set from the league finish${c.progress.next ? "" : ""}.</div>`;
-    else body = `<div class="dim small">${c.out ? "Your club is out." : c.progress.next ? "Next: " + esc(c.progress.next) + (c.progress.next_date ? " &middot; " + c.progress.next_date.text : "") : (c.progress.done >= c.progress.total && c.progress.total ? "Finished" : "Not started")}</div>
-      ${c.winner ? `<div class="row"><span>Winner</span><b>${esc(c.winner)}</b></div>` : ""}${c.ties.map((t) => `<div class="row"><span class="small">${esc(String(t.round))}</span><span class="rt">${esc(t.text || t.a + " v " + t.b)}</span><span class="dim small">${t.winner ? (t.winner === me ? "won" : "lost") : ""}</span></div>`).join("") || '<div class="dim small">Your club has no games here yet.</div>'}
-      ${!c.out && c.upcoming.length ? `<h3 style="margin-top:10px">Still to come</h3>${c.upcoming.map((u) => `<div class="row"><span class="small">${dt(u.date)}</span><span class="rt">${esc(u.label)}</span><span class="dim small">if still in</span></div>`).join("")}` : ""}
-      `;
+    const c = d.comps.find((x) => x.id === OWT.sc), mineAll = d.all.filter((g) => g.cid === c.id);
+    if (c.kind === "league") body = `${await owTable(st, true)}<h3 style="margin-top:12px">Next games</h3>${owByMonth(mineAll.filter((g) => !g.played), me) || '<div class="dim small">No games left this season.</div>'}<details class="owdone" style="margin-top:12px"><summary><b>Results</b> <span class="dim small">${mineAll.filter((g) => g.played).length} played, tap to open</span></summary>${owByMonth(mineAll.filter((g) => g.played).reverse(), me) || '<div class="dim small">No games played yet.</div>'}</details>`;
+    else if (c.notIn) body = `<div class="row"><span>Your status</span><b style="color:${c.pos && c.pos <= c.slots ? "#4fbf7a" : "#e0b44f"}">${c.pos && c.pos <= c.slots ? "in a qualifying place" : "not in this season's field"}</b></div><div class="dim small" style="margin-top:6px">The top ${c.slots} of ${esc(c.league)} qualify for the ${esc(c.title)}. ${c.pos ? "You are " + c.pos + (["th", "st", "nd", "rd"][(c.pos % 100 > 10 && c.pos % 100 < 14) ? 0 : (c.pos % 10 < 4 ? c.pos % 10 : 0)]) + " this season." : ""}</div>`;
+    else {
+      const left = mineAll.filter((g) => !g.played);
+      const status = c.out ? "Your club is out." : c.winner ? "Finished." : left.length ? "Your club is still in." : "Not started";
+      let bracket = "";
+      if (c.kind === "cup") {
+        try {
+          const x = await api("/api/comp?id=" + enc(c.id)), gm = await api("/api/games?comp=" + enc(c.id)).catch(() => null);
+          if (x.bracket && x.bracket.rounds && x.bracket.rounds.length) bracket = `<h3 style="margin-top:12px">Bracket</h3>` + bracketHTML(liveBracket(x.bracket, gm), false, { cid: c.id, ready: false }).replace(/<a [^>]*>|<\/a>/g, "");
+        } catch (e) { /* no bracket yet */ }
+      }
+      body = `<div class="dim small">${status}${c.progress && c.progress.next ? " Next round: " + esc(c.progress.next) + (c.progress.next_date ? " &middot; " + c.progress.next_date.text : "") : ""}</div>
+        ${c.winner ? `<div class="row"><span>Winner</span><b class="owt">${crest(c.winner, 18)}${esc(c.winner)}</b></div>` : ""}
+        <h3 style="margin-top:10px">Your games</h3>${mineAll.map((g) => owGameRow(g, me)).join("") || '<div class="dim small">Your club has no games here yet.</div>'}${bracket}`;
+    }
   }
-  return `<div class="card"><nav class="chips">${chips.map(([id, t]) => `<button class="${id === OWT.sc ? "on" : ""}" data-sc="${esc(id)}">${esc(t)}</button>`).join("")}</nav><div style="margin-top:10px">${body}</div></div>`;
+  return `<div class="card"><nav class="chips">${chips.map(([id, t, e]) => `<button class="${id === OWT.sc ? "on" : ""}" data-sc="${esc(id)}">${e || ""} ${esc(t)}</button>`).join("")}</nav><div style="margin-top:10px">${body}</div></div>`;
 }
 // ---- league: table, next games, and the way into every competition page ----
 async function owTable(st, inner) {
@@ -14419,7 +14619,7 @@ async function owTable(st, inner) {
     <div class="dim small" style="margin-top:6px">Playing games happens on the Hub. Competitions your club is in (cups, continental) are under All competitions.</div></div>`;
 }
 // ---- hub ----
-function owHub(st) {
+function owHub(st, sc) {
   const h = STATUS.header, off = !!h.flow, p = st.pressure;
   const staffAlert = st.no_coach ? "You have no coach. Hire one on the Staff tab." : st.coach_expired ? "Your coach's contract has run out. Renew or replace him on the Staff tab." : "";
   const phase = st.reneg ? "Contract talks" : st.window && st.window.open ? "Transfer window" : off ? "Off-season" : "In season";
@@ -14428,8 +14628,14 @@ function owHub(st) {
   else if (st.window && st.window.open) act = `<button class="pri wide" data-tab="window">Open the transfer window (round ${st.window.round} of ${st.window.rounds})</button>`;
   else if (off) act = `<div class="dim small" style="margin-bottom:6px">Awards and graduates are in the usual pages.</div><button class="pri wide" id="ow-next">Start season ${h.season}</button>`;
   else act = `<div class="ow-speed">${["week", "month", "season"].map((k) => `<button class="${st.speed === k ? "on" : ""}" data-speed="${k}">${k[0].toUpperCase() + k.slice(1)}</button>`).join("")}</div><button class="pri wide" id="ow-adv">Play ${st.speed === "season" ? "the season" : "a " + st.speed}</button><div class="dim small">${seasonLine(h)}</div>`;
+  let nextCard = "";
+  if (sc && !st.reneg && !(st.window && st.window.open) && !off) {
+    const me = st.club.name, n = sc.next, l = sc.last, cc = (x) => sc.comps.find((c) => c.id === x.cid), em = (x) => { const c = cc(x); return c ? owEmb(c, 14) : ""; };
+    nextCard = `<div class="card"><h3>Next game${n ? `<small>${esc(n.date ? n.date.text : "")}</small>` : ""}</h3>${n ? `<div class="dim small">${em(n)} ${esc(n.comp)} &middot; ${esc(n.label || "")}</div><div class="owbig">${n.h ? owTeams(n, me) : "<span>" + esc(n.label) + " <span class='dim small'>(if still in)</span></span>"}</div><div class="dim small">${n.h ? (n.neutral ? "Neutral ground" : n.h === me ? "Home" : "Away") : ""}</div><button class="pri wide" id="ow-game" style="margin-top:8px">Play this game</button>` : '<div class="dim small">No games left this season.</div>'}
+      ${l ? `<h3 style="margin-top:14px">Last result</h3><div class="dim small">${em(l)} ${esc(l.comp)} &middot; ${esc(l.label || "")} &middot; ${esc(l.date ? l.date.text : "")}</div><div class="owbig">${owTeam(l.h, me)} ${owScore(l, me)} ${owTeam(l.a, me)}</div>${sc.lastScorers ? `<div class="scr-c"><div>${owGoals(sc.lastScorers.hs)}</div><div>${owGoals(sc.lastScorers.as)}</div></div>` : ""}` : ""}</div>`;
+  }
   const bo = st.buyout ? `<div class="card ow-alert"><h3>Buyout offer</h3>The board offers <b>${owM(st.buyout.offer)}</b> for the club.<div class="owbtns"><button data-bo="accept">Accept</button><button data-bo="counter" ${st.buyout.counter ? "disabled" : ""}>Counter (+15%)</button><button data-bo="refuse">Refuse</button></div><div class="dim small">Refusing makes the next offer worse.</div></div>` : "";
-  return `${bo}${staffAlert ? `<div class="card ow-alert">${staffAlert} <button class="mini" data-tab="staff">Open staff</button></div>` : ""}<div class="card"><h3>${phase}<small>Season ${st.season}</small></h3>${act}</div>
+  return `${bo}${nextCard}${staffAlert ? `<div class="card ow-alert">${staffAlert} <button class="mini" data-tab="staff">Open staff</button></div>` : ""}<div class="card"><h3>${phase}<small>Season ${st.season}</small></h3>${act}</div>
     <div class="card"><h3>Pressure <small>${esc(p.ladder_name)}</small></h3>${owBar(p.board, "Board")}${owBar(p.fans, "Fans")}${owBar(p.players, "Players", p.money_only ? "Upset about money, but winning: the board stays neutral." : "")}</div>
     <div class="card"><h3>Coach</h3><div class="row"><span>${esc(st.coach.name)}</span><span class="dim small">prestige ${st.coach.prestige}</span></div><div class="row"><span>Trust in you</span><b>${st.trust}</b></div></div>
     <div class="card"><h3>News</h3>${st.feed.slice(0, 8).map((f) => `<div class="row"><span class="small">${esc(f.t)}</span><span class="dim small">S${f.season}</span></div>`).join("") || '<div class="dim small">Nothing yet.</div>'}</div>
@@ -14505,6 +14711,7 @@ function owWire(st) {
   document.querySelectorAll("[data-tab]").forEach((b) => (b.onclick = () => (location.hash = "#/owner/" + b.dataset.tab)));
   document.querySelectorAll("[data-speed]").forEach((b) => (b.onclick = () => go("/api/ow_settings", { speed: b.dataset.speed })));
   const adv = $("#ow-adv"); if (adv) adv.onclick = async () => { const r = await busy("Playing...", () => api("/api/ow_advance", { unit: st.speed })); if (r) { await refreshStatus(); if (r.rolled) toast("Season over. The off-season begins.", true); await route(); } };
+  const pg = $("#ow-game"); if (pg) pg.onclick = async () => { const r = await busy("Playing...", () => api("/api/ow_playgame", {})); if (r) { await refreshStatus(); if (r.rolled) toast("Season over. The off-season begins.", true); await route(); } };
   const nx = $("#ow-next"); if (nx) nx.onclick = async () => { try { const f = STATUS.header.flow; if (f) { for (const s of ["graduates", "transfers", "done"]) await api("/api/flow", { step: s }).catch(() => 0); } } catch (e) { toast(e.message); } await refreshStatus(); await route(); };
   const rt = $("#ow-retire"); if (rt) rt.onclick = async () => { if (confirm("Retire from ownership? This ends the run.")) await go("/api/ow_retire"); };
   document.querySelectorAll("[data-bo]").forEach((b) => (b.onclick = async () => { const r = await owPost("/api/ow_buyout", { action: b.dataset.bo }); if (r) { toast(r.msg || "Done", true); await refreshStatus(); await route(); } }));
