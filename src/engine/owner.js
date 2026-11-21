@@ -581,5 +581,54 @@ $mods["owner"] = (function () {
   function afterFlowDone(w) { const o = w.ow; if (!o) return; if (o.club) staffAuto(w); if (o.reneg && !o.reneg.done) finishReneg(w, false); if (o.win && o.win.open) closeWindow(w); squadRules(w); }
   // stays out of the owner's way: the AI market must not buy from, or sell to, the owner's club
   const blocked = (w, ...names) => !!(w && w.ow && w.ow.club && names.includes(w.ow.club));
-  return { create, buy, priceList, dividend, inject, lifestyle, sponsorOffers, takeSponsor, market, bid, release, sell, sellReply, dealAct, inboxAct, nextRound, renegAct, persuade, staffView, coachAct, beforeRollover, closeWindow, afterRollover, buyoutAct, retire, view, squadView, setSpeed, afterFlowDone, blocked, BACK, ROUNDS, openWindow };
+  
+// ---- schedule helpers: every game of the owner's club in a cup (played, and still to come) ----
+function cupGames(w, c, me, dateOf) {
+  const g_ = (o, k) => (o && typeof o.get === "function" ? o.get(k) : o && o[k]), evs = c.events || [], two = !!c.two_leg, games = [];
+  const evDate = (rnd, leg) => { const ev = evs.find((e) => g_(e, "rnd") === rnd && (g_(e, "leg") || 1) === leg); return ev ? dateOf(c, ev) : null; };
+  const cap = (x) => String(x || "").charAt(0).toUpperCase() + String(x || "").slice(1);
+  let out = false;
+  for (const t0 of c.tlog || []) {
+    const t = { season: g_(t0, "season"), a: g_(t0, "a"), b: g_(t0, "b"), legs: g_(t0, "legs") || [], name: g_(t0, "name"), round: g_(t0, "round"), date: g_(t0, "date"), winner: g_(t0, "winner") };
+    if (t.season !== w.season || (t.a !== me && t.b !== me)) continue;
+    (t.legs || []).forEach((l, i) => {
+      const flip = two && t.legs.length > 1 && i === 1;
+      games.push({ h: flip ? t.b : t.a, a: flip ? t.a : t.b, hg: flip ? l[1] : l[0], ag: flip ? l[0] : l[1], played: true, neutral: !two || t.legs.length < 2, label: cap(t.name) + (t.legs.length > 1 ? ", leg " + (i + 1) : ""), date: evDate(t.round, i + 1) || (i === t.legs.length - 1 && t.date ? { iso: t.date, text: t.date } : null) });
+    });
+    if (t.winner && t.winner !== me) out = true;
+  }
+  const mid = c.ptr > 0 && evs[c.ptr - 1] && g_(evs[c.ptr - 1], "leg") === 1 && evs[c.ptr] && g_(evs[c.ptr], "leg") === 2;
+  let opp = null;
+  if (mid && c.leg1) for (const [k, v] of c.leg1.itemsArr()) {
+    if (k[0] !== me && k[1] !== me) continue;
+    opp = k[0] === me ? k[1] : k[0];
+    games.push({ h: k[0], a: k[1], hg: v[0], ag: v[1], played: true, label: String(g_(evs[c.ptr - 1], "label")), date: dateOf(c, evs[c.ptr - 1]) });
+  }
+  if (!out && !c.winner) {
+    for (let k = c.ptr; k < evs.length; k++) {
+      const ev = evs[k]; let o = null;
+      if (k === c.ptr && mid) o = opp;
+      else { const exp = Math.floor((c.size || 0) / Math.pow(2, g_(ev, "rnd") + 1)); if (c.pairs && c.pairs.length === exp && (g_(ev, "leg") || 1) <= 2) { const pr = c.pairs.find((x) => x[0] === me || x[1] === me); if (pr) o = pr[0] === me ? pr[1] : pr[0]; } }
+      const evl = g_(ev, "leg") || 1, e = { label: String(g_(ev, "label")), date: dateOf(c, ev), tentative: !o };
+      if (o) { const meHome = true, pr = c.pairs.find((x) => x[0] === me || x[1] === me), aIsMe = pr ? pr[0] === me : true; const homeMe = two ? (aIsMe ? evl === 1 : evl === 2) : true; e.h = homeMe ? me : o; e.a = homeMe ? o : me; e.neutral = !two; void meHome; }
+      games.push(e);
+    }
+  }
+  const iso = (g) => (g.date && g.date.iso) || "9";
+  games.sort((x, y) => (iso(x) < iso(y) ? -1 : iso(x) > iso(y) ? 1 : 0));
+  return { games, out };
+}
+// how many games of his the world has played so far (league and cups): the play-one-game button waits for this to change
+function gameCount(w) {
+  const me = w.ow && w.ow.club; if (!me) return 0;
+  const MC = w.clubs.get(me), lc = w.comps.get("L:" + MC.get("league")); let n = 0;
+  for (const r of (lc && lc.results) || []) for (const g of r) if (g[0] === me || g[1] === me) n++;
+  for (const [, c] of w.comps.itemsArr()) {
+    if (c.kind !== "cup" || !c.field || !Array.from(c.field).includes(me)) continue;
+    for (const t of c.tlog || []) { const gg = (k) => (t && typeof t.get === "function" ? t.get(k) : t[k]); if (gg("season") === w.season && (gg("a") === me || gg("b") === me)) n += (gg("legs") || []).length; }
+    if (c.leg1) for (const [k] of c.leg1.itemsArr()) if (k[0] === me || k[1] === me) n++;
+  }
+  return n;
+}
+return { cupGames, gameCount, create, buy, priceList, dividend, inject, lifestyle, sponsorOffers, takeSponsor, market, bid, release, sell, sellReply, dealAct, inboxAct, nextRound, renegAct, persuade, staffView, coachAct, beforeRollover, closeWindow, afterRollover, buyoutAct, retire, view, squadView, setSpeed, afterFlowDone, blocked, BACK, ROUNDS, openWindow };
 })();

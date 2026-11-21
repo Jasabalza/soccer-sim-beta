@@ -1214,3 +1214,9 @@ select { padding-right: 30px; }
 .ow-tbl { margin-top: 8px; font-size: 12.5px; } .ow-tr { display: grid; grid-template-columns: 22px 1fr 24px 24px 24px 24px 34px 30px; gap: 2px; padding: 5px 2px; border-bottom: 1px solid var(--line); align-items: center; text-align: right; } .ow-tr .cl { text-align: left; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; } .ow-tr > span:first-child { text-align: left; color: var(--dim); } .ow-th { color: var(--dim); font-size: 11px; } .ow-tr.me { background: rgba(79,191,122,.16); font-weight: 700; border-radius: 6px; }
 .ow a.btn { display: inline-flex; align-items: center; text-decoration: none; padding: 4px 10px; min-height: 30px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel2); color: var(--text); font-size: 12px; }
 #ow-pill { position: fixed; left: 12px; bottom: calc(76px + env(safe-area-inset-bottom)); z-index: 20; background: var(--accent); color: #06210f; font-weight: 800; padding: 10px 16px; border-radius: 999px; text-decoration: none; box-shadow: 0 4px 16px rgba(0,0,0,.5); font-size: 14px; } #ow-pill[hidden] { display: none; }
+
+.ow .owt { display: inline-flex; align-items: center; gap: 6px; } .ow .owt .crest { flex: none; }
+.ow .owg .owd { min-width: 78px; } .ow .owbig { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-size: 16px; margin: 6px 0 2px; }
+.ow .owres { padding: 2px 8px; border-radius: 8px; background: var(--panel2, #1b2a22); } .ow .owres.w { color: #4fbf7a; } .ow .owres.l { color: #e05a4f; } .ow .owres.d { color: #e0b44f; }
+.ow .chips button { display: inline-flex; align-items: center; gap: 6px; } .ow .bk-box { margin-top: 6px; }
+.ow .owmon { margin: 12px 0 2px; font-weight: 700; color: var(--accent, #3ddc84); font-size: 13px; text-transform: uppercase; letter-spacing: .04em; } .ow .owres { white-space: nowrap; } .ow .owdone summary { cursor: pointer; padding: 6px 0; }

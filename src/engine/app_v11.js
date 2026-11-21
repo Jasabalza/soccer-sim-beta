@@ -983,17 +983,21 @@ POST = $lit_dict([["/api/favs", a_favs], ["/api/favnations", a_favnations], ["/a
     const MC = w.clubs.get(me), lg = MC.get("league"), confed = MC.get("confed"), lc = w.comps.get("L:" + lg), mine = (h, a) => h === me || a === me;
     const dateOf = (c, ev) => { try { return ev_date(w, c, ev); } catch (e) { return null; } };
     const past = [], next = [], all = [], comps = [];
-    const res = lc.results || [];
-    for (let i = 0; i < res.length; i++) for (const g of res[i]) if (mine(g[0], g[1])) past.push({ h: g[0], a: g[1], hg: g[2], ag: g[3], date: dateOf(lc, lc.events[i]), md: i + 1 });
-    for (let i = lc.ptr; i < lc.rounds.length; i++) for (const g of lc.rounds[i]) if (mine(g[0], g[1])) { const it = { h: g[0], a: g[1], date: dateOf(lc, lc.events[i]), md: i + 1 }; next.push(it); all.push({ comp: lg, kind: "league", h: g[0], a: g[1], date: it.date, label: "Matchday " + (i + 1) }); }
-    comps.push({ id: "L:" + lg, title: lg, kind: "league", progress: comp_progress(w, lc), past: past.slice(-8).reverse(), next: next.slice(0, 10) });
+    const res = lc.results || [], emb = (cid, c) => { try { return comp_emblem(cid, c); } catch (e) { return null; } };
+    for (let i = 0; i < res.length; i++) for (const g of res[i]) if (mine(g[0], g[1])) { const it = { h: g[0], a: g[1], hg: g[2], ag: g[3], date: dateOf(lc, lc.events[i]), md: i + 1 }; past.push(it); all.push({ comp: lg, cid: "L:" + lg, kind: "league", h: g[0], a: g[1], hg: g[2], ag: g[3], played: true, date: it.date, label: "Matchday " + (i + 1) }); }
+    for (let i = lc.ptr; i < lc.rounds.length; i++) for (const g of lc.rounds[i]) if (mine(g[0], g[1])) { const it = { h: g[0], a: g[1], date: dateOf(lc, lc.events[i]), md: i + 1 }; next.push(it); all.push({ comp: lg, cid: "L:" + lg, kind: "league", h: g[0], a: g[1], date: it.date, label: "Matchday " + (i + 1) }); }
+    comps.push({ id: "L:" + lg, title: lg, kind: "league", emblem: emb("L:" + lg, lc), progress: comp_progress(w, lc), past: past.slice(-8).reverse(), next: next.slice(0, 10) });
     for (const [cid, c] of w.comps.itemsArr()) {
       if (!(c.kind === "cup" || c.kind === "cwc" || c.kind === "ic") || !c.field || !Array.from(c.field).includes(me)) continue;
       const ties = (c.ties || []).filter((t) => t[1] === me || t[2] === me).map((t) => ({ round: t[0], a: t[1], b: t[2], text: t[3], winner: t[4] }));
-      const out = ties.some((t) => t.winner && t.winner !== me);
-      const upcoming = [];
-      if (!out && c.events) for (let k = c.ptr; k < c.events.length; k++) { const d = dateOf(c, c.events[k]); upcoming.push({ label: c.events[k].label, date: d }); all.push({ comp: c.title, kind: c.kind, label: c.events[k].label, date: d, tentative: c.kind === "cup" || (c.events[k].phase === "ko") }); }
-      comps.push({ id: cid, title: c.title, kind: c.kind, progress: comp_progress(w, c), ties, winner: c.winner || null, runner_up: c.runner_up || null, out, upcoming });
+      let games = [], out = ties.some((t) => t.winner && t.winner !== me);
+      if (c.kind === "cup" && c.tlog) {
+        const g = O.cupGames(w, c, me, dateOf); games = g.games; out = g.out;
+      } else if (!out && c.events) {
+        for (let k = c.ptr; k < c.events.length; k++) games.push({ label: String(c.events[k].get ? c.events[k].get("label") : c.events[k].label), date: dateOf(c, c.events[k]), tentative: true });
+      }
+      for (const g of games) all.push({ comp: c.title, cid, kind: c.kind, ...g });
+      comps.push({ id: cid, title: c.title, kind: c.kind, emblem: emb(cid, c), progress: comp_progress(w, c), ties, winner: c.winner || null, runner_up: c.runner_up || null, out, games });
     }
     {   // the continental cup of your confederation, even when you are not in it yet: how you qualify and where you stand
       const cc = w.comps.get("C:" + confed);
@@ -1013,8 +1017,10 @@ POST = $lit_dict([["/api/favs", a_favs], ["/api/favnations", a_favnations], ["/a
     stance = { season: nextYear, this_season: nextYear === w.season, confed, cup: comp ? comp.title : "", score: Math.round((sc.get(me) || 0) * 10) / 10, rank, slots, gap, champion: !!champ, field_set: !!prepared, in_field: !!inField,
       status: prepared ? (inField ? "qualified" : "not qualified") : (champ || rank <= slots ? "in a qualifying place" : rank <= slots + 3 ? "just outside" : "outside"),
       top: pool.slice(0, slots + 3).map((n) => ({ club: n, score: Math.round(sc.get(n) * 10) / 10, in: pool.indexOf(n) < slots })) };
-    all.sort((a, b) => ((a.date && a.date.iso) || "9") < ((b.date && b.date.iso) || "9") ? -1 : 1);
-    return $dict($kw({ comps, all: all.slice(0, 30), cwc: stance, season: w.season }));
+    const iso = (g) => (g.date && g.date.iso) || "9";
+    all.sort((a, b) => (iso(a) < iso(b) ? -1 : iso(a) > iso(b) ? 1 : 0));
+    const up = all.filter((g) => !g.played), pd = all.filter((g) => g.played);
+    return $dict($kw({ comps, all, next: up[0] || null, last: pd[pd.length - 1] || null, cwc: stance, season: w.season }));
   });
   POST.set("/api/ow_new", (body) => { a_new(body); const w = need_world(); O.create(w, pl(body)); return $dict($kw({ ok: true })); });
   POST.set("/api/ow_buy", R((w, b) => O.buy(w, b.club)));
@@ -1037,6 +1043,17 @@ POST = $lit_dict([["/api/favs", a_favs], ["/api/favnations", a_favnations], ["/a
   POST.set("/api/ow_settings", R((w, b) => O.setSpeed(w, b)));
   POST.set("/api/ow_buyout", R((w, b) => O.buyoutAct(w, b.action)));
   POST.set("/api/ow_retire", R((w, b) => ({ ended: O.retire(w) })));
+  // play to his next game: whole weeks, stopping as soon as his club has played
+  POST.set("/api/ow_playgame", R((w, b) => {
+    if (w.ow.state === "ended") bad("This run is over.");
+    if (w.ow.win && w.ow.win.open) bad("Finish the transfer window first (End window).");
+    if (w.flow) bad("Finish the off-season steps first.");
+    const before = O.gameCount(w);
+    let rolled = false, n = 0;
+    while (n < 14 && !w.season_done() && O.gameCount(w) === before) { a_sim($dict($kw({ scope: "world", weeks: 1 }))); n++; }
+    if (w.season_done()) { a_rollover($dict($kw({}))); rolled = true; }
+    return { rolled, weeks: n, header: header(w) };
+  }));
   // play on at the owner's speed: a week, a month (4 weeks) or to the end of the season; at season end the year rolls over and the window opens
   POST.set("/api/ow_advance", R((w, b) => {
     if (w.ow.state === "ended") bad("This run is over.");
