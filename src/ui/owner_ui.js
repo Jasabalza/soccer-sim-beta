@@ -11,9 +11,9 @@ async function viewOwner(tab) {
   if (!st.active) { location.hash = "#/"; return; }
   if (st.state === "ended") return owEnded(st);
   if (st.state === "start" || st.state === "between") return await owBuy(st);
-  const tabs = [["hub", "Hub"], ["window", "Window"], ["squad", "Squad"], ["staff", "Staff"], ["money", "Money"], ["board", "Board"]];
+  const tabs = [["hub", "Hub"], ["table", "League"], ["window", "Window"], ["squad", "Squad"], ["staff", "Staff"], ["money", "Money"], ["board", "Board"]];
   OWT.tab = tabs.some((t) => t[0] === tab) ? tab : OWT.tab || "hub";
-  const body = OWT.tab === "hub" ? owHub(st) : OWT.tab === "window" ? await owWindow(st) : OWT.tab === "squad" ? await owSquad(st) : OWT.tab === "staff" ? await owStaff(st) : OWT.tab === "money" ? await owMoney(st) : owBoard(st);
+  const body = OWT.tab === "hub" ? owHub(st) : OWT.tab === "table" ? await owTable(st) : OWT.tab === "window" ? await owWindow(st) : OWT.tab === "squad" ? await owSquad(st) : OWT.tab === "staff" ? await owStaff(st) : OWT.tab === "money" ? await owMoney(st) : owBoard(st);
   $("#view").innerHTML = `<div class="v2 ow"><div class="dim small">${esc(st.name)} &middot; ${esc(st.back)} &middot; age ${st.age} &middot; ${st.mode === "sandbox" ? "Sandbox" : "Classic"}</div>
     <h1>${esc(st.club.name)}</h1>
     <div class="owtop"><div><span class="dim small">Your money</span><b>${owM(st.wealth)}</b></div><div><span class="dim small">Club cash</span><b>${owM(st.club.cash)}</b></div><div><span class="dim small">Debt</span><b>${st.club.debt ? owM(st.club.debt) : "none"}</b></div></div>
@@ -57,6 +57,17 @@ function owEnded(st) {
     <div class="row"><span>Put into clubs</span><span>${owM(e.injected)}</span></div><div class="row"><span>Taken out as dividends</span><span>${owM(e.dividends)}</span></div><div class="row"><span>Titles</span><span>${e.titles}</span></div><div class="row"><span>Clubs owned</span><span>${e.clubs}</span></div><div class="row"><span>Bankruptcies</span><span>${e.bankrupt}</span></div><div class="row"><span>Reputation</span><span>${e.rep}</span></div></div>
     <div class="card"><h3>Your clubs</h3>${st.clubs.map((c) => `<div class="row"><span>${clubLink(c.club)}</span><span class="dim small">${c.from}-${c.to || "now"} &middot; ${esc(c.how)}${c.how2 ? ", " + esc(c.how2) : ""}</span></div>`).join("")}</div>
     <button class="pri wide" onclick="location.hash='#/'">New run</button></div>`;
+}
+// ---- league: table, next games, and the way into every competition page ----
+async function owTable(st) {
+  const d = await api("/api/league?name=" + enc(st.club.league)), me = st.club.name;
+  const links = `<div class="owbtns"><a class="btn mini" href="#/league/${enc(st.club.league)}">Full league page</a><a class="btn mini" href="#/club/${enc(me)}">Your club page</a><a class="btn mini" href="#/world">All competitions</a><a class="btn mini" href="#/news">News</a><a class="btn mini" href="#/players">Players</a><a class="btn mini" href="#/money">Money</a></div>`;
+  const nx = (d.next || []).filter((g) => g.h === me || g.a === me)[0];
+  return `<div class="card"><h3>${esc(st.club.league)} <small>${esc(STATUS.header.season_label || "")}</small></h3>${links}
+    ${nx ? `<div class="dim small" style="margin-top:6px">Next game: <b>${esc(nx.h)}</b> v <b>${esc(nx.a)}</b>${d.next_date ? " &middot; " + d.next_date.text : ""}</div>` : ""}
+    <div class="ow-tbl"><div class="ow-tr ow-th"><span>#</span><span class="cl">Club</span><span>P</span><span>W</span><span>D</span><span>L</span><span>GD</span><span>Pts</span></div>
+    ${d.rows.map((r) => `<div class="ow-tr${r.club === me ? " me" : ""}"><span>${r.pos}</span><span class="cl"><a href="#/club/${enc(r.club)}">${esc(r.club)}</a></span><span>${r.p}</span><span>${r.w}</span><span>${r.d}</span><span>${r.l}</span><span>${r.gd > 0 ? "+" : ""}${r.gd}</span><b>${r.pts}</b></div>`).join("")}</div>
+    <div class="dim small" style="margin-top:6px">Playing games happens on the Hub. Competitions your club is in (cups, continental) are under All competitions.</div></div>`;
 }
 // ---- hub ----
 function owHub(st) {
