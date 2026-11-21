@@ -708,6 +708,7 @@ function a_new(body) {
   }
   ST.world = $new(S.World, [cfg, seed]);
   if ($T($M.get(body, "form")) && ["1", "true", "yes", "on"].includes($M.lower($str($idx(body, "form"))))) ST.world.fm = { cap: FORM_CAP };      // team form is chosen when the world is made
+  if ($T($M.get(body, "apex")) && ["1", "true", "yes", "on"].includes($M.lower($str($idx(body, "apex"))))) $mods.apex.init(ST.world, { announce: $M.get(body, "apex_year", 0) });      // the Apex League is chosen when the world is made
   ST.stops = $new(Stops, []);
   ST.last_review = null;
   return $dict($kw({"ok": true}));
@@ -975,6 +976,8 @@ POST = $lit_dict([["/api/favs", a_favs], ["/api/favnations", a_favnations], ["/a
   const own = () => { const w = need_world(); if (!w.ow) bad("This world has no owner run. Start one from New game > Owner mode."); return w; };
   const R = (f) => (q) => { const w = own(); const r = f(w, pl(q)); return $dict($kw(Object.assign({ ok: true }, r || {}))); };
   GET.set("/api/match_scorers", (q) => { const w = need_world(), cid = $plain(q).comp; if (!cid || !w.comps.has(cid)) bad("unknown competition", 404); return $dict($kw({ games: $mods.compstats.scorers_between(w, cid, $plain(q).home, $plain(q).away) })); });
+  GET.set("/api/apex", (q) => { const w = need_world(); return $dict($kw($mods.apex.view(w))); });
+  POST.set("/api/ow_apex", R((w, b) => $mods.apex.choose(w, b.action)));
   GET.set("/api/ow_state", (q) => { const w = need_world(); return $dict($kw(O.view(w))); });
   GET.set("/api/ow_clubs", (q) => { const w = own(); return $dict($kw({ rows: O.priceList(w) })); });
   GET.set("/api/ow_market", (q) => { const w = own(); return $dict($kw({ rows: O.market(w, pl(q)) })); });

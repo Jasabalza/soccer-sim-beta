@@ -6474,7 +6474,7 @@ $mods["owner"] = (function () {
     }
     fail("unknown action");
   }
-  function beforeRollover(w) { const o = w.ow; if (!o || !o.club) return; o.snap = {}; for (const p of squadOf(w, o.club)) o.snap[p.uid] = p.ovr; }
+  function beforeRollover(w) { const o = w.ow; if (!o || !o.club) return; if ($mods.apex.mustDecide(w)) fail("Decide on your Apex League contract first (Apex tab). The season cannot end until you do.", 409); o.snap = {}; for (const p of squadOf(w, o.club)) o.snap[p.uid] = p.ovr; }
   function applyStaff(w) {
     const o = w.ow, me = o.club, c = club(w); if (!me || !c.get("coach")) return; const ci = coachInfo(w); let up = 0, kept = 0;
     for (const p of squadOf(w, me)) {
@@ -6589,7 +6589,7 @@ $mods["owner"] = (function () {
     const c = club(w), W = o.win, co = coachInfo(w);
     const out = { active: true, state: o.state, name: o.name, back: BACK[o.back].label, mode: o.mode, age: o.age, wealth: r1(o.wealth), income: o.income, rep: Math.round(o.rep), season: w.season,
       injected: r1(o.injected), dividends: r1(o.dividends), speed: o.speed, limit: o.limit, coach_expired: !!(c && c.get("coach") && c.get("coach").contract <= 0), no_coach: !!(c && !c.get("coach")), trust: Math.round(o.trust), life: o.life, status: o.status, feed: o.feed.slice(0, 25), ledger: o.ledger.slice(-15), ended: o.ended,
-      titles: o.titles, hist: (o.hist || []), money: moneyLog(w), clubs: o.clubs, coach: co, sponsors: o.sponsors, backstories: Object.entries(BACK).map(([k, v]) => ({ id: k, ...v })), lifestyle: Object.entries(LIFE).map(([k, v]) => ({ id: k, ...v, owned: o.life.includes(k) })) };
+      apex: $mods.apex.view(w), titles: o.titles, hist: (o.hist || []), money: moneyLog(w), clubs: o.clubs, coach: co, sponsors: o.sponsors, backstories: Object.entries(BACK).map(([k, v]) => ({ id: k, ...v })), lifestyle: Object.entries(LIFE).map(([k, v]) => ({ id: k, ...v, owned: o.life.includes(k) })) };
     if (c) {
       const inc = c.get("income") * X(w);
       out.club = { name: o.club, league: c.get("league"), cash: r1(c.get("funds") * X(w)), debt: r1(c.get("debt", 0) * X(w)), income: r1(inc), payroll: r1(payroll(w, o.club)), value: price(w, o.club), squad: squadOf(w, o.club).length,
@@ -6693,6 +6693,135 @@ function gameCount(w) {
   return n;
 }
 return { needs, cupGames, cwcGames, gameCount, create, buy, priceList, dividend, inject, lifestyle, sponsorOffers, takeSponsor, market, bid, release, sell, sellReply, dealAct, inboxAct, nextRound, renegAct, persuade, staffView, coachAct, beforeRollover, closeWindow, afterRollover, buyoutAct, retire, view, squadView, setSpeed, afterFlowDone, blocked, BACK, ROUNDS, openWindow };
+})();
+
+// Apex League (beta). Plain JS. Stage 1: the world event, the four-season countdown, rumours, the two contracts (Apex or domestic), AI decisions,
+// the owner's choice and the field-strength check. State lives on the world as `w.apex` (a plain object, saved with the world).
+// Everything is inert when `w.apex` is missing, so normal worlds are unchanged. Money here is euros (millions) = engine units x cfg.money_x.
+// Randomness is keyed (a hash of seed + club + season), never a running RNG: reloading a save gives the same answers.
+$mods["apex"] = (function () {
+  const H = (s) => $crc32($utf8(s)) / 4294967296;
+  const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
+  const r1 = (x) => Math.round(x * 10) / 10;
+  const COUNTDOWN = 4, MAXN = 16, MINN = 4, EXTRA = 4, MAX_DELAYS = 2;
+  const X = (w) => w.cfg.money_x;
+  const C = (w, n) => w.clubs.get(n);
+  const key = (w, ...a) => w.seed + "|apex|" + a.join("|");
+  const fail = (m, c) => { throw $new($mods.app_v11.ApiError, [m, c === undefined ? 400 : c]); };
+
+  // ---- the club's pull: size, strength and money (about half stature, a third rating, a fifth income) ---------------------------------------
+  function incomeMax(w) { let m = 1; for (const n of w.clubs.keysArr()) m = Math.max(m, C(w, n).get("income")); return m; }
+  function score(w, n, im) { const c = C(w, n); return 0.5 * c.get("stature") + 0.3 * c.get("eff") + 0.2 * 100 * c.get("income") / (im || incomeMax(w)); }
+  function ranking(w) {
+    const im = incomeMax(w), sc = {}; for (const n of w.clubs.keysArr()) sc[n] = score(w, n, im);
+    return w.clubs.keysArr().slice().sort((a, b) => sc[b] - sc[a] || (a < b ? -1 : 1)).map((n) => ({ club: n, score: r1(sc[n]) }));
+  }
+  // how rich a league is next to the richest one (0..1): the domestic counter-offer scales with it
+  function leagueRel(w) {
+    const avg = {}; let best = 1;
+    for (const ln of w.leagues.keysArr()) { const L = w.leagues.get(ln), names = L.get("clubs"); let s = 0; for (const n of names) s += C(w, n).get("income"); avg[ln] = names.length ? s / names.length : 0; best = Math.max(best, avg[ln]); }
+    const out = {}; for (const ln of Object.keys(avg)) out[ln] = avg[ln] / best; return out;
+  }
+
+  // ---- set up ------------------------------------------------------------------------------------------------------------------------------
+  function init(w, opts) {
+    opts = opts || {}; const start = w.season;
+    const announce = opts.announce ? +opts.announce : start + 1 + Math.floor(H(w.seed + "|apexyr") * 2);
+    w.apex = { v: 1, on: true, state: "pre", announce, inaugural: announce + COUNTDOWN - 1, offers: {}, ai: {}, choice: null, pending: null, members: [], delays: 0, founded: null, log: [] };
+    return w.apex;
+  }
+  const say = (w, t) => { const a = w.apex; a.log.unshift({ season: w.season, t }); if (a.log.length > 40) a.log.length = 40; w.news("apex", t); };
+
+  // ---- the contracts ----------------------------------------------------------------------------------------------------------------------
+  function makeOffer(w, n, rel) {
+    const c = C(w, n), inc = c.get("income") * X(w), h = H(key(w, "off", n, w.season)), ln = c.get("league");
+    const apex_pay = r1(0.45 * inc * (0.9 + 0.2 * h));                                  // extra money a year on top of today's income
+    const f = clamp(0.35 + 0.65 * (rel[ln] || 0.5), 0.35, 0.98);                          // a rich league can come close; a poor one cannot
+    const dom_pay = r1(apex_pay * f), years = 3 + Math.floor(H(key(w, "yrs", n, w.season)) * 3);
+    return { club: n, league: ln, apex_pay, dom_pay, years, ratio: r1(f * 100) / 100 };
+  }
+  // an AI club weighs the extra money against what its league offers, its own size and a little temperament
+  function aiChoice(w, o) {
+    const c = C(w, o.club), inc = Math.max(1, c.get("income") * X(w));
+    const u = (o.apex_pay - o.dom_pay) / inc * 6 + (c.get("stature") - 80) / 30 - 0.35 + (H(key(w, "mood", o.club)) - 0.5) * 1.6;   // a little loyalty to the old league
+    return u > 0;
+  }
+  function openContracts(w) {
+    const a = w.apex, rel = leagueRel(w), rk = ranking(w), me = w.ow && w.ow.club;
+    a.state = "contracts"; const take = rk.slice(0, MAXN + EXTRA);
+    for (const t of take) {
+      const o = makeOffer(w, t.club, rel); a.offers[t.club] = o;
+      if (t.club === me) a.pending = { club: me, season: w.season }; else { a.ai[t.club] = aiChoice(w, o) ? "apex" : "stay"; if (a.ai[t.club] === "apex") say(w, t.club + " signs with the Apex League."); }
+    }
+    say(w, "Apex League contracts are on the table. The first season is planned for season " + a.inaugural + ".");
+  }
+  function signedList(w) {
+    const a = w.apex, me = w.ow && w.ow.club, rk = ranking(w), pos = {}; rk.forEach((r, i) => (pos[r.club] = i));
+    const l = Object.keys(a.ai).filter((n) => a.ai[n] === "apex" && n !== me);
+    if (me && a.pending && a.choice === "apex") l.push(me);
+    return l.sort((x, y) => pos[x] - pos[y]).slice(0, MAXN);
+  }
+  // does the signed field make a league? a few giants can carry a small one; weaker clubs need more of them
+  const need = (n) => clamp(92 - 2.2 * (n - MINN), 62, 92);
+  function strength(w, list) {
+    const n = list.length, mean = n ? list.reduce((s, x) => s + C(w, x).get("stature"), 0) / n : 0;
+    return { n, mean: r1(mean), need: r1(need(n)), go: n >= MINN && mean >= need(n) };
+  }
+
+  // ---- the owner's choice -----------------------------------------------------------------------------------------------------------------
+  function choose(w, action) {
+    const a = w.apex, me = w.ow && w.ow.club;
+    if (!a || a.state !== "contracts" || !a.pending || a.pending.club !== me) fail("There is no Apex contract waiting for you.", 409);
+    if (action !== "apex" && action !== "stay") fail("Choose apex or stay.");
+    a.choice = action; return { ok: true, choice: action };
+  }
+  function mustDecide(w) { const a = w && w.apex; return !!(a && a.on && a.state === "contracts" && a.pending && !a.choice && w.ow && w.ow.club === a.pending.club && w.season === a.inaugural - 1); }
+
+  // ---- hooks ------------------------------------------------------------------------------------------------------------------------------
+  // the start of a season: word gets out, then the contracts open in the third season of the countdown
+  function startSeason(w) {
+    const a = w.apex; if (!a || !a.on) return; const s = w.season;
+    if (a.state === "pre" && s >= a.announce) { a.state = "rumour"; say(w, "Word is out: the biggest clubs are planning a breakaway Apex League, with a first season planned for season " + a.inaugural + "."); }
+    else if (a.state === "rumour" && s > a.announce) {
+      const left = a.inaugural - s, rk = ranking(w), who = rk.slice(0, 3 + (COUNTDOWN - left) * 2).map((r) => r.club);
+      say(w, "Apex rumours: " + who.slice(0, 4).join(", ") + " are said to be in talks. " + left + " season" + (left === 1 ? "" : "s") + " to go.");
+    }
+    if (a.state === "rumour" && s >= a.inaugural - 1) openContracts(w);
+  }
+  // the end of the season before the first one: contracts are locked and the league goes ahead, is delayed or never starts
+  function resolve(w) {
+    const a = w.apex; if (!a || !a.on || a.state !== "contracts" || w.season < a.inaugural - 1) return;
+    const me = w.ow && w.ow.club; let list = signedList(w);
+    if (me && a.pending && !a.choice) a.choice = "stay";
+    if (list.length > MAXN) { for (const n of list.slice(MAXN)) { if (n !== me) a.ai[n] = "stay"; } list = list.slice(0, MAXN); }
+    const st = strength(w, list);
+    if (st.go) {
+      a.state = "live"; a.members = list.map((n) => ({ club: n, years: a.offers[n].years, from: a.inaugural, pay: a.offers[n].apex_pay })); a.founded = a.inaugural;
+      say(w, "The Apex League is a go: " + list.length + " clubs will play in season " + a.inaugural + ".");
+      if (me && list.includes(me)) { const o = w.ow; o.fans = clamp(o.fans - 14, 0, 100); o.apex_fans = 14; }
+    } else if (a.delays < MAX_DELAYS) {
+      a.delays++; a.inaugural++; const rel = leagueRel(w), rk = ranking(w);
+      say(w, "The Apex League is delayed: " + list.length + " clubs signed, not enough strength. More invitations go out.");
+      for (const t of rk.slice(0, MAXN + EXTRA + 6 * a.delays)) { if (a.offers[t.club]) continue; const o = makeOffer(w, t.club, rel); a.offers[t.club] = o; if (t.club === me) { a.pending = { club: me, season: w.season }; a.choice = null; } else { a.ai[t.club] = aiChoice(w, o) ? "apex" : "stay"; if (a.ai[t.club] === "apex") say(w, t.club + " signs with the Apex League."); } }
+    } else { a.state = "dead"; say(w, "The Apex League collapses before it starts: too few big clubs."); }
+  }
+
+  // ---- views --------------------------------------------------------------------------------------------------------------------------------
+  function view(w) {
+    const a = w.apex; if (!a || !a.on) return { on: false };
+    const me = w.ow && w.ow.club, rk = ranking(w), rel = leagueRel(w);
+    const out = { on: true, state: a.state, announce: a.announce, inaugural: a.inaugural, season: w.season, seasons_left: Math.max(0, a.inaugural - w.season), delays: a.delays, log: a.log.slice(0, 12), max: MAXN, min: MINN };
+    if (a.state === "pre") return out;
+    out.rumours = rk.slice(0, 16).map((r, i) => ({ club: r.club, rank: i + 1, league: C(w, r.club).get("league"), score: r.score, said: a.ai[r.club] === "apex" ? "signed" : a.ai[r.club] === "stay" ? "staying" : i < 6 ? "very likely" : i < 12 ? "likely" : "possible" }));
+    if (a.state === "contracts") {
+      const l = signedList(w), st = strength(w, l);
+      out.signed = l.map((n) => ({ club: n, stature: Math.round(C(w, n).get("stature")), mine: n === me })); out.strength = st;
+      if (a.pending && me && a.pending.club === me) { const o = a.offers[me]; out.offer = { apex_pay: o.apex_pay, dom_pay: o.dom_pay, years: o.years, league: o.league, league_rel: Math.round((rel[o.league] || 0) * 100), choice: a.choice, fan_hit: 14, deadline: a.inaugural - 1 }; }
+    }
+    if (a.state === "live") out.members = a.members.map((m) => ({ club: m.club, years: m.years, mine: m.club === me }));
+    return out;
+  }
+  return { init, startSeason, resolve, choose, mustDecide, view, ranking, strength, need, leagueRel };
 })();
 
 $mods["sim_core"] = (function() {
@@ -7535,6 +7664,7 @@ class World {
         $setidx(self.comps, c.id, c);
       }
     }
+    if (self.apex) $mods.apex.startSeason(self);
   }
   date_of(season, week, kind = "league") {
     const self = this;
@@ -7814,6 +7944,7 @@ class World {
     $setidx(rec, "nateff", (() => { const $r = new $Dict(); let n, nm; for (const $c0 of $iter($M.items(self.nations))) { [nm, n] = $iter($c0); $r.set(nm, $idx(n, "eff")); } return $r; })());
     $setidx(rec, "budget", (() => { const $r = new $Dict(); let ln, names; for (const $c0 of $iter($M.items(self.league_clubs))) { [ln, names] = $iter($c0); $r.set(ln, statistics.mean((() => { const $r = []; let n; for (const $c0 of $iter(names)) { n = $c0; $r.push($idx($idx(self.clubs, n), "budget")); } return $r; })())); } return $r; })());
     $M.append(self.hist, rec);
+    if (self.apex) $mods.apex.resolve(self);       // Apex League (inert unless the world was made with it)
     self.start_season();
     if (((self.cycle_year === 1) && (self.season > 1))) {
       self.national_coach_cycle();
@@ -10585,6 +10716,7 @@ function a_new(body) {
   }
   ST.world = $new(S.World, [cfg, seed]);
   if ($T($M.get(body, "form")) && ["1", "true", "yes", "on"].includes($M.lower($str($idx(body, "form"))))) ST.world.fm = { cap: FORM_CAP };      // team form is chosen when the world is made
+  if ($T($M.get(body, "apex")) && ["1", "true", "yes", "on"].includes($M.lower($str($idx(body, "apex"))))) $mods.apex.init(ST.world, { announce: $M.get(body, "apex_year", 0) });      // the Apex League is chosen when the world is made
   ST.stops = $new(Stops, []);
   ST.last_review = null;
   return $dict($kw({"ok": true}));
@@ -10852,6 +10984,8 @@ POST = $lit_dict([["/api/favs", a_favs], ["/api/favnations", a_favnations], ["/a
   const own = () => { const w = need_world(); if (!w.ow) bad("This world has no owner run. Start one from New game > Owner mode."); return w; };
   const R = (f) => (q) => { const w = own(); const r = f(w, pl(q)); return $dict($kw(Object.assign({ ok: true }, r || {}))); };
   GET.set("/api/match_scorers", (q) => { const w = need_world(), cid = $plain(q).comp; if (!cid || !w.comps.has(cid)) bad("unknown competition", 404); return $dict($kw({ games: $mods.compstats.scorers_between(w, cid, $plain(q).home, $plain(q).away) })); });
+  GET.set("/api/apex", (q) => { const w = need_world(); return $dict($kw($mods.apex.view(w))); });
+  POST.set("/api/ow_apex", R((w, b) => $mods.apex.choose(w, b.action)));
   GET.set("/api/ow_state", (q) => { const w = need_world(); return $dict($kw(O.view(w))); });
   GET.set("/api/ow_clubs", (q) => { const w = own(); return $dict($kw({ rows: O.priceList(w) })); });
   GET.set("/api/ow_market", (q) => { const w = own(); return $dict($kw({ rows: O.market(w, pl(q)) })); });
@@ -13051,6 +13185,7 @@ async function viewStart() {
       <div class="field"><label for="start-year">First season starts in</label><input type="number" id="start-year" value="${esc((st.rules || {}).start_year ?? 2026)}" min="1900" max="2200" style="width:90px"></div>
       <details class="opts"><summary>Options</summary>
         <label class="check"><input type="checkbox" id="su-anim" ${animOn() ? "checked" : ""}> Winner animation when a league or cup finishes</label>
+        <label class="check"><input type="checkbox" id="su-apex"> Apex League (beta): a breakaway league of the biggest clubs, set when the world is made</label>
         <label class="check"><input type="checkbox" id="su-form" checked> Team form: clubs on a hot or cold run get a small nudge (set when the world is made)</label>
         <label class="check"><input type="checkbox" id="su-god" ${st.god ? "checked" : ""}> God mode (commissioner editor)</label>
         <label class="check"><input type="checkbox" id="rules-on"> Change rules before starting</label>
@@ -13072,7 +13207,7 @@ async function viewStart() {
     if ($("#start-year").value && $("#start-year").value !== String((st.rules || {}).start_year ?? 2026)) rules.start_year = $("#start-year").value;
     try { localStorage.setItem("ssb_anim", $("#su-anim").checked ? "1" : "0"); } catch (e) {}
     await api("/api/settings_set", { god: $("#su-god").checked });
-    const ok = await busy("Building the world (about 2 seconds)...", () => api("/api/new", { seed: $("#seed").value, rules, form: $("#su-form") && $("#su-form").checked ? "1" : "" }));
+    const ok = await busy("Building the world (about 2 seconds)...", () => api("/api/new", { seed: $("#seed").value, rules, form: $("#su-form") && $("#su-form").checked ? "1" : "", apex: $("#su-apex") && $("#su-apex").checked ? "1" : "" }));
     if (ok) { PICK_ASKED = false; location.hash = "#/world"; await refreshStatus(); await route(); }
   };
   wireSaves(false); wireSaveTools(false); wireLogoPanel(); storageNote(); if (typeof owWireStart === "function") owWireStart();
@@ -14590,15 +14725,16 @@ async function viewOwner(tab) {
   if (st.state === "ended") return owEnded(st);
   if (st.state === "start" || st.state === "between") return await owBuy(st);
   const tabs = [["hub", "Hub"], ["sched", "Schedule"], ["window", "Window"], ["squad", "Squad"], ["staff", "Staff"], ["money", "Money"], ["board", "Board"]];
+  if (st.apex && st.apex.on && st.apex.state !== "pre") tabs.splice(5, 0, ["apex", "Apex"]);
   OWT.tab = tabs.some((t) => t[0] === tab) ? tab : OWT.tab || "hub";
   const sched0 = OWT.tab === "hub" && st.state !== "ended" ? await api("/api/ow_schedule").catch(() => null) : null;
   if (sched0 && sched0.last) { const l = sched0.last; try { const r = await api(`/api/match_scorers?comp=${enc(l.cid)}&home=${enc(l.h)}&away=${enc(l.a)}`); sched0.lastScorers = (r.games || []).find((x) => x.hg === l.hg && x.ag === l.ag && x.h === l.h && (x.label === l.label || (/^Matchweek/.test(x.label) && l.kind === "league"))) || null; } catch (e) { /* no scorers */ } }
-  const body = OWT.tab === "hub" ? owHub(st, sched0) : OWT.tab === "sched" ? await owSched(st) : OWT.tab === "window" ? await owWindow(st) : OWT.tab === "squad" ? await owSquad(st) : OWT.tab === "staff" ? await owStaff(st) : OWT.tab === "money" ? await owMoney(st) : owBoard(st);
+  const body = OWT.tab === "hub" ? owHub(st, sched0) : OWT.tab === "sched" ? await owSched(st) : OWT.tab === "window" ? await owWindow(st) : OWT.tab === "squad" ? await owSquad(st) : OWT.tab === "staff" ? await owStaff(st) : OWT.tab === "money" ? await owMoney(st) : OWT.tab === "apex" ? owApex(st) : owBoard(st);
   $("#view").innerHTML = `<div class="v2 ow"><div class="dim small">${esc(st.name)} &middot; ${esc(st.back)} &middot; age ${st.age} &middot; ${st.mode === "sandbox" ? "Sandbox" : "Classic"}</div>
     <h1>${esc(st.club.name)}</h1>
     <div class="owtop"><div><span class="dim small">Your money</span><b>${owM(st.wealth)}</b></div><div><span class="dim small">Club cash</span><b>${owM(st.club.cash)}</b></div><div><span class="dim small">Debt</span><b>${st.club.debt ? owM(st.club.debt) : "none"}</b></div></div>
     <div class="owgame"><button class="mini" id="ow-save">Save game</button><button class="mini" id="ow-start">Start screen</button></div>
-    <nav class="tabs2 lgtabs">${tabs.map(([k, t]) => `<a href="#/owner/${k}" class="${OWT.tab === k ? "on" : ""}">${t}${k === "window" && (st.window || st.reneg) ? " &bull;" : ""}</a>`).join("")}</nav>${body}</div>`;
+    <nav class="tabs2 lgtabs">${tabs.map(([k, t]) => `<a href="#/owner/${k}" class="${OWT.tab === k ? "on" : ""}">${t}${(k === "window" && (st.window || st.reneg)) || (k === "apex" && st.apex.offer && !st.apex.offer.choice) ? " &bull;" : ""}</a>`).join("")}</nav>${body}</div>`;
   owWire(st);
   if (OWT.tab === "sched") { try { wireBrackets($("#view")); } catch (e) { /* no bracket on this tab */ } }
 }
@@ -14608,6 +14744,7 @@ function owStartCard() {
     <div class="field"><label>Name</label><input id="ow-name" value="The Owner" maxlength="30" style="width:170px"></div>
     <div class="field"><label>Seed</label><input type="number" id="ow-seed" value="1" min="1" style="width:90px"></div>
     <div class="field"><label>Form</label><label class="check"><input type="checkbox" id="ow-form" checked> Hot and cold runs (small nudge)</label></div>
+    <div class="field"><label>Apex</label><label class="check"><input type="checkbox" id="ow-apex"> Apex League: a breakaway league of the biggest clubs (beta, set when the world is made)</label></div>
     <div class="field"><label>Mode</label><select id="ow-mode"><option value="classic">Classic (injections capped)</option><option value="sandbox">Sandbox (no caps)</option></select></div>
     <div class="ow-back" id="ow-back">${[["selfmade", "Self-made", 32, "700M", "Little money, lots of time"], ["trust", "Trust fund", 35, "1.2B", "A family club, handed down"], ["founder", "Founder", 42, "2B", "A big exit and a big ego"], ["fan", "Local fan", 48, "500M", "Save the club you grew up with"], ["veteran", "Veteran", 62, "4B", "Rich, with little time left"]]
       .map(([k, t, a, m, d], i) => `<label class="owb"><input type="radio" name="owb" value="${k}" ${i === 0 ? "checked" : ""}><span><b>${t}</b> &middot; age ${a} &middot; ${m}<br><span class="dim small">${d}</span></span></label>`).join("")}</div>
@@ -14617,7 +14754,7 @@ function owWireStart() {
   const go = $("#ow-go"); if (!go) return;
   go.onclick = async () => {
     const back = document.querySelector("input[name=owb]:checked").value;
-    const ok = await busy("Building the world (about 2 seconds)...", () => api("/api/ow_new", { seed: $("#ow-seed").value, backstory: back, name: $("#ow-name").value, mode: $("#ow-mode").value, form: $("#ow-form") && $("#ow-form").checked ? "1" : "" }));
+    const ok = await busy("Building the world (about 2 seconds)...", () => api("/api/ow_new", { seed: $("#ow-seed").value, backstory: back, name: $("#ow-name").value, mode: $("#ow-mode").value, form: $("#ow-form") && $("#ow-form").checked ? "1" : "", apex: $("#ow-apex") && $("#ow-apex").checked ? "1" : "" }));
     if (ok) { PICK_ASKED = false; await refreshStatus(); location.hash = "#/owner"; await route(); }
   };
 }
@@ -14781,11 +14918,35 @@ function owHub(st, sc) {
       ${l ? `<h3 style="margin-top:14px">Last result</h3><div class="dim small">${em(l)} ${esc(l.comp)} &middot; ${esc(l.label || "")} &middot; ${esc(l.date ? l.date.text : "")}</div><div class="owbig">${owTeam(l.h, me)} ${owScore(l, me, false)} ${owTeam(l.a, me)}</div>${l.winner ? `<div style="margin-top:2px">${owScore({ ...l, hg: "", ag: "" }, me).replace(/<b class="owres[^>]*>[^<]*<\/b>/, "")}</div>` : ""}${sc.lastScorers ? `<div class="scr-c"><div>${owGoals(sc.lastScorers.hs)}</div><div>${owGoals(sc.lastScorers.as)}</div></div>` : ""}` : ""}</div>`;
   }
   const bo = st.buyout ? `<div class="card ow-alert"><h3>Buyout offer</h3>The board offers <b>${owM(st.buyout.offer)}</b> for the club.<div class="owbtns"><button data-bo="accept">Accept</button><button data-bo="counter" ${st.buyout.counter ? "disabled" : ""}>Counter (+15%)</button><button data-bo="refuse">Refuse</button></div><div class="dim small">Refusing makes the next offer worse.</div></div>` : "";
-  return `${bo}${nextCard}${staffAlert ? `<div class="card ow-alert">${staffAlert} <button class="mini" data-tab="staff">Open staff</button></div>` : ""}<div class="card"><h3>${phase}<small>Season ${st.season}</small></h3>${act}</div>
+  const apexAlert = st.apex && st.apex.offer && !st.apex.offer.choice ? `<div class="card ow-alert"><h3>Apex League contract</h3>Your club has been offered a place in the Apex League. You must answer before this season ends. <button class="mini" data-tab="apex">Open</button></div>` : "";
+  return `${bo}${apexAlert}${nextCard}${staffAlert ? `<div class="card ow-alert">${staffAlert} <button class="mini" data-tab="staff">Open staff</button></div>` : ""}<div class="card"><h3>${phase}<small>Season ${st.season}</small></h3>${act}</div>
     <div class="card"><h3>Pressure <small>${esc(p.ladder_name)}</small></h3>${owBar(p.board, "Board")}${owBar(p.fans, "Fans")}${owBar(p.players, "Players", p.money_only ? "Upset about money, but winning: the board stays neutral." : "")}</div>
     <div class="card"><h3>Coach</h3><div class="row"><span>${esc(st.coach.name)}</span><span class="dim small">prestige ${st.coach.prestige}</span></div><div class="row"><span>Trust in you</span><b>${st.trust}</b></div></div>
     <div class="card"><h3>News</h3>${st.feed.slice(0, 8).map((f) => `<div class="row"><span class="small">${esc(f.t)}</span><span class="dim small">S${f.season}</span></div>`).join("") || '<div class="dim small">Nothing yet.</div>'}</div>
     <div class="card"><button class="btn wide" id="ow-retire">Retire from ownership</button></div>`;
+}
+// ---- Apex League (stage 1: the countdown, the rumours and the two contracts) ----
+function owApex(st) {
+  const A = st.apex, me = st.club.name;
+  const log = A.log.length ? `<div class="card"><h3>News</h3>${A.log.map((f) => `<div class="row"><span class="small">${esc(f.t)}</span><span class="dim small">S${f.season}</span></div>`).join("")}</div>` : "";
+  const said = { signed: "#4fbf7a", staying: "#e0b44f", "very likely": "#e06a5a", likely: "#e0b44f", possible: "#9aa3a8" };
+  const rum = A.rumours ? `<div class="card"><h3>${A.state === "contracts" ? "Who has been approached" : "Rumoured founders"}</h3>${A.rumours.map((r) => `<div class="row"><span class="owt">${crest(r.club, 18)}<span ${r.club === me ? 'style="font-weight:800"' : ""}>${esc(r.club)}</span> <span class="dim small">${esc(r.league)}</span></span><b class="small" style="color:${said[r.said] || "#9aa3a8"}">${esc(r.said)}</b></div>`).join("")}</div>` : "";
+  let main = "";
+  if (A.state === "rumour") main = `<div class="card"><h3>Apex League <small>${A.seasons_left} season${A.seasons_left === 1 ? "" : "s"} to the first one</small></h3><div class="dim small">Word is out. The world's biggest clubs are planning a breakaway league of up to ${A.max} clubs: every match a giant against a giant. Contracts go out in season ${A.inaugural - 1}. Clubs that sign leave their domestic league.</div></div>`;
+  else if (A.state === "contracts") {
+    const o = A.offer, S = A.strength;
+    main = `<div class="card"><h3>Apex League <small>first season ${A.inaugural}</small></h3><div class="dim small">Contracts are out. The league goes ahead only if the clubs that sign are strong enough: ${S.n} signed, average stature ${S.mean}, needs ${S.need}.${A.delays ? " (delayed " + A.delays + " time" + (A.delays === 1 ? "" : "s") + ")" : ""}</div>
+      <div class="owm-b"><i style="width:${Math.min(100, Math.round(100 * S.mean / Math.max(1, S.need)))}%;background:${S.go ? "#4fbf7a" : "#e0b44f"}"></i></div></div>`;
+    if (o) main += `<div class="card"><h3>Your decision <small>answer before the season ends</small></h3>
+      <div class="row"><span><b>Apex League</b><div class="dim small">${o.years} years. Leave ${esc(o.league)}. Fans take it badly (about -${o.fan_hit} at first, fading if you win). Travel costs and fatigue.</div></span><b style="white-space:nowrap">+${owM(o.apex_pay)}/yr</b></div>
+      <div class="row"><span><b>Stay in ${esc(o.league)}</b><div class="dim small">${o.years} years. A guaranteed place and the fans on side. ${esc(o.league)} is ${o.league_rel}% as rich as the richest league, so its offer is ${Math.round(100 * o.dom_pay / o.apex_pay)}% of the Apex money.</div></span><b style="white-space:nowrap">+${owM(o.dom_pay)}/yr</b></div>
+      <div class="owbtns"><button class="${o.choice === "apex" ? "pri" : ""}" data-apex="apex">${o.choice === "apex" ? "Chosen: " : ""}Join the Apex League</button><button class="${o.choice === "stay" ? "pri" : ""}" data-apex="stay">${o.choice === "stay" ? "Chosen: " : ""}Stay in ${esc(o.league)}</button></div>
+      <div class="dim small" style="margin-top:6px">Either contract locks the club in. Leaving early costs fines and sanctions, depending on relations. You can change your answer until the season ends.</div></div>`;
+    else main += `<div class="card"><div class="dim small">Your club has not been approached. Strong seasons and a bigger name bring an invitation.</div></div>`;
+    main += `<div class="card"><h3>Signed so far</h3>${A.signed.map((x) => `<div class="row"><span class="owt">${crest(x.club, 18)}${esc(x.club)}</span><span class="dim small">stature ${x.stature}${x.mine ? " &middot; you" : ""}</span></div>`).join("") || '<div class="dim small">Nobody yet.</div>'}</div>`;
+  } else if (A.state === "live") main = `<div class="card"><h3>Apex League <small>founded season ${A.inaugural}</small></h3><div class="dim small">${A.members.length} clubs signed. Beta: the league's own matches are not played yet, so clubs stay in their domestic leagues for now.</div>${A.members.map((m) => `<div class="row"><span class="owt">${crest(m.club, 18)}<span ${m.mine ? 'style="font-weight:800"' : ""}>${esc(m.club)}</span></span><span class="dim small">${m.years} yr contract</span></div>`).join("")}</div>`;
+  else main = `<div class="card"><h3>Apex League</h3><div class="dim small">The league collapsed before it started: too few big clubs signed.</div></div>`;
+  return main + (A.state === "contracts" || A.state === "live" ? "" : rum) + (A.state === "contracts" ? rum : "") + log;
 }
 // ---- window ----
 async function owWindow(st) {
@@ -14888,6 +15049,7 @@ function owWire(st) {
   const mq = (k, el, ev) => { const e = $(el); if (e) e[ev] = () => { OWT.mq[k] = e.type === "checkbox" ? e.checked : e.value; route(); }; };
   mq("q", "#mq-q", "onchange"); mq("pos", "#mq-pos", "onchange"); mq("sort", "#mq-sort", "onchange");
   document.querySelectorAll("[data-mqf]").forEach((c) => (c.onchange = () => { OWT.mq[c.dataset.mqf] = c.checked; route(); }));
+  document.querySelectorAll("[data-apex]").forEach((b) => (b.onclick = async () => { const r = await owPost("/api/ow_apex", { action: b.dataset.apex }); if (r) { toast(b.dataset.apex === "apex" ? "You will join the Apex League." : "You will stay.", true); await route(); } }));
   document.querySelectorAll("[data-needpos]").forEach((r) => (r.onclick = () => { OWT.mq.pos = r.dataset.needpos; if (OWT.tab !== "window") location.hash = "#/owner/window"; else route(); }));
   document.querySelectorAll("[data-pers]").forEach((b) => (b.onclick = async () => { const pv = await owPost("/api/ow_persuade", { uid: +b.dataset.pers }); if (!pv) return; if (!confirm(pv.msg + "\nTry it?")) return; const r = await owPost("/api/ow_persuade", { uid: +b.dataset.pers, confirm: true }); if (r) { toast(r.msg, r.status === "stays"); await route(); } }));
   document.querySelectorAll("[data-cc]").forEach((b) => (b.onclick = async () => {

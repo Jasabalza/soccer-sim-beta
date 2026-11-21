@@ -838,6 +838,7 @@ class World {
         $setidx(self.comps, c.id, c);
       }
     }
+    if (self.apex) $mods.apex.startSeason(self);
   }
   date_of(season, week, kind = "league") {
     const self = this;
@@ -1117,6 +1118,7 @@ class World {
     $setidx(rec, "nateff", (() => { const $r = new $Dict(); let n, nm; for (const $c0 of $iter($M.items(self.nations))) { [nm, n] = $iter($c0); $r.set(nm, $idx(n, "eff")); } return $r; })());
     $setidx(rec, "budget", (() => { const $r = new $Dict(); let ln, names; for (const $c0 of $iter($M.items(self.league_clubs))) { [ln, names] = $iter($c0); $r.set(ln, statistics.mean((() => { const $r = []; let n; for (const $c0 of $iter(names)) { n = $c0; $r.push($idx($idx(self.clubs, n), "budget")); } return $r; })())); } return $r; })());
     $M.append(self.hist, rec);
+    if (self.apex) $mods.apex.resolve(self);       // Apex League (inert unless the world was made with it)
     self.start_season();
     if (((self.cycle_year === 1) && (self.season > 1))) {
       self.national_coach_cycle();

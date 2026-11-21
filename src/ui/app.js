@@ -566,6 +566,7 @@ async function viewStart() {
       <div class="field"><label for="start-year">First season starts in</label><input type="number" id="start-year" value="${esc((st.rules || {}).start_year ?? 2026)}" min="1900" max="2200" style="width:90px"></div>
       <details class="opts"><summary>Options</summary>
         <label class="check"><input type="checkbox" id="su-anim" ${animOn() ? "checked" : ""}> Winner animation when a league or cup finishes</label>
+        <label class="check"><input type="checkbox" id="su-apex"> Apex League (beta): a breakaway league of the biggest clubs, set when the world is made</label>
         <label class="check"><input type="checkbox" id="su-form" checked> Team form: clubs on a hot or cold run get a small nudge (set when the world is made)</label>
         <label class="check"><input type="checkbox" id="su-god" ${st.god ? "checked" : ""}> God mode (commissioner editor)</label>
         <label class="check"><input type="checkbox" id="rules-on"> Change rules before starting</label>
@@ -587,7 +588,7 @@ async function viewStart() {
     if ($("#start-year").value && $("#start-year").value !== String((st.rules || {}).start_year ?? 2026)) rules.start_year = $("#start-year").value;
     try { localStorage.setItem("ssb_anim", $("#su-anim").checked ? "1" : "0"); } catch (e) {}
     await api("/api/settings_set", { god: $("#su-god").checked });
-    const ok = await busy("Building the world (about 2 seconds)...", () => api("/api/new", { seed: $("#seed").value, rules, form: $("#su-form") && $("#su-form").checked ? "1" : "" }));
+    const ok = await busy("Building the world (about 2 seconds)...", () => api("/api/new", { seed: $("#seed").value, rules, form: $("#su-form") && $("#su-form").checked ? "1" : "", apex: $("#su-apex") && $("#su-apex").checked ? "1" : "" }));
     if (ok) { PICK_ASKED = false; location.hash = "#/world"; await refreshStatus(); await route(); }
   };
   wireSaves(false); wireSaveTools(false); wireLogoPanel(); storageNote(); if (typeof owWireStart === "function") owWireStart();

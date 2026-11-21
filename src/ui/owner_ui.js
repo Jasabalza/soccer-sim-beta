@@ -12,15 +12,16 @@ async function viewOwner(tab) {
   if (st.state === "ended") return owEnded(st);
   if (st.state === "start" || st.state === "between") return await owBuy(st);
   const tabs = [["hub", "Hub"], ["sched", "Schedule"], ["window", "Window"], ["squad", "Squad"], ["staff", "Staff"], ["money", "Money"], ["board", "Board"]];
+  if (st.apex && st.apex.on && st.apex.state !== "pre") tabs.splice(5, 0, ["apex", "Apex"]);
   OWT.tab = tabs.some((t) => t[0] === tab) ? tab : OWT.tab || "hub";
   const sched0 = OWT.tab === "hub" && st.state !== "ended" ? await api("/api/ow_schedule").catch(() => null) : null;
   if (sched0 && sched0.last) { const l = sched0.last; try { const r = await api(`/api/match_scorers?comp=${enc(l.cid)}&home=${enc(l.h)}&away=${enc(l.a)}`); sched0.lastScorers = (r.games || []).find((x) => x.hg === l.hg && x.ag === l.ag && x.h === l.h && (x.label === l.label || (/^Matchweek/.test(x.label) && l.kind === "league"))) || null; } catch (e) { /* no scorers */ } }
-  const body = OWT.tab === "hub" ? owHub(st, sched0) : OWT.tab === "sched" ? await owSched(st) : OWT.tab === "window" ? await owWindow(st) : OWT.tab === "squad" ? await owSquad(st) : OWT.tab === "staff" ? await owStaff(st) : OWT.tab === "money" ? await owMoney(st) : owBoard(st);
+  const body = OWT.tab === "hub" ? owHub(st, sched0) : OWT.tab === "sched" ? await owSched(st) : OWT.tab === "window" ? await owWindow(st) : OWT.tab === "squad" ? await owSquad(st) : OWT.tab === "staff" ? await owStaff(st) : OWT.tab === "money" ? await owMoney(st) : OWT.tab === "apex" ? owApex(st) : owBoard(st);
   $("#view").innerHTML = `<div class="v2 ow"><div class="dim small">${esc(st.name)} &middot; ${esc(st.back)} &middot; age ${st.age} &middot; ${st.mode === "sandbox" ? "Sandbox" : "Classic"}</div>
     <h1>${esc(st.club.name)}</h1>
     <div class="owtop"><div><span class="dim small">Your money</span><b>${owM(st.wealth)}</b></div><div><span class="dim small">Club cash</span><b>${owM(st.club.cash)}</b></div><div><span class="dim small">Debt</span><b>${st.club.debt ? owM(st.club.debt) : "none"}</b></div></div>
     <div class="owgame"><button class="mini" id="ow-save">Save game</button><button class="mini" id="ow-start">Start screen</button></div>
-    <nav class="tabs2 lgtabs">${tabs.map(([k, t]) => `<a href="#/owner/${k}" class="${OWT.tab === k ? "on" : ""}">${t}${k === "window" && (st.window || st.reneg) ? " &bull;" : ""}</a>`).join("")}</nav>${body}</div>`;
+    <nav class="tabs2 lgtabs">${tabs.map(([k, t]) => `<a href="#/owner/${k}" class="${OWT.tab === k ? "on" : ""}">${t}${(k === "window" && (st.window || st.reneg)) || (k === "apex" && st.apex.offer && !st.apex.offer.choice) ? " &bull;" : ""}</a>`).join("")}</nav>${body}</div>`;
   owWire(st);
   if (OWT.tab === "sched") { try { wireBrackets($("#view")); } catch (e) { /* no bracket on this tab */ } }
 }
@@ -30,6 +31,7 @@ function owStartCard() {
     <div class="field"><label>Name</label><input id="ow-name" value="The Owner" maxlength="30" style="width:170px"></div>
     <div class="field"><label>Seed</label><input type="number" id="ow-seed" value="1" min="1" style="width:90px"></div>
     <div class="field"><label>Form</label><label class="check"><input type="checkbox" id="ow-form" checked> Hot and cold runs (small nudge)</label></div>
+    <div class="field"><label>Apex</label><label class="check"><input type="checkbox" id="ow-apex"> Apex League: a breakaway league of the biggest clubs (beta, set when the world is made)</label></div>
     <div class="field"><label>Mode</label><select id="ow-mode"><option value="classic">Classic (injections capped)</option><option value="sandbox">Sandbox (no caps)</option></select></div>
     <div class="ow-back" id="ow-back">${[["selfmade", "Self-made", 32, "700M", "Little money, lots of time"], ["trust", "Trust fund", 35, "1.2B", "A family club, handed down"], ["founder", "Founder", 42, "2B", "A big exit and a big ego"], ["fan", "Local fan", 48, "500M", "Save the club you grew up with"], ["veteran", "Veteran", 62, "4B", "Rich, with little time left"]]
       .map(([k, t, a, m, d], i) => `<label class="owb"><input type="radio" name="owb" value="${k}" ${i === 0 ? "checked" : ""}><span><b>${t}</b> &middot; age ${a} &middot; ${m}<br><span class="dim small">${d}</span></span></label>`).join("")}</div>
@@ -39,7 +41,7 @@ function owWireStart() {
   const go = $("#ow-go"); if (!go) return;
   go.onclick = async () => {
     const back = document.querySelector("input[name=owb]:checked").value;
-    const ok = await busy("Building the world (about 2 seconds)...", () => api("/api/ow_new", { seed: $("#ow-seed").value, backstory: back, name: $("#ow-name").value, mode: $("#ow-mode").value, form: $("#ow-form") && $("#ow-form").checked ? "1" : "" }));
+    const ok = await busy("Building the world (about 2 seconds)...", () => api("/api/ow_new", { seed: $("#ow-seed").value, backstory: back, name: $("#ow-name").value, mode: $("#ow-mode").value, form: $("#ow-form") && $("#ow-form").checked ? "1" : "", apex: $("#ow-apex") && $("#ow-apex").checked ? "1" : "" }));
     if (ok) { PICK_ASKED = false; await refreshStatus(); location.hash = "#/owner"; await route(); }
   };
 }
@@ -203,11 +205,35 @@ function owHub(st, sc) {
       ${l ? `<h3 style="margin-top:14px">Last result</h3><div class="dim small">${em(l)} ${esc(l.comp)} &middot; ${esc(l.label || "")} &middot; ${esc(l.date ? l.date.text : "")}</div><div class="owbig">${owTeam(l.h, me)} ${owScore(l, me, false)} ${owTeam(l.a, me)}</div>${l.winner ? `<div style="margin-top:2px">${owScore({ ...l, hg: "", ag: "" }, me).replace(/<b class="owres[^>]*>[^<]*<\/b>/, "")}</div>` : ""}${sc.lastScorers ? `<div class="scr-c"><div>${owGoals(sc.lastScorers.hs)}</div><div>${owGoals(sc.lastScorers.as)}</div></div>` : ""}` : ""}</div>`;
   }
   const bo = st.buyout ? `<div class="card ow-alert"><h3>Buyout offer</h3>The board offers <b>${owM(st.buyout.offer)}</b> for the club.<div class="owbtns"><button data-bo="accept">Accept</button><button data-bo="counter" ${st.buyout.counter ? "disabled" : ""}>Counter (+15%)</button><button data-bo="refuse">Refuse</button></div><div class="dim small">Refusing makes the next offer worse.</div></div>` : "";
-  return `${bo}${nextCard}${staffAlert ? `<div class="card ow-alert">${staffAlert} <button class="mini" data-tab="staff">Open staff</button></div>` : ""}<div class="card"><h3>${phase}<small>Season ${st.season}</small></h3>${act}</div>
+  const apexAlert = st.apex && st.apex.offer && !st.apex.offer.choice ? `<div class="card ow-alert"><h3>Apex League contract</h3>Your club has been offered a place in the Apex League. You must answer before this season ends. <button class="mini" data-tab="apex">Open</button></div>` : "";
+  return `${bo}${apexAlert}${nextCard}${staffAlert ? `<div class="card ow-alert">${staffAlert} <button class="mini" data-tab="staff">Open staff</button></div>` : ""}<div class="card"><h3>${phase}<small>Season ${st.season}</small></h3>${act}</div>
     <div class="card"><h3>Pressure <small>${esc(p.ladder_name)}</small></h3>${owBar(p.board, "Board")}${owBar(p.fans, "Fans")}${owBar(p.players, "Players", p.money_only ? "Upset about money, but winning: the board stays neutral." : "")}</div>
     <div class="card"><h3>Coach</h3><div class="row"><span>${esc(st.coach.name)}</span><span class="dim small">prestige ${st.coach.prestige}</span></div><div class="row"><span>Trust in you</span><b>${st.trust}</b></div></div>
     <div class="card"><h3>News</h3>${st.feed.slice(0, 8).map((f) => `<div class="row"><span class="small">${esc(f.t)}</span><span class="dim small">S${f.season}</span></div>`).join("") || '<div class="dim small">Nothing yet.</div>'}</div>
     <div class="card"><button class="btn wide" id="ow-retire">Retire from ownership</button></div>`;
+}
+// ---- Apex League (stage 1: the countdown, the rumours and the two contracts) ----
+function owApex(st) {
+  const A = st.apex, me = st.club.name;
+  const log = A.log.length ? `<div class="card"><h3>News</h3>${A.log.map((f) => `<div class="row"><span class="small">${esc(f.t)}</span><span class="dim small">S${f.season}</span></div>`).join("")}</div>` : "";
+  const said = { signed: "#4fbf7a", staying: "#e0b44f", "very likely": "#e06a5a", likely: "#e0b44f", possible: "#9aa3a8" };
+  const rum = A.rumours ? `<div class="card"><h3>${A.state === "contracts" ? "Who has been approached" : "Rumoured founders"}</h3>${A.rumours.map((r) => `<div class="row"><span class="owt">${crest(r.club, 18)}<span ${r.club === me ? 'style="font-weight:800"' : ""}>${esc(r.club)}</span> <span class="dim small">${esc(r.league)}</span></span><b class="small" style="color:${said[r.said] || "#9aa3a8"}">${esc(r.said)}</b></div>`).join("")}</div>` : "";
+  let main = "";
+  if (A.state === "rumour") main = `<div class="card"><h3>Apex League <small>${A.seasons_left} season${A.seasons_left === 1 ? "" : "s"} to the first one</small></h3><div class="dim small">Word is out. The world's biggest clubs are planning a breakaway league of up to ${A.max} clubs: every match a giant against a giant. Contracts go out in season ${A.inaugural - 1}. Clubs that sign leave their domestic league.</div></div>`;
+  else if (A.state === "contracts") {
+    const o = A.offer, S = A.strength;
+    main = `<div class="card"><h3>Apex League <small>first season ${A.inaugural}</small></h3><div class="dim small">Contracts are out. The league goes ahead only if the clubs that sign are strong enough: ${S.n} signed, average stature ${S.mean}, needs ${S.need}.${A.delays ? " (delayed " + A.delays + " time" + (A.delays === 1 ? "" : "s") + ")" : ""}</div>
+      <div class="owm-b"><i style="width:${Math.min(100, Math.round(100 * S.mean / Math.max(1, S.need)))}%;background:${S.go ? "#4fbf7a" : "#e0b44f"}"></i></div></div>`;
+    if (o) main += `<div class="card"><h3>Your decision <small>answer before the season ends</small></h3>
+      <div class="row"><span><b>Apex League</b><div class="dim small">${o.years} years. Leave ${esc(o.league)}. Fans take it badly (about -${o.fan_hit} at first, fading if you win). Travel costs and fatigue.</div></span><b style="white-space:nowrap">+${owM(o.apex_pay)}/yr</b></div>
+      <div class="row"><span><b>Stay in ${esc(o.league)}</b><div class="dim small">${o.years} years. A guaranteed place and the fans on side. ${esc(o.league)} is ${o.league_rel}% as rich as the richest league, so its offer is ${Math.round(100 * o.dom_pay / o.apex_pay)}% of the Apex money.</div></span><b style="white-space:nowrap">+${owM(o.dom_pay)}/yr</b></div>
+      <div class="owbtns"><button class="${o.choice === "apex" ? "pri" : ""}" data-apex="apex">${o.choice === "apex" ? "Chosen: " : ""}Join the Apex League</button><button class="${o.choice === "stay" ? "pri" : ""}" data-apex="stay">${o.choice === "stay" ? "Chosen: " : ""}Stay in ${esc(o.league)}</button></div>
+      <div class="dim small" style="margin-top:6px">Either contract locks the club in. Leaving early costs fines and sanctions, depending on relations. You can change your answer until the season ends.</div></div>`;
+    else main += `<div class="card"><div class="dim small">Your club has not been approached. Strong seasons and a bigger name bring an invitation.</div></div>`;
+    main += `<div class="card"><h3>Signed so far</h3>${A.signed.map((x) => `<div class="row"><span class="owt">${crest(x.club, 18)}${esc(x.club)}</span><span class="dim small">stature ${x.stature}${x.mine ? " &middot; you" : ""}</span></div>`).join("") || '<div class="dim small">Nobody yet.</div>'}</div>`;
+  } else if (A.state === "live") main = `<div class="card"><h3>Apex League <small>founded season ${A.inaugural}</small></h3><div class="dim small">${A.members.length} clubs signed. Beta: the league's own matches are not played yet, so clubs stay in their domestic leagues for now.</div>${A.members.map((m) => `<div class="row"><span class="owt">${crest(m.club, 18)}<span ${m.mine ? 'style="font-weight:800"' : ""}>${esc(m.club)}</span></span><span class="dim small">${m.years} yr contract</span></div>`).join("")}</div>`;
+  else main = `<div class="card"><h3>Apex League</h3><div class="dim small">The league collapsed before it started: too few big clubs signed.</div></div>`;
+  return main + (A.state === "contracts" || A.state === "live" ? "" : rum) + (A.state === "contracts" ? rum : "") + log;
 }
 // ---- window ----
 async function owWindow(st) {
@@ -310,6 +336,7 @@ function owWire(st) {
   const mq = (k, el, ev) => { const e = $(el); if (e) e[ev] = () => { OWT.mq[k] = e.type === "checkbox" ? e.checked : e.value; route(); }; };
   mq("q", "#mq-q", "onchange"); mq("pos", "#mq-pos", "onchange"); mq("sort", "#mq-sort", "onchange");
   document.querySelectorAll("[data-mqf]").forEach((c) => (c.onchange = () => { OWT.mq[c.dataset.mqf] = c.checked; route(); }));
+  document.querySelectorAll("[data-apex]").forEach((b) => (b.onclick = async () => { const r = await owPost("/api/ow_apex", { action: b.dataset.apex }); if (r) { toast(b.dataset.apex === "apex" ? "You will join the Apex League." : "You will stay.", true); await route(); } }));
   document.querySelectorAll("[data-needpos]").forEach((r) => (r.onclick = () => { OWT.mq.pos = r.dataset.needpos; if (OWT.tab !== "window") location.hash = "#/owner/window"; else route(); }));
   document.querySelectorAll("[data-pers]").forEach((b) => (b.onclick = async () => { const pv = await owPost("/api/ow_persuade", { uid: +b.dataset.pers }); if (!pv) return; if (!confirm(pv.msg + "\nTry it?")) return; const r = await owPost("/api/ow_persuade", { uid: +b.dataset.pers, confirm: true }); if (r) { toast(r.msg, r.status === "stays"); await route(); } }));
   document.querySelectorAll("[data-cc]").forEach((b) => (b.onclick = async () => {
