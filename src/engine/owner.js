@@ -499,7 +499,7 @@ $mods["owner"] = (function () {
     }
     fail("unknown action");
   }
-  function beforeRollover(w) { const o = w.ow; if (!o || !o.club) return; if ($mods.apex.mustDecide(w)) fail("Decide on your Apex League contract first (Apex tab). The season cannot end until you do.", 409); o.snap = {}; for (const p of squadOf(w, o.club)) o.snap[p.uid] = p.ovr; }
+  function beforeRollover(w) { const o = w.ow; if (!o || !o.club) return; if ($mods.apex.mustDecide(w)) fail("Decide on your Apex League contract first (Apex tab). The season cannot end until you do.", 409); if ($mods.omega.mustDecide(w)) fail("Decide on your Omega League contract first (Omega tab). The season cannot end until you do.", 409); o.snap = {}; for (const p of squadOf(w, o.club)) o.snap[p.uid] = p.ovr; }
   function applyStaff(w) {
     const o = w.ow, me = o.club, c = club(w); if (!me || !c.get("coach")) return; const ci = coachInfo(w); let up = 0, kept = 0;
     for (const p of squadOf(w, me)) {
@@ -614,7 +614,7 @@ $mods["owner"] = (function () {
     const c = club(w), W = o.win, co = coachInfo(w);
     const out = { active: true, state: o.state, name: o.name, back: BACK[o.back].label, mode: o.mode, age: o.age, wealth: r1(o.wealth), income: o.income, rep: Math.round(o.rep), season: w.season,
       injected: r1(o.injected), dividends: r1(o.dividends), speed: o.speed, limit: o.limit, coach_expired: !!(c && c.get("coach") && c.get("coach").contract <= 0), no_coach: !!(c && !c.get("coach")), trust: Math.round(o.trust), life: o.life, status: o.status, feed: o.feed.slice(0, 25), ledger: o.ledger.slice(-15), ended: o.ended,
-      apex: $mods.apex.view(w), titles: o.titles, hist: (o.hist || []), money: moneyLog(w), clubs: o.clubs, coach: co, sponsors: o.sponsors, backstories: Object.entries(BACK).map(([k, v]) => ({ id: k, ...v })), lifestyle: Object.entries(LIFE).map(([k, v]) => ({ id: k, ...v, owned: o.life.includes(k) })) };
+      apex: $mods.apex.view(w), omega: $mods.omega.view(w), titles: o.titles, hist: (o.hist || []), money: moneyLog(w), clubs: o.clubs, coach: co, sponsors: o.sponsors, backstories: Object.entries(BACK).map(([k, v]) => ({ id: k, ...v })), lifestyle: Object.entries(LIFE).map(([k, v]) => ({ id: k, ...v, owned: o.life.includes(k) })) };
     if (c) {
       const inc = c.get("income") * X(w);
       out.club = { name: o.club, league: c.get("league"), cash: r1(c.get("funds") * X(w)), debt: r1(c.get("debt", 0) * X(w)), income: r1(inc), payroll: r1(payroll(w, o.club)), value: price(w, o.club), squad: squadOf(w, o.club).length,

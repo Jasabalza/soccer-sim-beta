@@ -141,7 +141,7 @@ function winners(w, key) {
     [title, spec] = $iter([ln, spec_league(ln)]);
     for (const $f10 of $iter(w.hist)) {
       r = $f10;
-      t = $idx($idx(r, "tables"), ln);
+      t = $M.get($idx(r, "tables"), ln, null); if (!t || !$len(t)) continue;      // seasons before the league existed, or after it folded
       f = $M.get(fin, [$idx(r, "season"), ln]);
       $M.append(rows, $dict($kw({"season": $idx(r, "season"), "winner": $idx(t, 0), "runner_up": (($len(t) > 1) ? $idx(t, 1) : null), "coach": $M.get($idx(r, "champ_coach"), ln), "text": ($str($idx($idx($idx(r, "pts"), ln), $idx(t, 0))) + " pts"), "date": ($T(f) ? $idx($idx(f, "date"), "text") : null)})));
     }

@@ -59,8 +59,16 @@ vm.runInThisContext(fs.readFileSync(__dirname + "/../dist/bundle_engine.js", "ut
     const dup = mem.filter((m, i) => mem.indexOf(m) !== i); if (dup.length) fail.push("duplicate members " + dup.join());
     const prem = w.leagues.get("Premier League").get("clubs").length; console.log("Apex", mem.length, "clubs; Premier League now", prem, "clubs; champions", champs.join(", "));
   }
+  // 2c: the Omega League (spawned by the Apex), never a club in both, a fold leaves nothing behind
+  if (w.omega) {
+    const O = w.omega, ov = await call("/api/omega"); console.log("omega", O.state, (O.members || []).length, "fund", Math.round(O.fund || 0), "prestige", O.prestige, "titles", (O.titles || []).map((t) => t.club).join(", "));
+    const am = new Set(w.apex.members.map((m) => m.club)); for (const m of O.members || []) if (am.has(m.club)) fail.push(m.club + " in both breakaways");
+    if (O.state === "live") { const L = w.leagues.get("Omega League"); if (!L || L.get("clubs").length !== O.members.length) fail.push("Omega league size"); }
+    if (O.state === "dead" && O.folded) { if (w.leagues.get("Omega League", null)) fail.push("folded league still listed"); for (const p of w.players) if (p.league === "Omega League") { fail.push("player still in folded league"); break; } }
+    for (const u of ["/api/trophy?key=league:Omega League", "/api/league?name=Omega League", "/api/world", "/api/awards", "/api/records"]) { const r = await R.request(u); if (r.code >= 500) fail.push(u + " " + r.code); }
+  } else if (N >= 12 && w.apex.state === "live") fail.push("no Omega League after " + N + " seasons");
   // 3: determinism and save round trip
-  const w2 = $deser($ser(w)); if (JSON.stringify(w2.apex) !== JSON.stringify(w.apex)) fail.push("save round trip changed apex state");
+  const w2 = $deser($ser(w)); if (JSON.stringify(w2.apex) !== JSON.stringify(w.apex) || JSON.stringify(w2.omega) !== JSON.stringify(w.omega)) fail.push("save round trip changed breakaway state");
   // 4: an owner at a giant gets an offer and cannot end the season without answering
   await call("/api/ow_new", { seed, backstory: "veteran", name: "T", mode: "sandbox", apex: "1", apex_year: 2 });
   const w3 = R.A.ST.world, rows = (await call("/api/ow_clubs")).rows, openRows = rows.filter((r) => r.status === "open"), rk = R.ap.ranking(w3).map((r) => r.club), tr = openRows.sort((a, b) => rk.indexOf(a.club) - rk.indexOf(b.club))[0], top = tr && tr.club;

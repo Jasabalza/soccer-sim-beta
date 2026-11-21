@@ -11,6 +11,7 @@ $mods["breakaway"] = function (CF) {
   const X = (w) => w.cfg.money_x;
   const C = (w, n) => w.clubs.get(n);
   const key = (w, ...a) => w.seed + "|" + K + "|" + a.join("|");
+  const inBreak = (w, n) => { const L = w.leagues.get(C(w, n).get("league")); return !!(L && L.get("confed") === "WORLD"); };     // already in a breakaway league
   const fail = (m, c) => { throw $new($mods.app_v11.ApiError, [m, c === undefined ? 400 : c]); };
 
   // ---- the club's pull: size, strength and money (about half stature, a third rating, a fifth income) ---------------------------------------
@@ -41,18 +42,20 @@ $mods["breakaway"] = function (CF) {
     const c = C(w, n), inc = c.get("income") * X(w), h = H(key(w, "off", n, w.season)), ln = c.get("league");
     const apex_pay = r1(CF.pay * inc * (0.9 + 0.2 * h));                                  // extra money a year on top of today's income
     const f = clamp(0.35 + 0.65 * (rel[ln] || 0.5), 0.35, 0.98);                          // a rich league can come close; a poor one cannot
-    const dom_pay = r1(apex_pay * f), years = 3 + Math.floor(H(key(w, "yrs", n, w.season)) * 3);
+    const dom_pay = r1(apex_pay * f), years = (CF.ymin || 3) + Math.floor(H(key(w, "yrs", n, w.season)) * (CF.yspan || 3));
     return { club: n, league: ln, apex_pay, dom_pay, years, ratio: r1(f * 100) / 100 };
   }
   // an AI club weighs the extra money against what its league offers, its own size and a little temperament
   function aiChoice(w, o) {
     const c = C(w, o.club), inc = Math.max(1, c.get("income") * X(w));
-    const u = (o.apex_pay - o.dom_pay) / inc * 6 + (c.get("stature") - 80) / 30 - 0.35 + (H(key(w, "mood", o.club)) - 0.5) * 1.6;   // a little loyalty to the old league
+    const u = (o.apex_pay - o.dom_pay) / inc * 6 + (c.get("stature") - (CF.pivot || 80)) / 30 - 0.35 + (H(key(w, "mood", o.club)) - 0.5) * 1.6 + (CF.spite ? spite(w, o.club) : 0);   // a little loyalty to the old league
     return u > 0;
   }
+  // Omega: clubs the Apex left out or let go are keener (spite)
+  function spite(w, n) { const ap = w.apex; if (!ap) return 0; if ((ap.released || []).includes(n)) return CF.spite * 1.3; return ap.offers && ap.offers[n] ? 0 : CF.spite; }
   function openContracts(w) {
     const a = w[K], rel = leagueRel(w), rk = ranking(w), me = w.ow && w.ow.club;
-    a.state = "contracts"; const take = rk.slice(0, MAXN + EXTRA);
+    a.state = "contracts"; const take = rk.filter((r) => !inBreak(w, r.club) && (!CF.prefilter || canLeave(w, C(w, r.club).get("league")))).slice(0, MAXN + EXTRA);
     for (const t of take) {
       const o = makeOffer(w, t.club, rel); a.offers[t.club] = o;
       if (t.club === me) a.pending = { club: me, season: w.season }; else { a.ai[t.club] = aiChoice(w, o) ? "apex" : "stay"; if (a.ai[t.club] === "apex") say(w, t.club + " signs with the " + NAME + "."); }
@@ -66,7 +69,7 @@ $mods["breakaway"] = function (CF) {
     return l.sort((x, y) => pos[x] - pos[y]).slice(0, MAXN);
   }
   // does the signed field make a league? a few giants can carry a small one; weaker clubs need more of them
-  const need = (n) => clamp(92 - 2.2 * (n - MINN), 62, 92);
+  const need = (n) => clamp((CF.need0 || 92) - 2.2 * (n - MINN), CF.needMin || 62, CF.need0 || 92);
   function strength(w, list) {
     const n = list.length, mean = n ? list.reduce((s, x) => s + C(w, x).get("stature"), 0) / n : 0;
     return { n, mean: r1(mean), need: r1(need(n)), go: n >= MINN && mean >= need(n) };
@@ -78,7 +81,7 @@ $mods["breakaway"] = function (CF) {
     if (a && a.state === "live" && o && me) {
       const mem = a.members.some((m) => m.club === me);
       if (action === "apply") {
-        if (mem) fail("You are already in the " + NAME + ".", 409);
+        if (mem || inBreak(w, me)) fail("You are already in a breakaway league.", 409);
         if (o[K + "_apply"] === w.season) fail("You have already applied this season.", 409);
         if (!canLeave(w, C(w, me).get("league"))) fail("Your league cannot lose another club to the breakaways.", 409);
         const c = C(w, me), fee = applyFee(w, me); if (c.get("funds") * X(w) < fee) fail("The tryout fee is " + fee + "M; the club does not have it.", 409);
@@ -175,14 +178,14 @@ $mods["breakaway"] = function (CF) {
     L.get("clubs").push(n); L.set("games", fullLen(L.get("clubs").length));
     const cc = C(w, n); cc.set("league", ln); cc.set("income", Math.max(0.5 * cc.get("income"), cc.get("income") - rec.pay / X(w)));
     for (const p of w.players) if (p.club === n) p.league = ln;
-    a.members = a.members.filter((x) => x.club !== n);
+    a.members = a.members.filter((x) => x.club !== n); a.released = (a.released || []).concat([n]).slice(-40);
     return ln;
   }
   // a seat is open: the members vote. Bigger and more famous clubs win more votes, with a lean toward European clubs.
   function boardVote(w) {
     const a = w[K], A = apexL(w), mem = new Set(a.members.map((m) => m.club)), me = w.ow && w.ow.club, rel = leagueRel(w), tried = new Set();
     for (let round = 0; round < 3; round++) {
-      const cands = a.cands || {}, okC = (n) => !mem.has(n) && !tried.has(n) && canLeave(w, C(w, n).get("league")) && (n !== me || cands[n]);
+      const cands = a.cands || {}, okC = (n) => !mem.has(n) && !inBreak(w, n) && !tried.has(n) && canLeave(w, C(w, n).get("league")) && (n !== me || cands[n]);
       const rk = ranking(w), pool = rk.filter((r) => okC(r.club) && r.club !== me).slice(0, 5);
       for (const r of rk) if (cands[r.club] && okC(r.club) && !pool.includes(r)) pool.push(r);
       if (pool.length < 2) return false;
@@ -242,7 +245,7 @@ $mods["breakaway"] = function (CF) {
     const mem = new Set(a.members.map((m) => m.club));
     return tableOf(w, tables).filter((n) => mem.has(n) && clubConfed(w, n) === cf).slice(0, a.deals[cf].slots);
   }
-  function fifaBids(a) { const h = a.health === undefined ? 70 : a.health; return clamp((h >= 80 ? 3 : h >= 55 ? 2 : h >= 30 ? 1 : 0) + (a.cwc_won ? 1 : 0) - (CF.fifa_malus || 0), 0, 4); }
+  function fifaBids(a) { if (CF.fifa === "prestige") { const p = a.prestige || CF.prestige; return clamp((p >= 88 ? 2 : p >= 72 ? 1 : 0) + (a.cwc_won ? 1 : 0), 0, 3); } const h = a.health === undefined ? 70 : a.health; return clamp((h >= 80 ? 3 : h >= 55 ? 2 : h >= 30 ? 1 : 0) + (a.cwc_won ? 1 : 0) - (CF.fifa_malus || 0), 0, 4); }
   function cwcAuto(w) {
     const a = w[K]; if (!a || a.state !== "live") return [];
     const mem = new Set(a.members.map((m) => m.club)); return tableOf(w, null).filter((n) => mem.has(n)).slice(0, fifaBids(a));
@@ -284,9 +287,9 @@ $mods["breakaway"] = function (CF) {
 
   // ---- summer: benchmark friendlies and tryouts --------------------------------------------------------------------------------------------
   // a one-off game: home side gets the usual edge; the result is read against the strength gap, so one fluke cannot swing much
-  function oneGame(w, h, a_, tag) {
+  function oneGame(w, h, a_, tag, neutral) {
     const r = new $Random(); r.seed(w.seed + "|" + w.season + "|" + K + "|" + tag + "|" + h + "|" + a_);
-    const eh = C(w, h).get("eff"), ea = C(w, a_).get("eff"), [hg, ag] = $mods.comps.score(r, eh, ea, false, 1.0, 0);
+    const eh = C(w, h).get("eff"), ea = C(w, a_).get("eff"), [hg, ag] = $mods.comps.score(r, eh, ea, !!neutral, 1.0, 0);
     return { h, a: a_, hg, ag, exp: r1((eh - ea) / 8 + 0.4) };            // expected goal difference for the home side
   }
   function summer(w) {
@@ -310,8 +313,8 @@ $mods["breakaway"] = function (CF) {
       g.k = "benchmark"; games.push(g);
     }
     // 2: tryouts: up to two clubs apply (the owner's club first if it applied). The Apex picks a mid-table opponent; a giant for a big name.
-    const apps = []; if (me && o[K + "_apply"] === w.season && !mem.has(me)) apps.push(me);
-    for (const r of ranking(w)) { if (apps.length >= 2) break; const n = r.club; if (mem.has(n) || n === me || a.cands[n] || C(w, n).get("stature") < 68) continue; if (H(key(w, "app", n, w.season)) < 0.25 && canLeave(w, C(w, n).get("league"))) apps.push(n); }
+    const apps = []; if (me && o[K + "_apply"] === w.season && !mem.has(me) && !inBreak(w, me)) apps.push(me);
+    for (const r of ranking(w)) { if (apps.length >= 2) break; const n = r.club; if (mem.has(n) || inBreak(w, n) || n === me || a.cands[n] || C(w, n).get("stature") < 68) continue; if (H(key(w, "app", n, w.season)) < 0.25 && canLeave(w, C(w, n).get("league"))) apps.push(n); }
     for (const n of apps) {
       const big = C(w, n).get("stature") >= 82, opp = at.filter((x) => mem.has(x))[big ? 1 : Math.floor(at.length / 2)] || at[0]; if (!opp) continue;
       const ln = C(w, n).get("league"), lv = (a.sanc && a.sanc[ln]) || 0;
@@ -341,12 +344,55 @@ $mods["breakaway"] = function (CF) {
     const t2 = new $Dict(); for (const ln of tb.keysArr()) { const L = w.leagues.get(ln); t2.set(ln, L && L.get("confed") === "WORLD" ? tb.get(ln) : tb.get(ln).filter((x) => !brk.has(x))); }
     w.compute_cup_fields(t2);
   }
+  // ---- Omega only: the backer fund, the playoffs and the summer challenge against the Apex ------------------------------------------------
+  const burn = (w) => r1(w[K].members.reduce((x, m) => x + m.pay, 0) * (CF.premium || 0.35) + 15);
+  function playoffs(w) {
+    const a = w[K], last = w.hist[w.hist.length - 1], t = last && $M.get(last.get("tables"), NAME, null); if (!t || t.length < 4) return null;
+    const top = Array.from(t).slice(0, 4), tie = (h, x, tag) => { const g = oneGame(w, h, x, tag); g.win = g.hg > g.ag ? h : g.ag > g.hg ? x : (H(key(w, "pen", tag, w.season)) < 0.55 ? h : x); g.pens = g.hg === g.ag; return g; };
+    const s1 = tie(top[0], top[3], "sf1"), s2 = tie(top[1], top[2], "sf2"), f = tie(s1.win, s2.win, "fin");
+    a.po = { season: w.season, games: [s1, s2, f].map((g) => ({ h: g.h, a: g.a, hg: g.hg, ag: g.ag, win: g.win, pens: g.pens })) };
+    last.get("champs").set(NAME, f.win); a.titles = (a.titles || []).concat([{ season: w.season, club: f.win }]);
+    say(w, f.win + " win the " + NAME + " playoff final: " + f.h + " " + f.hg + "-" + f.ag + " " + f.a + (f.pens ? " (pens)" : "") + ".");
+    return f.win;
+  }
+  function challenge(w, champ) {
+    const a = w[K], ap = w.apex, last = w.hist[w.hist.length - 1], ac = ap && ap.state === "live" && last && last.get("champs").get("Apex League", null);
+    if (!ac || !champ || ac === champ) return;
+    const g = oneGame(w, champ, ac, "chal", true), d = g.hg - g.ag;
+    a.prestige = r1(clamp(a.prestige + (d > 0 ? 5 : d === 0 ? 1.5 : -2), 30, 95)); if (d > 0) a.fund = r1(a.fund + 0.1 * burn(w));
+    ap.health = r1(clamp(ap.health + (d > 0 ? -4 : d === 0 ? -1 : 2), 0, 100));
+    a.chal = { season: w.season, h: champ, a: ac, hg: g.hg, ag: g.ag }; ap.chal = a.chal;
+    say(w, "Summer challenge: " + champ + " (" + NAME + ") " + g.hg + "-" + g.ag + " " + ac + " (Apex League)." + (d > 0 ? " A big night for the Omega." : d < 0 ? " The Apex holds its ground." : ""));
+  }
+  function backer(w) {
+    const a = w[K], o = w.ow, me = o && o.club, champ = playoffs(w); challenge(w, champ);
+    const L = apexL(w), mean = a.members.reduce((x, m) => x + C(w, m.club).get("stature"), 0) / Math.max(1, a.members.length);
+    a.prestige = r1(clamp(a.prestige + 0.1 * (mean - 68) + 0.8, 30, 95)); L.set("prestige", Math.round(a.prestige)); L.set("tvmult", r1(0.8 + 0.4 * a.prestige / 100));
+    const b = burn(w), inc = r1(b * clamp((a.prestige - 50) / 35, 0, 1.05) + (a.cwc_won === w.season ? 0.15 * b : 0));
+    a.fund = r1(a.fund - b + inc); a.flow = { season: w.season, burn: b, income: inc };          // sponsors and TV come with prestige; at the top the league pays for itself
+    if (a.fund <= 0) { fold(w); return true; }
+    if (a.fund < b && a.cut !== w.season - 1 && a.cut !== w.season) { a.cut = w.season; for (const m of a.members) m.pay = r1(m.pay * 0.75); a.health = r1(Math.max(0, (a.health || 60) - 10));
+      say(w, "The " + NAME + " backer is running low (" + Math.round(a.fund) + "M left): every club takes a 25% pay cut."); if (me && a.members.some((m) => m.club === me)) o[K + "_note"] = { season: w.season, t: "The backer is running low: your " + NAME + " pay is cut by 25%." }; }
+    return false;
+  }
+  // the money is gone: every club goes home (with a small fine for having left) and the league is wound up
+  function fold(w) {
+    const a = w[K], o = w.ow, me = o && o.club, list = a.members.map((m) => m.club);
+    for (const n of list) { const ln = fromApex(w, n), c = C(w, n); c.set("funds", c.get("funds") - 0.05 * c.get("income")); if (n === me) o[K + "_note"] = { season: w.season, t: "The " + NAME + " has folded. Your club is back in " + ln + " (with a fine for leaving)." }; }
+    w.leagues.del(NAME); w.league_clubs.del(NAME);
+    for (const p of w.players) if (p.league === NAME) { if (p.club) p.league = C(w, p.club).get("league"); else { const px = w.prox.get(p.nat); p.league = (px && px.find((x) => x[0] !== NAME && w.leagues.get(x[0])) || [w.leagues.keysArr()[0]])[0]; } }      // free agents who last played there
+    for (const nm of w.nations.keysArr()) { const lst = w.prox.get(nm); if (lst) { const i = lst.findIndex((x) => x[0] === NAME); if (i >= 0) lst.splice(i, 1); } }
+    a.state = "dead"; a.members = []; a.folded = w.season; recomputeCups(w);
+    say(w, "The " + NAME + " folds: the backer's money has run out. " + list.length + " clubs return to their old leagues.");
+  }
+
   // each rollover while the league lives
   function afterSeason(w) {
     const a = w[K]; if (!a || !a.on || a.state !== "live") return;
     const o = w.ow, me = o && o.club;
     for (const m of a.members) { const c = C(w, m.club); if (c) c.set("prize", c.get("prize", 0) + m.pay * (0.8 + 0.4 * (a.health === undefined ? 70 : a.health) / 100) / X(w)); m.years = Math.max(0, m.years - 1); }
     if (o && o[K + "_fans"] > 0) { const back = Math.min(4, o[K + "_fans"]); o[K + "_fans"] -= back; o.fans = clamp(o.fans + back, 0, 100); }
+    if (CF.fund && backer(w)) return;            // Omega: playoffs, the summer challenge, the backer fund (true = the league folded)
     // health
     const h0 = healthNow(w); a.health = a.health === undefined ? r1(h0) : r1(0.6 * a.health + 0.4 * h0); a.hh = (a.hh || []).concat([{ season: w.season, h: a.health }]).slice(-20);
     settleInvite(w);
@@ -371,6 +417,10 @@ $mods["breakaway"] = function (CF) {
     let guard = 0; while (a.members.length + (a.invite ? 1 : 0) < wantSize(a.health) && guard++ < 4) { if (!boardVote(w)) break; }
     negotiate(w);
     recomputeCups(w);
+    if (CF.spawn && !w[CF.spawn] && $mods[CF.spawn] && w.season - a.founded >= 1 + Math.floor(H(key(w, "spawn")) * 2)) {
+      const out = ranking(w).filter((r) => !inBreak(w, r.club) && C(w, r.club).get("stature") >= 65).length;
+      if (out >= 8) { $mods[CF.spawn].init(w, { announce: w.season + 1 }); say(w, "A billionaire who wants to spoil the " + NAME + "'s party is building a rival league for the clubs it left out."); }
+    }
     if (a.health < 22 && a.members.length < 6) { /* pause and collapse come in a later slice */ }
   }
 
@@ -393,12 +443,14 @@ $mods["breakaway"] = function (CF) {
     const me = w.ow && w.ow.club; let list = signedList(w);
     if (me && a.pending && !a.choice) a.choice = "stay";
     if (list.length > MAXN) { for (const n of list.slice(MAXN)) { if (n !== me) a.ai[n] = "stay"; } list = list.slice(0, MAXN); }
-    list = eligible(w, list);
+    list = eligible(w, list.filter((n) => !inBreak(w, n)));          // a club the other breakaway took in the meantime is gone
     const st = strength(w, list);
     if (st.go) {
       a.state = "live"; a.members = list.map((n) => ({ club: n, years: a.offers[n].years, from: a.inaugural, pay: a.offers[n].apex_pay, home: C(w, n).get("league") })); a.founded = a.inaugural; relInit(w); a.health = r1(healthNow(w));
       say(w, "The " + NAME + " is a go: " + list.length + " clubs will play in season " + a.inaugural + ".");
       formLeague(w, list);
+      if (CF.fund) { a.prestige = CF.prestige; a.fund = r1(CF.fund_seasons * burn(w)); a.fund0 = a.fund; for (const n of list) { const c = C(w, n); c.set("funds", c.get("funds") + 0.15 * a.offers[n].apex_pay / X(w)); }
+        say(w, "A billionaire backer funds the " + NAME + ": " + Math.round(a.fund) + "M in the bank, signing bonuses for every club, and compensation for the leagues they leave."); }
       if (me && list.includes(me)) { const o = w.ow; o.fans = clamp(o.fans - CF.fan_hit, 0, 100); o[K + "_fans"] = CF.fan_hit; }
     } else if (a.delays < MAX_DELAYS) {
       a.delays++; a.inaugural++; const rel = leagueRel(w), rk = ranking(w);
@@ -411,9 +463,9 @@ $mods["breakaway"] = function (CF) {
   function view(w) {
     const a = w[K]; if (!a || !a.on) return { on: false };
     const me = w.ow && w.ow.club, rk = ranking(w), rel = leagueRel(w);
-    const out = { on: true, state: a.state, announce: a.announce, inaugural: a.inaugural, season: w.season, seasons_left: Math.max(0, a.inaugural - w.season), delays: a.delays, log: a.log.slice(0, 12), max: MAXN, min: MINN };
+    const out = { on: true, folded: a.folded || null, key: K, name: NAME, short: CF.short, state: a.state, announce: a.announce, inaugural: a.inaugural, season: w.season, seasons_left: Math.max(0, a.inaugural - w.season), delays: a.delays, log: a.log.slice(0, 12), max: MAXN, min: MINN };
     if (a.state === "pre") return out;
-    out.rumours = rk.slice(0, 16).map((r, i) => ({ club: r.club, rank: i + 1, league: C(w, r.club).get("league"), score: r.score, said: a.ai[r.club] === "apex" ? "signed" : a.ai[r.club] === "stay" ? "staying" : i < 6 ? "very likely" : i < 12 ? "likely" : "possible" }));
+    out.rumours = rk.filter((r) => !inBreak(w, r.club)).slice(0, 16).map((r, i) => ({ club: r.club, rank: i + 1, league: C(w, r.club).get("league"), score: r.score, said: a.ai[r.club] === "apex" ? "signed" : a.ai[r.club] === "stay" ? "staying" : i < 6 ? "very likely" : i < 12 ? "likely" : "possible" }));
     if (a.state === "contracts") {
       const l = signedList(w), st = strength(w, l);
       out.signed = l.map((n) => ({ club: n, stature: Math.round(C(w, n).get("stature")), mine: n === me })); out.strength = st;
@@ -424,6 +476,8 @@ $mods["breakaway"] = function (CF) {
       out.members = a.members.map((m) => ({ club: m.club, years: m.years, pay: m.pay, file: fileScore(w, m.club), mine: m.club === me }));
       const mm = a.members.find((m) => m.club === me); if (mm) { const f = fileScore(w, me); out.mine = { years: mm.years, pay: mm.pay, file: f, verdict: verdictOf(f, a.members.length) }; }
       out.note = w.ow && w.ow[K + "_note"] || null;
+      if (CF.fund) { out.fund = a.fund; out.fund0 = a.fund0; out.prestige = a.prestige; out.flow = a.flow || null; out.po = a.po || null; out.runway = a.flow && a.flow.burn > a.flow.income ? r1(a.fund / (a.flow.burn - a.flow.income)) : null; }
+      out.chal = a.chal || null;
       out.summer = a.summer || null; out.cands = Object.keys(a.cands || {}).map((c) => ({ club: c, bonus: a.cands[c].bonus, how: a.cands[c].how, mine: c === me }));
       if (w.ow && me) { const o = w.ow; out.stance = o[K + "_stance"] || "std"; out.friendly = o[K + "_friendly"] || "on"; out.invite = a.invite && a.invite.club === me ? { pay: a.invite.offer.apex_pay, years: a.invite.offer.years, answer: a.invite.answer } : null;
         if (!mm) { const ln = C(w, me).get("league"); out.apply = { fee: applyFee(w, me), applied: o[K + "_apply"] === w.season, open: canLeave(w, ln), league: ln }; } }
@@ -435,4 +489,7 @@ $mods["breakaway"] = function (CF) {
   return { NAME, SANC, blocked, cupExtra, cwcAuto, fifaBids, lostFrom, canLeave, fullLen, init, startSeason, resolve, choose, mustDecide, view, ranking, strength, need, leagueRel };
 };
 $mods["apex"] = $mods.breakaway({ key: "apex", name: "Apex League", countdown: 4, maxn: 16, minn: 4, extra: 4, max_delays: 2, keep: 12,
-  pay: 0.45, prestige: 100, tvmult: 1.1, short: "Apex", bloc: "UEFA", bloc_bias: 4, fan_hit: 14 });
+  pay: 0.45, prestige: 100, tvmult: 1.1, short: "Apex", spawn: "omega", bloc: "UEFA", bloc_bias: 4, fan_hit: 14 });
+$mods["omega"] = $mods.breakaway({ key: "omega", name: "Omega League", short: "Omega", countdown: 3, maxn: 14, minn: 6, extra: 6, max_delays: 1, keep: 12,
+  pay: 0.63, prestige: 55, tvmult: 0.9, bloc: null, bloc_bias: 0, fan_hit: 8, rel0: 80, need0: 80, needMin: 58, pivot: 66, spite: 0.8, ymin: 2, yspan: 2,
+  fifa: "prestige", fund: true, fund_seasons: 5, premium: 0.35, prefilter: true });

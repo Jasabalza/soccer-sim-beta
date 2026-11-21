@@ -933,7 +933,7 @@ class ClubWorldCup extends WorldCup {
     hist.forEach((r, k) => {
       const wt = wts[k], tf = $M.get(r, "tables_full");
       if (tf) for (const [ln, rows] of $M.items(tf)) {
-        const L = $idx(w.leagues, ln), n = $len(rows);
+        const L = $M.get(w.leagues, ln, null), n = $len(rows); if (!L) continue;      // a league that has since folded
         for (const row of rows) add($idx(row, "club"), wt * 10 * Math.pow(1 - ($idx(row, "pos") - 1) / n, 2) * ($idx(L, "prestige") / 80));
       }
       const cd = $M.get(r, "cup_detail");

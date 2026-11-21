@@ -977,7 +977,8 @@ POST = $lit_dict([["/api/favs", a_favs], ["/api/favnations", a_favnations], ["/a
   const R = (f) => (q) => { const w = own(); const r = f(w, pl(q)); return $dict($kw(Object.assign({ ok: true }, r || {}))); };
   GET.set("/api/match_scorers", (q) => { const w = need_world(), cid = $plain(q).comp; if (!cid || !w.comps.has(cid)) bad("unknown competition", 404); return $dict($kw({ games: $mods.compstats.scorers_between(w, cid, $plain(q).home, $plain(q).away) })); });
   GET.set("/api/apex", (q) => { const w = need_world(); return $dict($kw($mods.apex.view(w))); });
-  POST.set("/api/ow_apex", R((w, b) => $mods.apex.choose(w, b.action)));
+  GET.set("/api/omega", (q) => { const w = need_world(); return $dict($kw($mods.omega.view(w))); });
+  POST.set("/api/ow_apex", R((w, b) => $mods[b.league === "omega" ? "omega" : "apex"].choose(w, b.action)));
   GET.set("/api/ow_state", (q) => { const w = need_world(); return $dict($kw(O.view(w))); });
   GET.set("/api/ow_clubs", (q) => { const w = own(); return $dict($kw({ rows: O.priceList(w) })); });
   GET.set("/api/ow_market", (q) => { const w = own(); return $dict($kw({ rows: O.market(w, pl(q)) })); });
