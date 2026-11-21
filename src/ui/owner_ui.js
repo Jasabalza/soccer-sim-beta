@@ -239,7 +239,8 @@ async function owApex(st) {
     } catch (e) { tbl = ""; }
     main = `<div class="card"><h3>Apex League <small>founded season ${A.inaugural}</small></h3>${tbl}<div class="dim small" style="margin-top:6px">${A.members.length} clubs. Every match is a heavyweight.</div></div><div class="card"><h3>Contracts</h3>${A.members.map((m) => `<div class="row"><span class="owt">${crest(m.club, 18)}<span ${m.mine ? 'style="font-weight:800"' : ""}>${esc(m.club)}</span></span><span class="dim small">${m.years} yr left</span></div>`).join("")}</div>`;
   } else main = `<div class="card"><h3>Apex League</h3><div class="dim small">The league collapsed before it started: too few big clubs signed.</div></div>`;
-  return main + (A.state === "contracts" || A.state === "live" ? "" : rum) + (A.state === "contracts" ? rum : "") + log;
+  const art = `<div style="text-align:center;padding:4px 0 10px"><img src="${APEX_ART.badge}" height="84" alt="Apex League"></div>`;
+  return art + main + (A.state === "contracts" || A.state === "live" ? "" : rum) + (A.state === "contracts" ? rum : "") + log;
 }
 // ---- window ----
 async function owWindow(st) {
