@@ -1226,3 +1226,4 @@ select { padding-right: 30px; }
 .fmline { margin: 8px 0; display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; } .fmline .meta { flex-basis: 100%; }
 .scr { margin: 8px 0; } .scr-h { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 15px; } .scr-c { display: flex; justify-content: space-between; gap: 12px; margin-top: 6px; font-size: 13px; } .scr-c > div:last-child { text-align: right; }
 .ow .owsd { text-align: right; } .ow .owsd .owagg { margin-left: 0; white-space: normal; max-width: 130px; }
+.ow .owgame { display: flex; gap: 8px; margin: 6px 0 2px; }

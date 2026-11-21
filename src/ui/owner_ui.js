@@ -19,6 +19,7 @@ async function viewOwner(tab) {
   $("#view").innerHTML = `<div class="v2 ow"><div class="dim small">${esc(st.name)} &middot; ${esc(st.back)} &middot; age ${st.age} &middot; ${st.mode === "sandbox" ? "Sandbox" : "Classic"}</div>
     <h1>${esc(st.club.name)}</h1>
     <div class="owtop"><div><span class="dim small">Your money</span><b>${owM(st.wealth)}</b></div><div><span class="dim small">Club cash</span><b>${owM(st.club.cash)}</b></div><div><span class="dim small">Debt</span><b>${st.club.debt ? owM(st.club.debt) : "none"}</b></div></div>
+    <div class="owgame"><button class="mini" id="ow-save">Save game</button><button class="mini" id="ow-start">Start screen</button></div>
     <nav class="tabs2 lgtabs">${tabs.map(([k, t]) => `<a href="#/owner/${k}" class="${OWT.tab === k ? "on" : ""}">${t}${k === "window" && (st.window || st.reneg) ? " &bull;" : ""}</a>`).join("")}</nav>${body}</div>`;
   owWire(st);
   if (OWT.tab === "sched") { try { wireBrackets($("#view")); } catch (e) { /* no bracket on this tab */ } }
@@ -241,6 +242,8 @@ function owWire(st) {
   document.querySelectorAll("[data-tab]").forEach((b) => (b.onclick = () => (location.hash = "#/owner/" + b.dataset.tab)));
   document.querySelectorAll("[data-speed]").forEach((b) => (b.onclick = () => go("/api/ow_settings", { speed: b.dataset.speed })));
   const adv = $("#ow-adv"); if (adv) adv.onclick = async () => { const r = await busy("Playing...", () => api("/api/ow_advance", { unit: st.speed })); if (r) { await refreshStatus(); if (r.rolled) toast("Season over. The off-season begins.", true); await route(); } };
+  const sv = $("#ow-save"); if (sv) sv.onclick = () => saveDialog();
+  const stt = $("#ow-start"); if (stt) stt.onclick = () => { location.hash = "#/start"; };
   const pg = $("#ow-game"); if (pg) pg.onclick = async () => { const r = await busy("Playing...", () => api("/api/ow_playgame", {})); if (r) { await refreshStatus(); if (r.rolled) toast("Season over. The off-season begins.", true); await route(); } };
   const nx = $("#ow-next"); if (nx) nx.onclick = async () => { try { const f = STATUS.header.flow; if (f) { for (const s of ["graduates", "transfers", "done"]) await api("/api/flow", { step: s }).catch(() => 0); } } catch (e) { toast(e.message); } await refreshStatus(); await route(); };
   const rt = $("#ow-retire"); if (rt) rt.onclick = async () => { if (confirm("Retire from ownership? This ends the run.")) await go("/api/ow_retire"); };
