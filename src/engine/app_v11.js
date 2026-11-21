@@ -977,6 +977,23 @@ POST = $lit_dict([["/api/favs", a_favs], ["/api/favnations", a_favnations], ["/a
   GET.set("/api/ow_market", (q) => { const w = own(); return $dict($kw({ rows: O.market(w, pl(q)) })); });
   GET.set("/api/ow_squad", (q) => { const w = own(); return $dict($kw(O.squadView(w))); });
   GET.set("/api/ow_sponsors", (q) => { const w = own(); return $dict($kw({ rows: O.sponsorOffers(w) })); });
+  // the owner's schedule: his league, plus every club competition he is in (continental cup, Club World Cup ...)
+  GET.set("/api/ow_schedule", (q) => {
+    const w = own(), me = w.ow.club; if (!me) return $dict($kw({ comps: [] }));
+    const out = [], lg = w.clubs.get(me).get("league"), lc = w.comps.get("L:" + lg);
+    const mine = (h, a) => h === me || a === me;
+    const past = [], next = [];
+    const res = lc.results || [];
+    for (let i = 0; i < res.length; i++) for (const g of res[i]) if (mine(g[0], g[1])) { let d = null; try { d = ev_date(w, lc, lc.events[i]); } catch (e) { /* no date */ } past.push({ h: g[0], a: g[1], hg: g[2], ag: g[3], date: d, md: i + 1 }); }
+    for (let i = lc.ptr; i < lc.rounds.length; i++) for (const g of lc.rounds[i]) if (mine(g[0], g[1])) { let d = null; try { d = ev_date(w, lc, lc.events[i]); } catch (e) { /* no date */ } next.push({ h: g[0], a: g[1], date: d, md: i + 1 }); }
+    out.push({ id: "L:" + lg, title: lg, kind: "league", progress: comp_progress(w, lc), past: past.slice(-8).reverse(), next: next.slice(0, 10) });
+    for (const [cid, c] of w.comps.itemsArr()) {
+      if (!(c.kind === "cup" || c.kind === "cwc" || c.kind === "ic") || !c.field || !Array.from(c.field).includes(me)) continue;
+      const ties = (c.ties || []).filter((t) => t[1] === me || t[2] === me).map((t) => ({ round: t[0], a: t[1], b: t[2], text: t[3], winner: t[4] }));
+      out.push({ id: cid, title: c.title, kind: c.kind, progress: comp_progress(w, c), ties, winner: c.winner || null, runner_up: c.runner_up || null, out: c.reached && c.reached.has ? undefined : undefined });
+    }
+    return $dict($kw({ comps: out, season: w.season }));
+  });
   POST.set("/api/ow_new", (body) => { a_new(body); const w = need_world(); O.create(w, pl(body)); return $dict($kw({ ok: true })); });
   POST.set("/api/ow_buy", R((w, b) => O.buy(w, b.club)));
   POST.set("/api/ow_dividend", R((w, b) => O.dividend(w, b.amount)));

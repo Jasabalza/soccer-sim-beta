@@ -11,9 +11,9 @@ async function viewOwner(tab) {
   if (!st.active) { location.hash = "#/"; return; }
   if (st.state === "ended") return owEnded(st);
   if (st.state === "start" || st.state === "between") return await owBuy(st);
-  const tabs = [["hub", "Hub"], ["table", "League"], ["window", "Window"], ["squad", "Squad"], ["staff", "Staff"], ["money", "Money"], ["board", "Board"]];
+  const tabs = [["hub", "Hub"], ["table", "League"], ["sched", "Schedule"], ["window", "Window"], ["squad", "Squad"], ["staff", "Staff"], ["money", "Money"], ["board", "Board"]];
   OWT.tab = tabs.some((t) => t[0] === tab) ? tab : OWT.tab || "hub";
-  const body = OWT.tab === "hub" ? owHub(st) : OWT.tab === "table" ? await owTable(st) : OWT.tab === "window" ? await owWindow(st) : OWT.tab === "squad" ? await owSquad(st) : OWT.tab === "staff" ? await owStaff(st) : OWT.tab === "money" ? await owMoney(st) : owBoard(st);
+  const body = OWT.tab === "hub" ? owHub(st) : OWT.tab === "sched" ? await owSched(st) : OWT.tab === "table" ? await owTable(st) : OWT.tab === "window" ? await owWindow(st) : OWT.tab === "squad" ? await owSquad(st) : OWT.tab === "staff" ? await owStaff(st) : OWT.tab === "money" ? await owMoney(st) : owBoard(st);
   $("#view").innerHTML = `<div class="v2 ow"><div class="dim small">${esc(st.name)} &middot; ${esc(st.back)} &middot; age ${st.age} &middot; ${st.mode === "sandbox" ? "Sandbox" : "Classic"}</div>
     <h1>${esc(st.club.name)}</h1>
     <div class="owtop"><div><span class="dim small">Your money</span><b>${owM(st.wealth)}</b></div><div><span class="dim small">Club cash</span><b>${owM(st.club.cash)}</b></div><div><span class="dim small">Debt</span><b>${st.club.debt ? owM(st.club.debt) : "none"}</b></div></div>
@@ -57,6 +57,19 @@ function owEnded(st) {
     <div class="row"><span>Put into clubs</span><span>${owM(e.injected)}</span></div><div class="row"><span>Taken out as dividends</span><span>${owM(e.dividends)}</span></div><div class="row"><span>Titles</span><span>${e.titles}</span></div><div class="row"><span>Clubs owned</span><span>${e.clubs}</span></div><div class="row"><span>Bankruptcies</span><span>${e.bankrupt}</span></div><div class="row"><span>Reputation</span><span>${e.rep}</span></div></div>
     <div class="card"><h3>Your clubs</h3>${st.clubs.map((c) => `<div class="row"><span>${clubLink(c.club)}</span><span class="dim small">${c.from}-${c.to || "now"} &middot; ${esc(c.how)}${c.how2 ? ", " + esc(c.how2) : ""}</span></div>`).join("")}</div>
     <button class="pri wide" onclick="location.hash='#/'">New run</button></div>`;
+}
+// ---- schedule: your games in the league and in every other competition your club is in ----
+OWT.sc = "";
+async function owSched(st) {
+  const d = await api("/api/ow_schedule"), me = st.club.name; if (!OWT.sc || !d.comps.some((c) => c.id === OWT.sc)) OWT.sc = d.comps[0].id;
+  const c = d.comps.find((x) => x.id === OWT.sc), dt = (x) => (x ? x.text : "");
+  const game = (g, past) => { const home = g.h === me; return `<div class="row"><span class="small">${dt(g.date) || "md " + g.md}</span><span class="rt">${home ? "<b>" + esc(g.h) + "</b> v " + esc(g.a) : esc(g.h) + " v <b>" + esc(g.a) + "</b>"}</span>${past ? `<b>${g.hg}-${g.ag}</b>` : `<span class="dim small">${home ? "home" : "away"}</span>`}</div>`; };
+  let body;
+  if (c.kind === "league") body = `<h3>Next games</h3>${c.next.map((g) => game(g, false)).join("") || '<div class="dim small">No games left this season.</div>'}<h3 style="margin-top:12px">Results</h3>${c.past.map((g) => game(g, true)).join("") || '<div class="dim small">No games played yet.</div>'}`;
+  else body = `<div class="dim small">${c.progress.next ? "Next: " + esc(c.progress.next) + (c.progress.next_date ? " &middot; " + c.progress.next_date.text : "") : (c.progress.done >= c.progress.total && c.progress.total ? "Finished" : "Not started")}</div>
+    ${c.winner ? `<div class="row"><span>Winner</span><b>${esc(c.winner)}</b></div>` : ""}${c.ties.map((t) => `<div class="row"><span class="small">${esc(String(t.round))}</span><span class="rt">${esc(t.text || t.a + " v " + t.b)}</span><span class="dim small">${t.winner ? (t.winner === me ? "won" : "lost") : ""}</span></div>`).join("") || '<div class="dim small">Your club has no games here yet.</div>'}
+    <div class="owbtns"><a class="btn mini" href="#/comp/${enc(c.id)}">Full competition page</a></div>`;
+  return `<div class="card"><nav class="chips">${d.comps.map((x) => `<button class="${x.id === OWT.sc ? "on" : ""}" data-sc="${esc(x.id)}">${esc(x.title)}</button>`).join("")}</nav><div style="margin-top:10px">${body}</div></div>`;
 }
 // ---- league: table, next games, and the way into every competition page ----
 async function owTable(st) {
@@ -192,6 +205,7 @@ function owWire(st) {
     const v = prompt("Offer " + b.dataset.name + " a wage per year (M). He asks " + b.dataset.ask + "M. Hiring him replaces your current coach (severance applies).", b.dataset.ask); if (!v) return;
     const r = await owPost("/api/ow_coach", { action: "hire", id: +b.dataset.hire, wage: +v, years: 3 }); if (r) { toast(r.msg || "Done", r.status === "hired"); await route(); }
   }));
+  document.querySelectorAll("[data-sc]").forEach((b) => (b.onclick = () => { OWT.sc = b.dataset.sc; route(); }));
   document.querySelectorAll("[data-sq]").forEach((b) => (b.onclick = () => { OWT.sq = b.dataset.sq; route(); }));
   document.querySelectorAll("[data-selll]").forEach((b) => (b.onclick = async () => { const r = await owPost("/api/ow_sell", { uid: +b.dataset.selll }); if (r) { if (r.msg) toast(r.msg); await route(); } }));
   document.querySelectorAll("[data-sell]").forEach((b) => (b.onclick = async () => { const r = await owPost("/api/ow_sellreply", { uid: +b.dataset.sell, club: b.dataset.club, action: "accept" }); if (r) { toast(r.msg || "Done", r.status === "done"); await route(); } }));
