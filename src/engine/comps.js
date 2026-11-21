@@ -954,11 +954,12 @@ class ClubWorldCup extends WorldCup {
     const self = this, w = self.w, sc = self.club_scores(), field = [];
     for (const [confed, cup] of $M.items(w.cups)) {
       const comp = $M.get(w.comps, "C:" + confed), slots = $M.get(cup, "cwc_slots", 0);
-      const pool = [];
-      for (const [n, c] of $M.items(w.clubs)) if ($idx(c, "confed") === confed) pool.push(n);
+      const pool = [], brk = (c) => $M.get($M.get(w.leagues, $idx(c, "league"), new $Dict()), "confed") === "WORLD";
+      for (const [n, c] of $M.items(w.clubs)) if ($idx(c, "confed") === confed && !brk(c)) pool.push(n);      // breakaway clubs only come in through FIFA bids
       pool.sort((x, y) => (sc.get(y) - sc.get(x)) || (x < y ? -1 : 1));
       const take = [];
-      if (comp && comp.winner) { take.push(comp.winner); self.qual.set(comp.winner, "champion"); sc.set(comp.winner, sc.get(comp.winner) + 30); }
+      for (const k of ["apex", "omega"]) if (w[k] && $mods[k]) for (const n of $mods[k].cwcAuto(w)) if ($idx($idx(w.clubs, n), "confed") === confed && take.length < slots && !take.includes(n)) { take.push(n); self.qual.set(n, k + " bid"); }
+      if (comp && comp.winner && !take.includes(comp.winner)) { take.push(comp.winner); self.qual.set(comp.winner, "champion"); sc.set(comp.winner, sc.get(comp.winner) + 30); }
       for (const n of pool) { if (take.length >= slots) break; if (!take.includes(n)) { take.push(n); self.qual.set(n, "ranking"); } }
       for (const n of take) field.push(n);
     }

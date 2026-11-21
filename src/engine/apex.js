@@ -138,7 +138,8 @@ $mods["breakaway"] = function (CF) {
   function fileScore(w, n) {
     const last = w.hist[w.hist.length - 1], tb = last && last.get("tables"), t = tb && tb.get(NAME), c = C(w, n);
     const i = t ? t.indexOf(n) : -1, fin = i < 0 || t.length < 2 ? 50 : 100 * (1 - i / (t.length - 1));
-    return r1(0.4 * fin + 0.35 * c.get("stature") + 0.25 * c.get("eff"));
+    const m = w[K].members.find((x) => x.club === n), cb = m && m.cont !== undefined ? 8 * (m.cont - 0.4) : 0;
+    return r1(0.4 * fin + 0.35 * c.get("stature") + 0.25 * c.get("eff") + cb);
   }
   const verdictOf = (f, n) => (n <= 8 ? "renew" : f >= 66 ? "renew" : f >= 52 ? "review" : "release");
   function toApex(w, m, offer) {
@@ -215,6 +216,55 @@ $mods["breakaway"] = function (CF) {
     return false;
   }
 
+  // ---- continental places: the breakaway negotiates with each confederation; FIFA hands out Club World Cup bids --------------------------------
+  const clubConfed = (w, n) => C(w, n).get("confed");
+  const tableOf = (w, tables) => { const t = tables && $M.get(tables, NAME, null); return t ? Array.from(t) : apexL(w) ? apexL(w).get("clubs").slice() : []; };
+  // the members that use this confederation's deal next season: the best placed in the breakaway table
+  function cupExtra(w, cf, tables) {
+    const a = w[K]; if (!a || a.state !== "live" || !a.deals || !a.deals[cf] || !a.deals[cf].slots) return [];
+    const mem = new Set(a.members.map((m) => m.club));
+    return tableOf(w, tables).filter((n) => mem.has(n) && clubConfed(w, n) === cf).slice(0, a.deals[cf].slots);
+  }
+  function fifaBids(a) { const h = a.health === undefined ? 70 : a.health; return clamp((h >= 80 ? 3 : h >= 55 ? 2 : h >= 30 ? 1 : 0) + (a.cwc_won ? 1 : 0) - (CF.fifa_malus || 0), 0, 4); }
+  function cwcAuto(w) {
+    const a = w[K]; if (!a || a.state !== "live") return [];
+    const mem = new Set(a.members.map((m) => m.club)); return tableOf(w, null).filter((n) => mem.has(n)).slice(0, fifaBids(a));
+  }
+  function negotiate(w) {
+    const a = w[K]; a.deals = a.deals || {}; a.cupw0 = a.cupw0 || {};
+    const confeds = [...new Set(a.members.map((m) => clubConfed(w, m.club)))];
+    for (const cf of w.cups.keysArr()) {
+      const cup = w.cups.get(cf); if (a.cupw0[cf] === undefined) a.cupw0[cf] = cup.get("weight", 1.0);
+      const M = a.members.filter((m) => clubConfed(w, m.club) === cf), d = a.deals[cf];
+      if (!M.length) { if (d) delete a.deals[cf]; cup.set("weight", a.cupw0[cf]); continue; }
+      const lns = Object.keys(a.rel || {}).filter((ln) => w.leagues.get(ln) && w.leagues.get(ln).get("confed") === cf);
+      const boy = lns.some((ln) => (a.sanc[ln] || 0) >= 4);
+      if (boy) { if (d && d.slots) say(w, cf + " cancels its deal with the " + NAME + ": no " + NAME + " club may play in its cup while the boycott lasts."); a.deals[cf] = { slots: 0, until: w.season + 1 }; }
+      else if (!d || w.season >= d.until) {
+        const relAvg = lns.length ? lns.reduce((x, ln) => x + a.rel[ln], 0) / lns.length : 60, miss = clamp(M.length / 6, 0, 1);
+        const p = clamp(0.15 + 0.5 * relAvg / 60 + 0.35 * miss + 0.15 * (a.health - 60) / 40, 0.05, 0.95);
+        if (H(key(w, "deal", cf, w.season)) < p) {
+          const k = clamp(Math.round(M.length * 0.35 + a.health / 50), 1, Math.min(4, M.length));
+          a.deals[cf] = { slots: k, until: w.season + 3 }; say(w, cf + " agrees a deal with the " + NAME + ": " + k + " place" + (k === 1 ? "" : "s") + " in its cup for the next 3 seasons.");
+        } else { a.deals[cf] = { slots: 0, until: w.season + 1 }; say(w, "Talks between " + cf + " and the " + NAME + " break down. Its clubs from " + cf + " miss the cup next season."); }
+      }
+      // the cup is weaker without its giants: less weight in rankings and coefficients
+      const out = M.length - ((a.deals[cf] && a.deals[cf].slots) || 0);
+      cup.set("weight", r1(a.cupw0[cf] * (1 - 0.3 * clamp(out / 8, 0, 1)) * 100) / 100);
+    }
+  }
+  // how the deal clubs did in the cups and the Club World Cup, against what a league of this health should manage
+  function judge(w) {
+    const a = w[K], last = w.hist[w.hist.length - 1]; if (!last) return;
+    const mem = new Set(a.members.map((m) => m.club)), cd = last.get("cup_detail", null), rs = [];
+    if (cd) for (const [cf, dd] of cd.itemsArr()) { const rt = Math.max(1, Math.round(Math.log2(w.cups.get(cf).get("size", 16)))); for (const [n, r] of dd.get("reached").itemsArr()) if (mem.has(n)) { rs.push(r / rt); const m = a.members.find((x) => x.club === n); m.cont = r1(r / rt * 100) / 100; } }
+    const cw = last.get("cwc_detail", null); if (cw) { const ch = w.comps.itemsArr().map((x) => x[1]).find((c) => c && c.kind === "cwc" && c.winner); if (ch && mem.has(ch.winner)) { a.cwc_won = w.season; say(w, ch.winner + " win the Club World Cup for the " + NAME + "."); } }
+    if (!rs.length) return;
+    const perf = rs.reduce((x, y) => x + y, 0) / rs.length, expect = 0.3 + 0.3 * a.health / 100;
+    a.health = r1(clamp(a.health + 10 * (perf - expect), 0, 100)); a.cont = { season: w.season, perf: r1(perf * 100), expect: r1(expect * 100) };
+    say(w, NAME + " clubs in the continental cups: " + (perf >= expect ? "beat" : "fell short of") + " expectations (" + Math.round(perf * 100) + " vs " + Math.round(expect * 100) + ").");
+  }
+
   // each rollover while the league lives
   function afterSeason(w) {
     const a = w[K]; if (!a || !a.on || a.state !== "live") return;
@@ -223,6 +273,7 @@ $mods["breakaway"] = function (CF) {
     if (o && o[K + "_fans"] > 0) { const back = Math.min(4, o[K + "_fans"]); o[K + "_fans"] -= back; o.fans = clamp(o.fans + back, 0, 100); }
     // health
     const h0 = healthNow(w); a.health = a.health === undefined ? r1(h0) : r1(0.6 * a.health + 0.4 * h0); a.hh = (a.hh || []).concat([{ season: w.season, h: a.health }]).slice(-20);
+    judge(w);
     sanctions(w);
     // contract reviews
     for (const m of a.members.slice()) {
@@ -236,6 +287,8 @@ $mods["breakaway"] = function (CF) {
     }
     // fill open seats up to the size a league of this health can run
     let guard = 0; while (a.members.length < wantSize(a.health) && guard++ < 4) { if (!boardVote(w)) break; }
+    negotiate(w);
+    { const last = w.hist[w.hist.length - 1], tb = last && last.get("tables"); if (tb) w.compute_cup_fields(tb); }
     if (a.health < 22 && a.members.length < 6) { /* pause and collapse come in a later slice */ }
   }
 
@@ -289,11 +342,12 @@ $mods["breakaway"] = function (CF) {
       out.members = a.members.map((m) => ({ club: m.club, years: m.years, pay: m.pay, file: fileScore(w, m.club), mine: m.club === me }));
       const mm = a.members.find((m) => m.club === me); if (mm) { const f = fileScore(w, me); out.mine = { years: mm.years, pay: mm.pay, file: f, verdict: verdictOf(f, a.members.length) }; }
       out.note = w.ow && w.ow[K + "_note"] || null;
+      out.deals = Object.keys(a.deals || {}).map((cf) => ({ confed: cf, slots: a.deals[cf].slots, until: a.deals[cf].until, clubs: a.members.filter((m) => clubConfed(w, m.club) === cf).length })); out.fifa = fifaBids(a); out.cont = a.cont || null;
       out.rel = Object.keys(a.rel || {}).map((ln) => ({ league: ln, rel: a.rel[ln], level: a.sanc[ln] || 0, label: SANC[a.sanc[ln] || 0], clubs: a.members.filter((m) => m.home === ln).length, mine: !!(mm && mm.home === ln) })).sort((x, y) => y.level - x.level || x.rel - y.rel);
     }
     return out;
   }
-  return { NAME, SANC, blocked, lostFrom, canLeave, fullLen, init, startSeason, resolve, choose, mustDecide, view, ranking, strength, need, leagueRel };
+  return { NAME, SANC, blocked, cupExtra, cwcAuto, fifaBids, lostFrom, canLeave, fullLen, init, startSeason, resolve, choose, mustDecide, view, ranking, strength, need, leagueRel };
 };
 $mods["apex"] = $mods.breakaway({ key: "apex", name: "Apex League", countdown: 4, maxn: 16, minn: 4, extra: 4, max_delays: 2, keep: 12,
   pay: 0.45, prestige: 100, tvmult: 1.1, short: "Apex", bloc: "UEFA", bloc_bias: 4, fan_hit: 14 });

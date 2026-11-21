@@ -35,7 +35,6 @@ vm.runInThisContext(fs.readFileSync(__dirname + "/../dist/bundle_engine.js", "ut
     for (const ln of new Set(mem.map((m) => w.apex.offers[m].league))) { const L = w.leagues.get(ln); if (L.get("games") > R.ap.fullLen(L.get("clubs").length)) fail.push(ln + " games " + L.get("games") + " for " + L.get("clubs").length + " clubs"); }
     const lc = w.comps.get("L:Apex League"); if (!lc || lc.st.size !== mem.length) fail.push("no Apex comp or wrong size");
     const champs = w.hist.map((r) => r.get("champs").get("Apex League")).filter(Boolean); if (champs.length < 2) fail.push("Apex champions not recorded (" + champs.length + ")");
-    for (const [cf, f] of w.cup_fields.itemsArr()) for (const m of f) if (set.has(m)) fail.push(m + " in the " + cf + " cup field");
     const tab = (await call("/api/league?name=" + "Apex League")); if (!tab.rows || tab.rows.length !== mem.length) fail.push("league page rows");
     const bad = [];
     for (const u of ["/api/world", "/api/status", "/api/news", "/api/nations", "/api/awards", "/api/trophies", "/api/worldmoney", "/api/leaguemoney", "/api/records", "/api/years", "/api/charts", "/api/halloffame", "/api/hof_clubs", "/api/comp?id=" + "L:Apex League", "/api/club?name=" + mem[0], "/api/money?club=" + mem[0], "/api/compstats?id=" + "L:Apex League", "/api/comphist?id=" + "L:Apex League", "/api/fixtures?comp=" + "L:Apex League", "/api/league?name=Premier League", "/api/hofleague?league=" + "Apex League", "/api/moves", "/api/movemoney"]) {
@@ -51,6 +50,12 @@ vm.runInThisContext(fs.readFileSync(__dirname + "/../dist/bundle_engine.js", "ut
     for (const r of v.rel || []) { const L = w.leagues.get(r.league), n = L.get("clubs").length; if (n < 12 && r.clubs > 0) fail.push(r.league + " down to " + n + " clubs"); if (R.ap.lostFrom(w, r.league) > Math.max(1, Math.floor(0.25 * (n + R.ap.lostFrom(w, r.league))))) fail.push(r.league + " lost too many"); }
     // a blocked pair never trades: check this season's transfers
     const bl = w.transfers.filter((t) => t.get("season") === w.season - 1 && t.get("frm") && R.ap.blocked(w, t.get("frm"), t.get("to"))).length; console.log("transfers last season across a block:", bl);
+    console.log("news:", ["agrees a deal", "break down", "cancels its deal", "expectations", "Club World Cup for"].map((t) => t + "=" + w.news_log.filter((n) => String(n[3] || n[1] || n).includes(t) || JSON.stringify(n).includes(t)).length).join(" "));
+    console.log("deals", JSON.stringify(v.deals), "fifa", v.fifa, "cont", JSON.stringify(v.cont));
+    const inCups = []; for (const [cf, f] of w.cup_fields.itemsArr()) for (const m of f) if (set.has(m)) inCups.push(m + "@" + cf);
+    const allowed = (v.deals || []).reduce((x, d) => x + d.slots, 0); if (inCups.length > allowed) fail("more members in cups (" + inCups.length + ") than deal places (" + allowed + ")");
+    for (const [cf, f] of w.cup_fields.itemsArr()) { const sz = w.cups.get(cf).get("size"); if (f.length !== sz && f.length < sz) console.log("note: " + cf + " field " + f.length + " of " + sz); }
+    const cw = [...w.hist].reverse().map((r) => r.get("cwc_detail", null)).find(Boolean); if (cw) { const ins = Array.from(cw.get("field")).filter((n) => w.clubs.get(n).get("league") === "Apex League"); console.log("last CWC Apex clubs", ins.length, ins.join(", ")); }
     const dup = mem.filter((m, i) => mem.indexOf(m) !== i); if (dup.length) fail.push("duplicate members " + dup.join());
     const prem = w.leagues.get("Premier League").get("clubs").length; console.log("Apex", mem.length, "clubs; Premier League now", prem, "clubs; champions", champs.join(", "));
   }

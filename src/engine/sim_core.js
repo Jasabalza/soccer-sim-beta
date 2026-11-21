@@ -613,7 +613,11 @@ class World {
     self.cup_fields = new $Dict();
     for (const $f21 of $iter(self.cups)) {
       confed = $f21;
-      slots = self.allocate_slots(confed);
+      // breakaway leagues: clubs that won places through a deal with this confederation take them from the domestic share
+      const extra = []; if (tables != null) for (const k of ["apex", "omega"]) if (self[k] && $mods[k]) for (const n of $mods[k].cupExtra(self, confed, tables)) if (!extra.includes(n)) extra.push(n);
+      const cupD = $idx(self.cups, confed), sz0 = $idx(cupD, "size");
+      if (extra.length) $setidx(cupD, "size", sz0 - extra.length);
+      try { slots = self.allocate_slots(confed); } finally { $setidx(cupD, "size", sz0); }
       field_ = [];
       for (const $f22 of $iter($M.items(slots))) {
         [ln, n] = $iter($f22);
@@ -625,6 +629,7 @@ class World {
         }
         field_ = $iadd(field_, $slice(order, null, n, null));
       }
+      field_ = field_.concat(extra);
       $setidx(self.cup_fields, confed, field_);
     }
   }
