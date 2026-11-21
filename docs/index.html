@@ -1228,6 +1228,7 @@ select { padding-right: 30px; }
 .fmtag { font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 10px; background: var(--panel2, #1b2a22); white-space: nowrap; } .fmtag.hot { color: #ff9a4d; } .fmtag.cold { color: #6cc4ff; }
 .fmline { margin: 8px 0; display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; } .fmline .meta { flex-basis: 100%; }
 .scr { margin: 8px 0; } .scr-h { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 15px; } .scr-c { display: flex; justify-content: space-between; gap: 12px; margin-top: 6px; font-size: 13px; } .scr-c > div:last-child { text-align: right; }
+.ow .owsd { text-align: right; } .ow .owsd .owagg { margin-left: 0; white-space: normal; max-width: 130px; }
 
 </style>
 
@@ -6553,7 +6554,7 @@ function cupGames(w, c, me, dateOf) {
     if (t.season !== w.season || (t.a !== me && t.b !== me)) continue;
     (t.legs || []).forEach((l, i) => {
       const flip = two && t.legs.length > 1 && i === 1;
-      games.push({ h: flip ? t.b : t.a, a: flip ? t.a : t.b, hg: flip ? l[1] : l[0], ag: flip ? l[0] : l[1], played: true, neutral: !two || t.legs.length < 2, agg: t.legs.length > 1 && i === t.legs.length - 1 && g_(t0, "agg") ? (flip ? [g_(t0, "agg")[1], g_(t0, "agg")[0]] : [g_(t0, "agg")[0], g_(t0, "agg")[1]]) : null, how: i === t.legs.length - 1 ? g_(t0, "how") || "" : "", label: cap(t.name) + (t.legs.length > 1 ? ", leg " + (i + 1) : ""), date: evDate(t.round, i + 1) || (i === t.legs.length - 1 && t.date ? { iso: t.date, text: t.date } : null) });
+      games.push({ h: flip ? t.b : t.a, a: flip ? t.a : t.b, hg: flip ? l[1] : l[0], ag: flip ? l[0] : l[1], played: true, neutral: !two || t.legs.length < 2, agg: t.legs.length > 1 && i === t.legs.length - 1 && g_(t0, "agg") ? (flip ? [g_(t0, "agg")[1], g_(t0, "agg")[0]] : [g_(t0, "agg")[0], g_(t0, "agg")[1]]) : null, how: i === t.legs.length - 1 ? g_(t0, "how") || "" : "", winner: i === t.legs.length - 1 ? t.winner || null : null, label: cap(t.name) + (t.legs.length > 1 ? ", leg " + (i + 1) : ""), date: evDate(t.round, i + 1) || (i === t.legs.length - 1 && t.date ? { iso: t.date, text: t.date } : null) });
     });
     if (t.winner && t.winner !== me) out = true;
   }
@@ -14549,7 +14550,11 @@ const owGoals = (arr) => (arr.length ? arr.map((x) => esc(x.name) + " " + x.min 
 const owEmb = (c, size) => { try { return compEmb(c.title, c.emblem, size || 16); } catch (e) { return ""; } };
 const owTeam = (n, me, size) => `<span class="owt">${crest(n, size || 18)}<span>${n === me ? "<b>" + esc(n) + "</b>" : esc(n)}</span></span>`;
 const owTeams = (g, me) => (g.h ? `${owTeam(g.h, me)}<span class="dim small"> v </span>${owTeam(g.a, me)}` : `<span>${esc(g.label)}</span>`);
-const owScore = (g, me, ext) => { const mine = g.h === me ? g.hg - g.ag : g.ag - g.hg, x = g.agg ? `<span class="dim small owagg">agg ${g.agg[0]}-${g.agg[1]}${g.how ? " " + esc(g.how) : ""}</span>` : g.how ? `<span class="dim small owagg">${esc(g.how)}</span>` : ""; return `<b class="owres ${mine > 0 ? "w" : mine < 0 ? "l" : "d"}">${g.hg}-${g.ag}</b>${ext === false ? "" : x}`; };
+const owScore = (g, me, ext) => {
+  const mine = g.h === me ? g.hg - g.ag : g.ag - g.hg, cls = g.winner ? (g.winner === me ? "w" : "l") : mine > 0 ? "w" : mine < 0 ? "l" : "d";
+  const x = g.winner ? `<span class="small owagg" style="color:${g.winner === me ? "#4fbf7a" : "#e05a4f"}">${g.winner === me ? "You go through" : esc(g.winner) + " go through"}${g.agg ? ", " + g.agg[0] + "-" + g.agg[1] + " on aggregate" : ""}${g.how ? " (" + esc(g.how) + ")" : ""}</span>` : "";
+  return `<b class="owres ${cls}">${g.hg}-${g.ag}</b>${ext === false ? "" : x}`;
+};
 // one game of the owner's club: date, competition, both teams with crests, and either the score or home/away
 function owGameRow(g, me, emb, showComp) {
   const side = g.played ? `<span class="owsd">${owScore(g, me)}</span>` : g.tentative && !g.h ? '<span class="dim small">if still in</span>' : `<span class="dim small">${g.neutral ? "neutral" : g.h === me ? "home" : "away"}</span>`;
@@ -14632,7 +14637,7 @@ function owHub(st, sc) {
   if (sc && !st.reneg && !(st.window && st.window.open) && !off) {
     const me = st.club.name, n = sc.next, l = sc.last, cc = (x) => sc.comps.find((c) => c.id === x.cid), em = (x) => { const c = cc(x); return c ? owEmb(c, 14) : ""; };
     nextCard = `<div class="card"><h3>Next game${n ? `<small>${esc(n.date ? n.date.text : "")}</small>` : ""}</h3>${n ? `<div class="dim small">${em(n)} ${esc(n.comp)} &middot; ${esc(n.label || "")}</div><div class="owbig">${n.h ? owTeams(n, me) : "<span>" + esc(n.label) + " <span class='dim small'>(if still in)</span></span>"}</div><div class="dim small">${n.h ? (n.neutral ? "Neutral ground" : n.h === me ? "Home" : "Away") : ""}</div><button class="pri wide" id="ow-game" style="margin-top:8px">Play this game</button>` : '<div class="dim small">No games left this season.</div>'}
-      ${l ? `<h3 style="margin-top:14px">Last result</h3><div class="dim small">${em(l)} ${esc(l.comp)} &middot; ${esc(l.label || "")} &middot; ${esc(l.date ? l.date.text : "")}</div><div class="owbig">${owTeam(l.h, me)} ${owScore(l, me)} ${owTeam(l.a, me)}</div>${sc.lastScorers ? `<div class="scr-c"><div>${owGoals(sc.lastScorers.hs)}</div><div>${owGoals(sc.lastScorers.as)}</div></div>` : ""}` : ""}</div>`;
+      ${l ? `<h3 style="margin-top:14px">Last result</h3><div class="dim small">${em(l)} ${esc(l.comp)} &middot; ${esc(l.label || "")} &middot; ${esc(l.date ? l.date.text : "")}</div><div class="owbig">${owTeam(l.h, me)} ${owScore(l, me, false)} ${owTeam(l.a, me)}</div>${l.winner ? `<div style="margin-top:2px">${owScore({ ...l, hg: "", ag: "" }, me).replace(/<b class="owres[^>]*>[^<]*<\/b>/, "")}</div>` : ""}${sc.lastScorers ? `<div class="scr-c"><div>${owGoals(sc.lastScorers.hs)}</div><div>${owGoals(sc.lastScorers.as)}</div></div>` : ""}` : ""}</div>`;
   }
   const bo = st.buyout ? `<div class="card ow-alert"><h3>Buyout offer</h3>The board offers <b>${owM(st.buyout.offer)}</b> for the club.<div class="owbtns"><button data-bo="accept">Accept</button><button data-bo="counter" ${st.buyout.counter ? "disabled" : ""}>Counter (+15%)</button><button data-bo="refuse">Refuse</button></div><div class="dim small">Refusing makes the next offer worse.</div></div>` : "";
   return `${bo}${nextCard}${staffAlert ? `<div class="card ow-alert">${staffAlert} <button class="mini" data-tab="staff">Open staff</button></div>` : ""}<div class="card"><h3>${phase}<small>Season ${st.season}</small></h3>${act}</div>

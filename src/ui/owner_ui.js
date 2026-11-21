@@ -75,7 +75,11 @@ const owGoals = (arr) => (arr.length ? arr.map((x) => esc(x.name) + " " + x.min 
 const owEmb = (c, size) => { try { return compEmb(c.title, c.emblem, size || 16); } catch (e) { return ""; } };
 const owTeam = (n, me, size) => `<span class="owt">${crest(n, size || 18)}<span>${n === me ? "<b>" + esc(n) + "</b>" : esc(n)}</span></span>`;
 const owTeams = (g, me) => (g.h ? `${owTeam(g.h, me)}<span class="dim small"> v </span>${owTeam(g.a, me)}` : `<span>${esc(g.label)}</span>`);
-const owScore = (g, me, ext) => { const mine = g.h === me ? g.hg - g.ag : g.ag - g.hg, x = g.agg ? `<span class="dim small owagg">agg ${g.agg[0]}-${g.agg[1]}${g.how ? " " + esc(g.how) : ""}</span>` : g.how ? `<span class="dim small owagg">${esc(g.how)}</span>` : ""; return `<b class="owres ${mine > 0 ? "w" : mine < 0 ? "l" : "d"}">${g.hg}-${g.ag}</b>${ext === false ? "" : x}`; };
+const owScore = (g, me, ext) => {
+  const mine = g.h === me ? g.hg - g.ag : g.ag - g.hg, cls = g.winner ? (g.winner === me ? "w" : "l") : mine > 0 ? "w" : mine < 0 ? "l" : "d";
+  const x = g.winner ? `<span class="small owagg" style="color:${g.winner === me ? "#4fbf7a" : "#e05a4f"}">${g.winner === me ? "You go through" : esc(g.winner) + " go through"}${g.agg ? ", " + g.agg[0] + "-" + g.agg[1] + " on aggregate" : ""}${g.how ? " (" + esc(g.how) + ")" : ""}</span>` : "";
+  return `<b class="owres ${cls}">${g.hg}-${g.ag}</b>${ext === false ? "" : x}`;
+};
 // one game of the owner's club: date, competition, both teams with crests, and either the score or home/away
 function owGameRow(g, me, emb, showComp) {
   const side = g.played ? `<span class="owsd">${owScore(g, me)}</span>` : g.tentative && !g.h ? '<span class="dim small">if still in</span>' : `<span class="dim small">${g.neutral ? "neutral" : g.h === me ? "home" : "away"}</span>`;
@@ -158,7 +162,7 @@ function owHub(st, sc) {
   if (sc && !st.reneg && !(st.window && st.window.open) && !off) {
     const me = st.club.name, n = sc.next, l = sc.last, cc = (x) => sc.comps.find((c) => c.id === x.cid), em = (x) => { const c = cc(x); return c ? owEmb(c, 14) : ""; };
     nextCard = `<div class="card"><h3>Next game${n ? `<small>${esc(n.date ? n.date.text : "")}</small>` : ""}</h3>${n ? `<div class="dim small">${em(n)} ${esc(n.comp)} &middot; ${esc(n.label || "")}</div><div class="owbig">${n.h ? owTeams(n, me) : "<span>" + esc(n.label) + " <span class='dim small'>(if still in)</span></span>"}</div><div class="dim small">${n.h ? (n.neutral ? "Neutral ground" : n.h === me ? "Home" : "Away") : ""}</div><button class="pri wide" id="ow-game" style="margin-top:8px">Play this game</button>` : '<div class="dim small">No games left this season.</div>'}
-      ${l ? `<h3 style="margin-top:14px">Last result</h3><div class="dim small">${em(l)} ${esc(l.comp)} &middot; ${esc(l.label || "")} &middot; ${esc(l.date ? l.date.text : "")}</div><div class="owbig">${owTeam(l.h, me)} ${owScore(l, me)} ${owTeam(l.a, me)}</div>${sc.lastScorers ? `<div class="scr-c"><div>${owGoals(sc.lastScorers.hs)}</div><div>${owGoals(sc.lastScorers.as)}</div></div>` : ""}` : ""}</div>`;
+      ${l ? `<h3 style="margin-top:14px">Last result</h3><div class="dim small">${em(l)} ${esc(l.comp)} &middot; ${esc(l.label || "")} &middot; ${esc(l.date ? l.date.text : "")}</div><div class="owbig">${owTeam(l.h, me)} ${owScore(l, me, false)} ${owTeam(l.a, me)}</div>${l.winner ? `<div style="margin-top:2px">${owScore({ ...l, hg: "", ag: "" }, me).replace(/<b class="owres[^>]*>[^<]*<\/b>/, "")}</div>` : ""}${sc.lastScorers ? `<div class="scr-c"><div>${owGoals(sc.lastScorers.hs)}</div><div>${owGoals(sc.lastScorers.as)}</div></div>` : ""}` : ""}</div>`;
   }
   const bo = st.buyout ? `<div class="card ow-alert"><h3>Buyout offer</h3>The board offers <b>${owM(st.buyout.offer)}</b> for the club.<div class="owbtns"><button data-bo="accept">Accept</button><button data-bo="counter" ${st.buyout.counter ? "disabled" : ""}>Counter (+15%)</button><button data-bo="refuse">Refuse</button></div><div class="dim small">Refusing makes the next offer worse.</div></div>` : "";
   return `${bo}${nextCard}${staffAlert ? `<div class="card ow-alert">${staffAlert} <button class="mini" data-tab="staff">Open staff</button></div>` : ""}<div class="card"><h3>${phase}<small>Season ${st.season}</small></h3>${act}</div>

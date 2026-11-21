@@ -1225,3 +1225,4 @@ select { padding-right: 30px; }
 .fmtag { font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 10px; background: var(--panel2, #1b2a22); white-space: nowrap; } .fmtag.hot { color: #ff9a4d; } .fmtag.cold { color: #6cc4ff; }
 .fmline { margin: 8px 0; display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; } .fmline .meta { flex-basis: 100%; }
 .scr { margin: 8px 0; } .scr-h { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 15px; } .scr-c { display: flex; justify-content: space-between; gap: 12px; margin-top: 6px; font-size: 13px; } .scr-c > div:last-child { text-align: right; }
+.ow .owsd { text-align: right; } .ow .owsd .owagg { margin-left: 0; white-space: normal; max-width: 130px; }
