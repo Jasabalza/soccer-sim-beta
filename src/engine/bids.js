@@ -12,7 +12,8 @@ $mods["bids"] = (function () {
     for (const n of w.clubs.keysArr()) { by[n] = []; pay[n] = 0; attr[n] = w.attr(n); }
     for (const p of w.players) if (p.club && by[p.club]) { by[p.club].push(p); pay[p.club] += p.wage; }
     for (const n of w.clubs.keysArr()) { const o = by[n].map((p) => p.ovr).sort((a, b) => b - a); floor[n] = o.length >= 11 ? o[10] : 0; }
-    const pool = w.players.filter((p) => p.club && by[p.club] && p.age <= 34 && p.ovr >= 64);
+    const own = w.ow && w.ow.club ? w.ow.club : null;      // owner mode: the owner club neither sells nor bids here
+    const pool = w.players.filter((p) => p.club && by[p.club] && p.club !== own && p.age <= 34 && p.ovr >= 64);
     if (!pool.length) return 0;
     const weight = (p) => Math.pow(Math.max(1, w.fee_for(p)), 0.8) * (p.contract <= 1 ? 2 : 1) * (w.clubs.get_(p.club).get("debt", 0) > 0 ? 2 : 1);
     const picks = rng.choices(pool, pool.map(weight), $kw({ "k": cfg.bid_lots }));
@@ -23,7 +24,7 @@ $mods["bids"] = (function () {
       const wageAsk = wageFor(p);
       const cand = [];
       for (const b of w.clubs.keysArr()) {
-        if (b === seller) continue;
+        if (b === seller || b === own) continue;
         const B = w.clubs.get_(b), funds = B.get_("funds");
         if (attr[b] < attr[seller] - 6 || p.ovr < floor[b] + 1 || funds < ask0 || by[b].length >= 27) continue;
         if (pay[b] + wageAsk > cfg.wage_cap * B.get_("budget")) continue;

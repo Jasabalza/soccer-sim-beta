@@ -978,6 +978,7 @@ class World {
       left = (() => { const $r = []; let c; for (const $c0 of $iter(self.active())) { c = $c0; $r.push(c.id); } return $r; })();
       throw $new(RuntimeError, [("Season not finished: " + $M.join(", ", left))]);
     }
+    if (self.ow) $mods.owner.beforeRollover(self);
     $mods.rivals.update_season(self);
     $mods.moves.begin(self);
     rec = $lit_dict([["season", self.season], ["retired", 0], ["youth", 0], ["outflow", 0], ["down", 0], ["up", 0]]);
@@ -1126,6 +1127,7 @@ class World {
       }
     }
     $mods.moves.finish(self, $idx(rec, "season"));
+    if (self.ow) $mods.owner.afterRollover(self, rec);       // owner mode (inert when there is no owner)
     return rec;
   }
   comps_nat_refresh(nm) {
@@ -1409,6 +1411,7 @@ class World {
           co.contract = self._contract();
         }
       }
+      if (self.ow && self.ow.club === n && reason !== "retire") reason = null;      // owner mode: you decide about your own coach
       if ($T(reason)) {
         self._vacate(n, reason);
       }
@@ -1754,7 +1757,9 @@ class World {
       for (const $f87 of $iter($enumerate($sorted(members, $kw({"key": ((x) => (-x.ovr))}))))) {
         [rank, p] = $iter($f87);
         p.contract = p.contract - 1;
-        if ((p.contract <= 0)) {
+        if ((p.contract <= 0) && self.ow && self.ow.club === p.club) {
+          p.contract = 0;                 // owner mode: the owner negotiates his own expiring contracts before free agency
+        } else if ((p.contract <= 0)) {
           if (($lt(rank, cfg.release_top_n) && (rng.random() < 0.9))) {
             p.contract = rng.randint(1, 4);
             p.wage = wage_for(p.ovr, p.age);

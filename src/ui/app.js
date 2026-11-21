@@ -61,7 +61,7 @@ function renderShell() {
   applyDense();
   const has = STATUS && STATUS.has_world;
   const route = location.hash.split("/")[1] || "";
-  const items = [["world", "World"], ["nations", "Nations"], ["news", "News"], ["money", "Money"], ["moves", "Off-season"], ["rivals", "Rivals"], ["players", "Players"], ["ceremony", "Awards"], ["hof", "Hall of Fame"], ["trophies", "Trophies"], ["records", "Records"]];
+  const items = [...(STATUS && STATUS.owner ? [["owner", "Owner"]] : []), ["world", "World"], ["nations", "Nations"], ["news", "News"], ["money", "Money"], ["moves", "Off-season"], ["rivals", "Rivals"], ["players", "Players"], ["ceremony", "Awards"], ["hof", "Hall of Fame"], ["trophies", "Trophies"], ["records", "Records"]];
   $("#nav").innerHTML = has ? items.map(([k, t]) => `<a href="#/${k}" class="${route === k || (k === "moves" && route === "ledger") ? "on" : ""}">${t}</a>`).join("") : "";
   renderTabbar(has, route);
   document.body.classList.toggle("inapp", !!has);
@@ -101,6 +101,7 @@ function menuPage(title, sub, groups) {
 }
 function viewMore() {
   menuPage("More", "Everything else, in one place.", [
+    ...(STATUS && STATUS.owner ? [["Owner", [["pres", "Owner hub", "your club, window and money", "#/owner"]]]] : []),
     ["Money and moves", [["money", "Money", "finances across the world", "#/money"], ["moves", "Off-season moves", "transfers, retirements, new players", "#/moves"], ["grad", "Graduates", "academy prospects", "#/prospects"]]],
     ["Explore", [["nations", "Nations", "national teams and rankings", "#/nations"], ["rivals", "Rivals", "derbies and rivalries", "#/rivals"]]],
     ["Game", [["save", "Save and load", "slots, export, import", "", "mr-save"], ["gear", "Settings", "animations, god mode, logos", "", "mr-set"]]],
@@ -402,7 +403,7 @@ function wireSaves(inGame) {
 
 // ---------------------------------------------------------------- favorites
 // A favorite is a key: "L:<league>" or "<kind>:<confed>" (cup, ct, nl, qual). The list is kept inside the world, so it travels with every save.
-const APP_VERSION = "v16.2.0-beta", APP_TAG = "Show Your Worth";
+const APP_VERSION = "v17.0.0-beta (Owner Mode)", APP_TAG = "Show Your Worth";
 let FAVS = null, PICK_ASKED = false;                    // FAVS: null until the player has chosen, then an array of keys
 const CT_NAMES = { UEFA: "European Championship", CONMEBOL: "Copa America", CONCACAF: "Gold Cup", CAF: "Africa Cup of Nations", AFC: "Asian Cup", OFC: "OFC Nations Cup" };
 const NL_NAMES = { UEFA: "UEFA Nations League", CONMEBOL: "CONMEBOL Nations League", CONCACAF: "CONCACAF Nations League", CAF: "CAF Nations League", AFC: "AFC Nations League", OFC: "OFC Nations League" };
@@ -572,7 +573,7 @@ async function viewStart() {
     <div class="start-head"><h1>Soccer Sim <span class="ver">${APP_VERSION}</span></h1>
       <div class="start-tag">${starSvg(14)} ${APP_TAG}<span>Title stars, federation badges, league and competition logos</span></div>
       <div class="sub">Commissioner mode: no lineups, no relegation, one worldwide player market.</div></div>
-    ${hasSaves ? loadCard + newCard : newCard + loadCard}</div>`;
+    ${hasSaves ? loadCard + newCard : newCard + loadCard}${typeof owStartCard === "function" ? owStartCard() : ""}</div>`;
   $("#rules-on").onchange = (e) => ($("#rules").hidden = !e.target.checked);
   $("#seed-rnd").onclick = () => ($("#seed").value = 1 + Math.floor(Math.random() * 99999));
   $("#go-new").onclick = async () => {
@@ -584,7 +585,7 @@ async function viewStart() {
     const ok = await busy("Building the world (about 2 seconds)...", () => api("/api/new", { seed: $("#seed").value, rules }));
     if (ok) { PICK_ASKED = false; location.hash = "#/world"; await refreshStatus(); await route(); }
   };
-  wireSaves(false); wireSaveTools(false); wireLogoPanel(); storageNote();
+  wireSaves(false); wireSaveTools(false); wireLogoPanel(); storageNote(); if (typeof owWireStart === "function") owWireStart();
 }
 
 function progressRow(c) {
@@ -2030,6 +2031,7 @@ async function route() {
 async function routeInner(r, a, b) {
   {
     if (!r || r === "start") return viewStart();
+    if (r === "owner") return await viewOwner(a);
     if (r === "world") return await viewWorld();
     if (r === "leagues") return await viewLeagues();
     if (r === "more") return viewMore();

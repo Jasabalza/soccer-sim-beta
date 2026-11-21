@@ -130,7 +130,9 @@ function v_status() {
   if ((w == null)) {
     return $dict($kw({"has_world": false, "god": ST.god, "saves": list_saves(), "stop_items": (() => { const $r = []; let k, t; for (const $c0 of $iter(STOP_ITEMS)) { [k, t] = $iter($c0); $r.push($dict($kw({"key": k, "text": t}))); } return $r; })(), "rules": rule_defaults()}));
   }
-  return $dict($kw({"has_world": true, "god": ST.god, "header": header(w), "stops": stops_view(), "saves": list_saves(), "stop_items": (() => { const $r = []; let k, t; for (const $c0 of $iter(STOP_ITEMS)) { [k, t] = $iter($c0); $r.push($dict($kw({"key": k, "text": t}))); } return $r; })(), "leagues": $sorted(w.leagues), "seasons_played": $len(w.hist)}));
+  const out = $dict($kw({"has_world": true, "god": ST.god, "header": header(w), "stops": stops_view(), "saves": list_saves(), "stop_items": (() => { const $r = []; let k, t; for (const $c0 of $iter(STOP_ITEMS)) { [k, t] = $iter($c0); $r.push($dict($kw({"key": k, "text": t}))); } return $r; })(), "leagues": $sorted(w.leagues), "seasons_played": $len(w.hist)}));
+  if (w.ow) out.set("owner", true);       // owner mode only: normal worlds report exactly what they always did
+  return out;
 }
 function stops_view() {
   let s;
@@ -866,7 +868,7 @@ function a_flow(body) {
   if (!cur) return $dict($kw({"ok": true, "header": header(w)}));
   if (step === "graduates" && cur === "awards") w.flow.set("step", "graduates");
   else if (step === "transfers" && (cur === "graduates" || cur === "awards")) w.flow.set("step", "transfers");
-  else if (step === "done") w.flow = null;
+  else if (step === "done") { if (w.ow) $mods.owner.afterFlowDone(w); w.flow = null; }
   else if (step !== cur) throw $new(ApiError, ["That step does not follow the current one.", 409]);
   return $dict($kw({"ok": true, "header": header(w)}));
 }
@@ -964,6 +966,49 @@ POST = $lit_dict([["/api/favs", a_favs], ["/api/favnations", a_favnations], ["/a
   GET.set("/api/movemoney", (q) => { const w = need_world(); return $dict($kw($mods.movepages.v_money(w, { season: hq(q, "season", null) ? $int(hq(q, "season", null)) : 0, league: hq(q, "league", null) }))); });
   GET.set("/api/moves", (q) => { const w = need_world(); const g = (k) => hq(q, k, null); return $dict($kw($mods.movepages.v_moves(w, { season: g("season") ? $int(g("season")) : 0, tab: g("tab"), kind: g("kind"), mv: g("mv"), sort: g("sort"), league: g("league"), club: g("club"), who: g("who"), limit: g("limit") ? $int(g("limit")) : 0 }))); });
   GET.set("/api/hofwatch", (q) => $dict($kw({ "rows": HP.v_watch(need_world()) })));
+}
+// ---- Owner Mode routes (beta). All inert unless an owner run exists on the world. ----
+{
+  const O = $mods.owner, pl = (q) => $plain(q), bad = (m, c = 409) => { throw $new(ApiError, [m, c]); };
+  const own = () => { const w = need_world(); if (!w.ow) bad("This world has no owner run. Start one from New game > Owner mode."); return w; };
+  const R = (f) => (q) => { const w = own(); const r = f(w, pl(q)); return $dict($kw(Object.assign({ ok: true }, r || {}))); };
+  GET.set("/api/ow_state", (q) => { const w = need_world(); return $dict($kw(O.view(w))); });
+  GET.set("/api/ow_clubs", (q) => { const w = own(); return $dict($kw({ rows: O.priceList(w) })); });
+  GET.set("/api/ow_market", (q) => { const w = own(); return $dict($kw({ rows: O.market(w, pl(q)) })); });
+  GET.set("/api/ow_squad", (q) => { const w = own(); return $dict($kw(O.squadView(w))); });
+  GET.set("/api/ow_sponsors", (q) => { const w = own(); return $dict($kw({ rows: O.sponsorOffers(w) })); });
+  POST.set("/api/ow_new", (body) => { a_new(body); const w = need_world(); O.create(w, pl(body)); return $dict($kw({ ok: true })); });
+  POST.set("/api/ow_buy", R((w, b) => O.buy(w, b.club)));
+  POST.set("/api/ow_dividend", R((w, b) => O.dividend(w, b.amount)));
+  POST.set("/api/ow_inject", R((w, b) => O.inject(w, b.amount)));
+  POST.set("/api/ow_life", R((w, b) => O.lifestyle(w, b.item)));
+  POST.set("/api/ow_sponsor", R((w, b) => O.takeSponsor(w, b.id)));
+  POST.set("/api/ow_bid", R((w, b) => O.bid(w, b)));
+  POST.set("/api/ow_release", R((w, b) => O.release(w, b.uid)));
+  POST.set("/api/ow_sell", R((w, b) => O.sell(w, b.uid)));
+  POST.set("/api/ow_sellreply", R((w, b) => O.sellReply(w, b)));
+  POST.set("/api/ow_deal", R((w, b) => O.dealAct(w, b)));
+  POST.set("/api/ow_inbox", R((w, b) => O.inboxAct(w, b)));
+  POST.set("/api/ow_reneg", R((w, b) => O.renegAct(w, b)));
+  POST.set("/api/ow_persuade", R((w, b) => O.persuade(w, b)));
+  GET.set("/api/ow_staff", (q) => { const w = own(); return $dict($kw(O.staffView(w))); });
+  POST.set("/api/ow_coach", R((w, b) => O.coachAct(w, b)));
+  POST.set("/api/ow_round", R((w, b) => O.nextRound(w)));
+  POST.set("/api/ow_endwindow", R((w, b) => { O.closeWindow(w); return {}; }));
+  POST.set("/api/ow_settings", R((w, b) => O.setSpeed(w, b)));
+  POST.set("/api/ow_buyout", R((w, b) => O.buyoutAct(w, b.action)));
+  POST.set("/api/ow_retire", R((w, b) => ({ ended: O.retire(w) })));
+  // play on at the owner's speed: a week, a month (4 weeks) or to the end of the season; at season end the year rolls over and the window opens
+  POST.set("/api/ow_advance", R((w, b) => {
+    if (w.ow.state === "ended") bad("This run is over.");
+    if (w.ow.win && w.ow.win.open) bad("Finish the transfer window first (End window).");
+    if (w.flow) bad("Finish the off-season steps first.");
+    const unit = b.unit || w.ow.speed, n = unit === "week" ? 1 : unit === "month" ? 4 : null;
+    a_sim($dict($kw({ scope: "world", weeks: n || 1, to_end: n === null })));
+    let rolled = false;
+    if (w.season_done()) { a_rollover($dict($kw({}))); rolled = true; }
+    return { rolled, header: header(w) };
+  }));
 }
 return {ApiError: ApiError, BaseHTTPRequestHandler: BaseHTTPRequestHandler, C: C, CONF_ORDER: CONF_ORDER, G: G, GEO: GEO, GET: GET, Handler: Handler, POST: POST, PRESETS: PRESETS, S: S, ST: ST, STOP_ITEMS: STOP_ITEMS, State: State, Stops: Stops, T: T, ThreadingHTTPServer: ThreadingHTTPServer, _LS: _LS, _a_sim: _a_sim, _done_set: _done_set, a_beat: a_beat, a_delete: a_delete, a_edit: a_edit, a_export: a_export, a_load: a_load, a_new: a_new, a_quit: a_quit, a_rollover: a_rollover, a_save: a_save, a_settings: a_settings, a_sim: a_sim, a_stops: a_stops, a_year: a_year, argparse: argparse, awards_brief: awards_brief, bracket_upcoming: bracket_upcoming, cal: cal, coach_row: coach_row, comp_emblem: comp_emblem, comp_progress: comp_progress, compstats: compstats, cur_stats: cur_stats, ev_date: ev_date, find_browser: find_browser, header: header, json: json, list_saves: list_saves, live_stats: live_stats, main: main, mimetypes: mimetypes, mx: mx, need_world: need_world, os: os, parse_qs: parse_qs, player_row: player_row, r1: r1, re: re, review: review, round_name_: round_name_, rule_defaults: rule_defaults, safe_slot: safe_slot, shim: shim, shutil: shutil, stops_view: stops_view, subprocess: subprocess, sys: sys, threading: threading, time: time, traceback: traceback, urlparse: urlparse, v_awards: v_awards, v_charts: v_charts, v_club: v_club, v_comp: v_comp, v_compsum: v_compsum, v_continent: v_continent, v_edits: v_edits, v_league: v_league, v_league_season: v_league_season, v_ledger: v_ledger, v_map: v_map, v_money: v_money, v_nation: v_nation, v_nations: v_nations, v_news: v_news, v_player: v_player, v_players: v_players, v_records: v_records, v_status: v_status, v_world: v_world, watchdog: watchdog};
 })();
