@@ -117,11 +117,84 @@ $mods["apex"] = (function () {
     // 4: next season's income already includes the contract money
     for (const m of list) { const c = C(w, m), add = a.offers[m].apex_pay / X(w); c.set("income", c.get("income") + add); c.set("budget", Math.max(c.get("budget"), c.get("income"))); }
   }
-  // each rollover while the league lives: contract money, and the owner's fan backlash fading
+  // ---- stage 3 (slice 1): health, contract reviews, board votes ----------------------------------------------------------------------------
+  const confedOf = (w, n) => w.leagues.get(C(w, n).get("league")).get("confed");
+  const apexL = (w) => w.leagues.get(NAME);
+  // how healthy the league is (0..100): the strength of its field against the line it needs, and how full it is. It moves slowly.
+  function healthNow(w) {
+    const a = w.apex, l = a.members.map((m) => m.club), st = strength(w, l);
+    const strengthPart = clamp((st.mean - 60) * 2.5, 0, 100), sizePart = l.length / MAXN * 100;
+    return clamp(0.65 * strengthPart + 0.35 * sizePart, 0, 100);
+  }
+  const wantSize = (h) => clamp(Math.round(8 + h / 100 * 8), MINN, MAXN);          // a dying league runs smaller
+  // a club's file: league finish, stature and squad rating. The owner sees this number before the review.
+  function fileScore(w, n) {
+    const last = w.hist[w.hist.length - 1], tb = last && last.get("tables"), t = tb && tb.get(NAME), c = C(w, n);
+    const i = t ? t.indexOf(n) : -1, fin = i < 0 || t.length < 2 ? 50 : 100 * (1 - i / (t.length - 1));
+    return r1(0.4 * fin + 0.35 * c.get("stature") + 0.25 * c.get("eff"));
+  }
+  const verdictOf = (f, n) => (n <= 8 ? "renew" : f >= 66 ? "renew" : f >= 52 ? "review" : "release");
+  function toApex(w, m, offer) {
+    const a = w.apex, A = apexL(w), c = C(w, m), ln = c.get("league"), L = w.leagues.get(ln), arr = L.get("clubs"), i = arr.indexOf(m);
+    if (i >= 0) arr.splice(i, 1);
+    L.set("games", Math.min(L.get("games"), fullLen(arr.length)));
+    c.set("league", NAME); A.get("clubs").push(m); A.get("bases").set(m, c.get("base")); A.set("games", fullLen(A.get("clubs").length));
+    for (const p of w.players) if (p.club === m) p.league = NAME;
+    c.set("last_finish", Math.ceil(A.get("clubs").length / 2));
+    const add = offer.apex_pay / X(w); c.set("income", c.get("income") + add); c.set("budget", Math.max(c.get("budget"), c.get("income")));
+    a.members.push({ club: m, years: offer.years, from: w.season + 1, pay: offer.apex_pay, home: ln });
+  }
+  function fromApex(w, m) {
+    const a = w.apex, A = apexL(w), c = C(w, m), rec = a.members.find((x) => x.club === m.club || x.club === m); const n = rec.club;
+    const ln = rec.home || (a.offers[n] && a.offers[n].league), L = w.leagues.get(ln), arr = A.get("clubs"), i = arr.indexOf(n);
+    if (i >= 0) arr.splice(i, 1);
+    A.set("games", fullLen(arr.length));
+    L.get("clubs").push(n); L.set("games", fullLen(L.get("clubs").length));
+    const cc = C(w, n); cc.set("league", ln); cc.set("income", Math.max(0.5 * cc.get("income"), cc.get("income") - rec.pay / X(w)));
+    for (const p of w.players) if (p.club === n) p.league = ln;
+    a.members = a.members.filter((x) => x.club !== n);
+    return ln;
+  }
+  // a seat is open: the members vote. Bigger and more famous clubs win more votes, with a lean toward European clubs.
+  function boardVote(w) {
+    const a = w.apex, A = apexL(w), mem = new Set(a.members.map((m) => m.club)), me = w.ow && w.ow.club, rel = leagueRel(w), tried = new Set();
+    for (let round = 0; round < 3; round++) {
+      const pool = ranking(w).filter((r) => !mem.has(r.club) && r.club !== me && !tried.has(r.club) && w.leagues.get(C(w, r.club).get("league")).get("clubs").length > KEEP).slice(0, 5);
+      if (pool.length < 2) return false;
+      const tally = {}; pool.forEach((p) => (tally[p.club] = 0));
+      for (const m of a.members) {
+        let best = null, bs = -1e9;
+        for (const p of pool) { const v = p.score + (confedOf(w, p.club) === "UEFA" ? 4 : 0) + H(key(w, "vote", m.club, p.club, w.season)) * 9; if (v > bs) { bs = v; best = p.club; } }
+        tally[best]++;
+      }
+      const win = pool.slice().sort((x, y) => tally[y.club] - tally[x.club] || y.score - x.score)[0].club, o = makeOffer(w, win, rel);
+      o.apex_pay = r1(o.apex_pay * (0.8 + 0.4 * a.health / 100)); o.dom_pay = r1(o.apex_pay * o.ratio);
+      if (aiChoice(w, o)) { a.offers[win] = o; toApex(w, win, o); say(w, "The Apex board votes " + tally[win] + " to " + (a.members.length - 1 - tally[win]) + " to admit " + win + ". They take the open seat."); return true; }
+      say(w, win + " turns the Apex League down."); tried.add(win);
+    }
+    return false;
+  }
+  // each rollover while the league lives
   function afterSeason(w) {
     const a = w.apex; if (!a || !a.on || a.state !== "live") return;
-    for (const m of a.members) { const c = C(w, m.club); if (c) c.set("prize", c.get("prize", 0) + m.pay / X(w)); m.years = Math.max(0, m.years - 1); }
-    const o = w.ow; if (o && o.apex_fans > 0) { const back = Math.min(4, o.apex_fans); o.apex_fans -= back; o.fans = clamp(o.fans + back, 0, 100); }
+    const o = w.ow, me = o && o.club;
+    for (const m of a.members) { const c = C(w, m.club); if (c) c.set("prize", c.get("prize", 0) + m.pay * (0.8 + 0.4 * (a.health === undefined ? 70 : a.health) / 100) / X(w)); m.years = Math.max(0, m.years - 1); }
+    if (o && o.apex_fans > 0) { const back = Math.min(4, o.apex_fans); o.apex_fans -= back; o.fans = clamp(o.fans + back, 0, 100); }
+    // health
+    const h0 = healthNow(w); a.health = a.health === undefined ? r1(h0) : r1(0.6 * a.health + 0.4 * h0); a.hh = (a.hh || []).concat([{ season: w.season, h: a.health }]).slice(-20);
+    // contract reviews
+    for (const m of a.members.slice()) {
+      if (m.years > 0) continue;
+      const f = fileScore(w, m.club), v = verdictOf(f, a.members.length), rel = leagueRel(w);
+      if (v === "release") { const ln = fromApex(w, m.club); say(w, "The Apex League lets " + m.club + " go: their contract is up and the file is weak. They return to the " + ln + "."); if (m.club === me) o.apex_note = { season: w.season, t: "The Apex League did not renew your contract. You are back in the " + ln + "." }; continue; }
+      const off = makeOffer(w, m.club, rel), mult = (v === "renew" ? 1 + (f - 66) / 100 : 0.85) * (0.8 + 0.4 * a.health / 100);
+      m.pay = r1(off.apex_pay * mult); m.years = v === "renew" ? off.years : 1 + Math.floor(H(key(w, "ry", m.club, w.season)) * 2);
+      say(w, "The Apex League " + (v === "renew" ? "renews" : "keeps on review") + " " + m.club + " for " + m.years + " season" + (m.years === 1 ? "" : "s") + ".");
+      if (m.club === me) o.apex_note = { season: w.season, t: v === "renew" ? "Your Apex contract was renewed for " + m.years + " seasons." : "The Apex League kept you on review: one or two more seasons, lower pay." };
+    }
+    // fill open seats up to the size a league of this health can run
+    let guard = 0; while (a.members.length < wantSize(a.health) && guard++ < 4) { if (!boardVote(w)) break; }
+    if (a.health < 22 && a.members.length < 6) { /* pause and collapse come in a later slice */ }
   }
 
   // ---- hooks ------------------------------------------------------------------------------------------------------------------------------
@@ -146,7 +219,7 @@ $mods["apex"] = (function () {
     list = eligible(w, list);
     const st = strength(w, list);
     if (st.go) {
-      a.state = "live"; a.members = list.map((n) => ({ club: n, years: a.offers[n].years, from: a.inaugural, pay: a.offers[n].apex_pay })); a.founded = a.inaugural;
+      a.state = "live"; a.members = list.map((n) => ({ club: n, years: a.offers[n].years, from: a.inaugural, pay: a.offers[n].apex_pay, home: C(w, n).get("league") })); a.founded = a.inaugural; a.health = r1(healthNow(w));
       say(w, "The Apex League is a go: " + list.length + " clubs will play in season " + a.inaugural + ".");
       formLeague(w, list);
       if (me && list.includes(me)) { const o = w.ow; o.fans = clamp(o.fans - 14, 0, 100); o.apex_fans = 14; }
@@ -169,7 +242,12 @@ $mods["apex"] = (function () {
       out.signed = l.map((n) => ({ club: n, stature: Math.round(C(w, n).get("stature")), mine: n === me })); out.strength = st;
       if (a.pending && me && a.pending.club === me) { const o = a.offers[me]; out.offer = { apex_pay: o.apex_pay, dom_pay: o.dom_pay, years: o.years, league: o.league, league_rel: Math.round((rel[o.league] || 0) * 100), choice: a.choice, fan_hit: 14, deadline: a.inaugural - 1 }; }
     }
-    if (a.state === "live") out.members = a.members.map((m) => ({ club: m.club, years: m.years, mine: m.club === me }));
+    if (a.state === "live") {
+      out.health = a.health === undefined ? r1(healthNow(w)) : a.health; out.hh = a.hh || []; out.want = wantSize(out.health);
+      out.members = a.members.map((m) => ({ club: m.club, years: m.years, pay: m.pay, file: fileScore(w, m.club), mine: m.club === me }));
+      const mm = a.members.find((m) => m.club === me); if (mm) { const f = fileScore(w, me); out.mine = { years: mm.years, pay: mm.pay, file: f, verdict: verdictOf(f, a.members.length) }; }
+      out.note = w.ow && w.ow.apex_note || null;
+    }
     return out;
   }
   return { NAME, fullLen, init, startSeason, resolve, choose, mustDecide, view, ranking, strength, need, leagueRel };

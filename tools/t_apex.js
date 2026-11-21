@@ -42,6 +42,11 @@ vm.runInThisContext(fs.readFileSync(__dirname + "/../dist/bundle_engine.js", "ut
       let r; try { r = await R.request(u); } catch (e) { bad.push(u + " threw " + String(e.message).slice(0, 60)); continue; } if (r.code >= 500) bad.push(u + " " + r.code + " " + JSON.stringify(r.body).slice(0, 80));
     }
     if (bad.length) fail.push("endpoints: " + bad.join(" | "));
+    if (typeof v.health !== "number") fail.push("no health score");
+    const txt = JSON.stringify(w.news_log); const rv = (txt.match(/Apex League (renews|keeps on review|lets)/g) || []).length, vt = (txt.match(/Apex board votes/g) || []).length;
+    console.log("health", v.health, "want", v.want, "reviews", rv, "board votes", vt);
+    if (N >= 14 && rv < 3) fail.push("contract reviews never happened (" + rv + ")");
+    const dup = mem.filter((m, i) => mem.indexOf(m) !== i); if (dup.length) fail.push("duplicate members " + dup.join());
     const prem = w.leagues.get("Premier League").get("clubs").length; console.log("Apex", mem.length, "clubs; Premier League now", prem, "clubs; champions", champs.join(", "));
   }
   // 3: determinism and save round trip
