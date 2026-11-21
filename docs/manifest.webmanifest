@@ -1,6 +1,6 @@
 {
-  "name": "Soccer Sim",
-  "short_name": "Soccer Sim",
+  "name": "Soccer Sim Beta",
+  "short_name": "SS Beta",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

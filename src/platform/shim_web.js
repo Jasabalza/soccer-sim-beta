@@ -7,7 +7,7 @@ $mods.shim = (function () {
   const store = { persistent: false, backend: "memory", note: "", mem: new Map(), db: null };
   const SAVES = [];                       // [{name,size,time}] kept in memory, mirrored in storage
   let queued = null, loaded = null;
-  const LS = "ssave:";                    // localStorage prefix (fallback when IndexedDB is unavailable)
+  const LS = "ssbeta:";                    // localStorage prefix (fallback when IndexedDB is unavailable)
 
   // ---- compression: saves are JSON, gzip makes them about 7x smaller ----
   const canGzip = () => typeof CompressionStream === "function" && typeof DecompressionStream === "function" && typeof Response === "function";
@@ -33,7 +33,7 @@ $mods.shim = (function () {
     return new Promise((res) => {
       try {
         if (!globalThis.indexedDB) return res(null);
-        const rq = indexedDB.open("soccersim", 1);
+        const rq = indexedDB.open("soccersim-beta", 1);
         rq.onupgradeneeded = () => rq.result.createObjectStore("saves", { keyPath: "name" });
         rq.onsuccess = () => res(rq.result);
         rq.onerror = () => res(null);

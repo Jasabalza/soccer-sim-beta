@@ -1,4 +1,4 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><meta name="theme-color" content="#0a120d"><meta name="color-scheme" content="dark"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black"><meta name="apple-mobile-web-app-title" content="Soccer Sim"><meta name="description" content="A multi-season club soccer ecosystem simulator: 16 leagues, 304 clubs, 110 nations."><link rel="manifest" href="manifest.webmanifest"><link rel="apple-touch-icon" href="icons/apple-touch-icon.png"><link rel="icon" href="icons/icon-192.png"></head><body style="margin:0"><title>Soccer Sim</title>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><meta name="theme-color" content="#0a120d"><meta name="color-scheme" content="dark"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black"><meta name="apple-mobile-web-app-title" content="Soccer Sim Beta"><meta name="description" content="A multi-season club soccer ecosystem simulator: 16 leagues, 304 clubs, 110 nations."><link rel="manifest" href="manifest.webmanifest"><link rel="apple-touch-icon" href="icons/apple-touch-icon.png"><link rel="icon" href="icons/icon-192.png"></head><body style="margin:0"><title>Soccer Sim</title>
 <style>
 :root { color-scheme: dark; }
 :root {
@@ -1208,7 +1208,7 @@ select { padding-right: 30px; }
 </style>
 
 <div id="top">
-  <div class="brand" id="brand">SOCCER SIM</div>
+  <div class="brand" id="brand">SOCCER SIM <span style="font-size:11px;font-weight:800;letter-spacing:.08em;padding:2px 8px;border-radius:10px;background:#f5c542;color:#2b2410;vertical-align:middle">BETA</span></div>
   <nav id="nav"></nav>
   <div id="season-info"></div>
 </div>
@@ -2116,7 +2116,7 @@ $mods.shim = (function () {
   const store = { persistent: false, backend: "memory", note: "", mem: new Map(), db: null };
   const SAVES = [];                       // [{name,size,time}] kept in memory, mirrored in storage
   let queued = null, loaded = null;
-  const LS = "ssave:";                    // localStorage prefix (fallback when IndexedDB is unavailable)
+  const LS = "ssbeta:";                    // localStorage prefix (fallback when IndexedDB is unavailable)
 
   // ---- compression: saves are JSON, gzip makes them about 7x smaller ----
   const canGzip = () => typeof CompressionStream === "function" && typeof DecompressionStream === "function" && typeof Response === "function";
@@ -2142,7 +2142,7 @@ $mods.shim = (function () {
     return new Promise((res) => {
       try {
         if (!globalThis.indexedDB) return res(null);
-        const rq = indexedDB.open("soccersim", 1);
+        const rq = indexedDB.open("soccersim-beta", 1);
         rq.onupgradeneeded = () => rq.result.createObjectStore("saves", { keyPath: "name" });
         rq.onsuccess = () => res(rq.result);
         rq.onerror = () => res(null);
@@ -11939,7 +11939,7 @@ function wireSaves(inGame) {
 
 // ---------------------------------------------------------------- favorites
 // A favorite is a key: "L:<league>" or "<kind>:<confed>" (cup, ct, nl, qual). The list is kept inside the world, so it travels with every save.
-const APP_VERSION = "v16.2.0", APP_TAG = "Show Your Worth";
+const APP_VERSION = "v16.2.0-beta", APP_TAG = "Show Your Worth";
 let FAVS = null, PICK_ASKED = false;                    // FAVS: null until the player has chosen, then an array of keys
 const CT_NAMES = { UEFA: "European Championship", CONMEBOL: "Copa America", CONCACAF: "Gold Cup", CAF: "Africa Cup of Nations", AFC: "Asian Cup", OFC: "OFC Nations Cup" };
 const NL_NAMES = { UEFA: "UEFA Nations League", CONMEBOL: "CONMEBOL Nations League", CONCACAF: "CONCACAF Nations League", CAF: "CAF Nations League", AFC: "AFC Nations League", OFC: "OFC Nations League" };
@@ -13482,7 +13482,7 @@ async function settingsDialog() {
       <div class="sh-row"><div><b>Full density</b><div class="sh-sub">Tighter rows so more fits on screen</div></div>${sw("st-dense", denseOn())}</div>
       <div class="sh-row"><div><b>God mode</b><div class="sh-sub">Edit players, clubs, nations and money</div></div>${sw("st-god", s.god)}</div>
     </div>
-    <div class="sh-note">Money is in euros (1 engine unit = ${s.money_x} million).</div>`);
+    <div class="sh-note"><b>Beta.</b> Its saves are kept apart from the original game. Money is in euros (1 engine unit = ${s.money_x} million). <a href="https://jasabalza.github.io/soccer-sim/" target="_blank" rel="noopener">Open the original game</a></div>`);
   $("#st-save").onclick = saveDialog;
   $("#st-log").onclick = editLogDialog;
   $("#st-logos").onclick = () => { openModal(`${logoPanel()}<p><button class="pri" id="lg-back">Back</button></p>`); wireLogoPanel(); $("#lg-back").onclick = settingsDialog; };

@@ -46,22 +46,22 @@ if (process.argv.includes("--site")) {
     '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">' +
     '<meta name="theme-color" content="#0a120d"><meta name="color-scheme" content="dark">' +
     '<meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes">' +
-    '<meta name="apple-mobile-web-app-status-bar-style" content="black"><meta name="apple-mobile-web-app-title" content="Soccer Sim">' +
+    '<meta name="apple-mobile-web-app-status-bar-style" content="black"><meta name="apple-mobile-web-app-title" content="Soccer Sim Beta">' +
     '<meta name="description" content="A multi-season club soccer ecosystem simulator: 16 leagues, 304 clubs, 110 nations.">' +
     '<link rel="manifest" href="manifest.webmanifest"><link rel="apple-touch-icon" href="icons/apple-touch-icon.png"><link rel="icon" href="icons/icon-192.png">' +
     '</head><body style="margin:0">' + body +
     '<script>if ("serviceWorker" in navigator && location.protocol.startsWith("http")) addEventListener("load", function () { navigator.serviceWorker.register("sw.js").catch(function () {}); });</script>' +
     "</body></html>");
   fs.writeFileSync(path.join(D, "manifest.webmanifest"), JSON.stringify({
-    name: "Soccer Sim", short_name: "Soccer Sim", start_url: "./", scope: "./", display: "standalone",
+    name: "Soccer Sim Beta", short_name: "SS Beta", start_url: "./", scope: "./", display: "standalone",
     background_color: "#0f1a14", theme_color: "#0a120d", description: "Multi-season club soccer ecosystem simulator",
     icons: [{ src: "icons/icon-192.png", sizes: "192x192", type: "image/png" }, { src: "icons/icon-512.png", sizes: "512x512", type: "image/png" },
             { src: "icons/icon-maskable-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" }] }, null, 2));
   fs.writeFileSync(path.join(D, "sw.js"),
     "// network-first: always take the newest game when online, fall back to the cached copy offline. Saves live in IndexedDB and are never touched here.\n" +
-    'const CACHE = "soccersim-' + ver + '", FILES = ["./", "index.html", "manifest.webmanifest", "icons/icon-192.png", "icons/apple-touch-icon.png"];\n' +
+    'const CACHE = "soccersim-beta-' + ver + '", FILES = ["./", "index.html", "manifest.webmanifest", "icons/icon-192.png", "icons/apple-touch-icon.png"];\n' +
     'self.addEventListener("install", (e) => { self.skipWaiting(); e.waitUntil(caches.open(CACHE).then((c) => c.addAll(FILES)).catch(() => {})); });\n' +
-    'self.addEventListener("activate", (e) => e.waitUntil(caches.keys().then((ks) => Promise.all(ks.filter((k) => k !== CACHE).map((k) => caches.delete(k)))).then(() => self.clients.claim())));\n' +
+    'self.addEventListener("activate", (e) => e.waitUntil(caches.keys().then((ks) => Promise.all(ks.filter((k) => k.startsWith("soccersim-beta-") && k !== CACHE).map((k) => caches.delete(k)))).then(() => self.clients.claim())));\n' +
     'self.addEventListener("fetch", (e) => { if (e.request.method !== "GET") return;\n' +
     '  e.respondWith(fetch(e.request).then((r) => { const copy = r.clone(); caches.open(CACHE).then((c) => c.put(e.request, copy)); return r; }).catch(() => caches.match(e.request, { ignoreSearch: true }))); });\n');
   fs.writeFileSync(path.join(D, ".nojekyll"), "");

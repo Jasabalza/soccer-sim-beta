@@ -402,7 +402,7 @@ function wireSaves(inGame) {
 
 // ---------------------------------------------------------------- favorites
 // A favorite is a key: "L:<league>" or "<kind>:<confed>" (cup, ct, nl, qual). The list is kept inside the world, so it travels with every save.
-const APP_VERSION = "v16.2.0", APP_TAG = "Show Your Worth";
+const APP_VERSION = "v16.2.0-beta", APP_TAG = "Show Your Worth";
 let FAVS = null, PICK_ASKED = false;                    // FAVS: null until the player has chosen, then an array of keys
 const CT_NAMES = { UEFA: "European Championship", CONMEBOL: "Copa America", CONCACAF: "Gold Cup", CAF: "Africa Cup of Nations", AFC: "Asian Cup", OFC: "OFC Nations Cup" };
 const NL_NAMES = { UEFA: "UEFA Nations League", CONMEBOL: "CONMEBOL Nations League", CONCACAF: "CONCACAF Nations League", CAF: "CAF Nations League", AFC: "AFC Nations League", OFC: "OFC Nations League" };
@@ -1945,7 +1945,7 @@ async function settingsDialog() {
       <div class="sh-row"><div><b>Full density</b><div class="sh-sub">Tighter rows so more fits on screen</div></div>${sw("st-dense", denseOn())}</div>
       <div class="sh-row"><div><b>God mode</b><div class="sh-sub">Edit players, clubs, nations and money</div></div>${sw("st-god", s.god)}</div>
     </div>
-    <div class="sh-note">Money is in euros (1 engine unit = ${s.money_x} million).</div>`);
+    <div class="sh-note"><b>Beta.</b> Its saves are kept apart from the original game. Money is in euros (1 engine unit = ${s.money_x} million). <a href="https://jasabalza.github.io/soccer-sim/" target="_blank" rel="noopener">Open the original game</a></div>`);
   $("#st-save").onclick = saveDialog;
   $("#st-log").onclick = editLogDialog;
   $("#st-logos").onclick = () => { openModal(`${logoPanel()}<p><button class="pri" id="lg-back">Back</button></p>`); wireLogoPanel(); $("#lg-back").onclick = settingsDialog; };

@@ -1,3 +1,13 @@
+# Soccer Sim BETA
+
+This is the beta copy of Soccer Sim, the place to try changes before they go to the original (https://github.com/Jasabalza/soccer-sim, site: https://jasabalza.github.io/soccer-sim/).
+
+- It keeps its own saves (browser storage names `soccersim-beta` and `ssbeta:`), so it never reads or writes the original's saves. Save to file and Load from file use the same format in both.
+- Currently identical to the original at v16.2.0. Next test: goalscorers on finished matches and a team form indicator (see the project plan).
+- The roguelike betting game that started here as v17 now lives in its own repo: https://github.com/Jasabalza/soccerbets. The old work is kept on the `gambler-v17-archive` branch.
+
+---
+
 # Soccer Sim
 
 A multi-season "god mode" club soccer ecosystem simulator that runs entirely in your browser: **16 leagues, 304 real clubs, 110 nations**, continental cups, Nations Leagues, World Cup qualifiers, the Club World Cup and the World Cup, played across as many seasons as you like. You are the commissioner: no relegation, no manager, just the whole world ticking over.
