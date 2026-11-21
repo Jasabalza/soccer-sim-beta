@@ -53,7 +53,7 @@ vm.runInThisContext(fs.readFileSync(__dirname + "/../dist/bundle_engine.js", "ut
     console.log("news:", ["agrees a deal", "break down", "cancels its deal", "expectations", "Club World Cup for"].map((t) => t + "=" + w.news_log.filter((n) => String(n[3] || n[1] || n).includes(t) || JSON.stringify(n).includes(t)).length).join(" "));
     console.log("deals", JSON.stringify(v.deals), "fifa", v.fifa, "cont", JSON.stringify(v.cont));
     const inCups = []; for (const [cf, f] of w.cup_fields.itemsArr()) for (const m of f) if (set.has(m)) inCups.push(m + "@" + cf);
-    const allowed = (v.deals || []).reduce((x, d) => x + d.slots, 0); if (inCups.length > allowed) fail("more members in cups (" + inCups.length + ") than deal places (" + allowed + ")");
+    const allowed = (v.deals || []).reduce((x, d) => x + d.slots, 0); if (inCups.length > allowed) fail.push("more members in cups (" + inCups.length + ") than deal places (" + allowed + ") " + inCups.join(","));
     for (const [cf, f] of w.cup_fields.itemsArr()) { const sz = w.cups.get(cf).get("size"); if (f.length !== sz && f.length < sz) console.log("note: " + cf + " field " + f.length + " of " + sz); }
     const cw = [...w.hist].reverse().map((r) => r.get("cwc_detail", null)).find(Boolean); if (cw) { const ins = Array.from(cw.get("field")).filter((n) => w.clubs.get(n).get("league") === "Apex League"); console.log("last CWC Apex clubs", ins.length, ins.join(", ")); }
     const dup = mem.filter((m, i) => mem.indexOf(m) !== i); if (dup.length) fail.push("duplicate members " + dup.join());
@@ -82,6 +82,33 @@ vm.runInThisContext(fs.readFileSync(__dirname + "/../dist/bundle_engine.js", "ut
       const w4 = R.A.ST.world; const f0 = w4.ow.fans; for (let k = 0; k < 80; k++) { const a = await call("/api/ow_advance", { unit: "season" }); if (a.rolled) break; }
       const v2 = await call("/api/apex"); console.log("owner chose apex ->", v2.state, (v2.members || []).some((m) => m.mine) ? "in the league" : "not in the field");
       if (v2.state === "live" && (v2.members || []).some((m) => m.mine) && !(w4.ow.fans < f0 + 1)) console.log("note: fans", f0, "->", w4.ow.fans);
+    }
+  }
+  // 5: summer games happened in the plain world; a mid-size owner club can apply for tryouts and answer an invitation
+  if (w.apex.state === "live") { if (!w.apex.summer || !w.apex.summer.games.length) fail.push("no summer games"); else console.log("summer", w.apex.summer.games.map((g) => g.k[0] + ":" + g.h + " " + (g.note || g.hg + "-" + g.ag) + " " + g.a).join(" | ")); }
+  if (process.env.TRYOUT !== "0") {
+    await call("/api/ow_new", { seed, backstory: "veteran", name: "T", mode: "sandbox", apex: "1", apex_year: 2 });
+    const w5 = R.A.ST.world, rk5 = R.ap.ranking(w5).map((r) => r.club), rows5 = (await call("/api/ow_clubs")).rows.filter((r) => r.status === "open" && rk5.indexOf(r.club) >= 24 && rk5.indexOf(r.club) < 45 && w5.clubs.get(r.club).get("stature") >= 70);
+    const pick = rows5.sort((a, b) => rk5.indexOf(a.club) - rk5.indexOf(b.club))[0];
+    if (!pick) console.log("tryout part skipped: no club"); else {
+      await call("/api/ow_buy", { club: pick.club }); const log = [];
+      const adv = async () => { for (let k = 0; k < 80; k++) { const a = await call("/api/ow_advance", { unit: "season" }); if (a.rolled) break; }
+        if (w5.flow) for (const f of ["graduates", "transfers", "done"]) await call("/api/flow", { step: f }).catch(() => 0);
+        const s2 = await call("/api/ow_state"); if (s2.reneg) for (const x of s2.reneg.list) await call("/api/ow_reneg", { uid: x.uid, action: "approve" }).catch(() => 0); if (s2.window && s2.window.open) await call("/api/ow_endwindow", {}).catch(() => 0); };
+      let joined = false, applied = 0, invited = 0;
+      for (let s = 0; s < 13 && !joined; s++) {
+        const st = await call("/api/ow_state"), A = st.apex;
+        if (A.offer && !A.offer.choice) await call("/api/ow_apex", { action: "stay" });
+        if (A.state === "live") {
+          if (A.invite) { invited++; await call("/api/ow_apex", { action: "accept" }); }
+          else if (A.apply && A.apply.open && !A.apply.applied) { const r = await R.request("/api/ow_apex", { action: "apply" }); if (r.code === 200) applied++; }
+          if ((A.members || []).some((m) => m.mine)) joined = true;
+          if (A.note) log.push("S" + st.season + " " + A.note.t);
+        }
+        await adv();
+      }
+      console.log("tryout owner", pick.club, "applied", applied, "invited", invited, "joined", joined); console.log("  " + [...new Set(log)].slice(-4).join("\n  "));
+      if (!applied) fail.push("owner could never apply for a tryout");
     }
   }
   console.log(fail.length ? "APEX FAIL: " + fail.join("; ") : "APEX OK");

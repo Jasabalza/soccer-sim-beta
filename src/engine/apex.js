@@ -74,11 +74,25 @@ $mods["breakaway"] = function (CF) {
 
   // ---- the owner's choice -----------------------------------------------------------------------------------------------------------------
   function choose(w, action) {
-    const a = w[K], me = w.ow && w.ow.club;
-    if (!a || a.state !== "contracts" || !a.pending || a.pending.club !== me) fail("There is no " + CF.short + " contract waiting for you.", 409);
+    const a = w[K], o = w.ow, me = o && o.club;
+    if (a && a.state === "live" && o && me) {
+      const mem = a.members.some((m) => m.club === me);
+      if (action === "apply") {
+        if (mem) fail("You are already in the " + NAME + ".", 409);
+        if (o[K + "_apply"] === w.season) fail("You have already applied this season.", 409);
+        if (!canLeave(w, C(w, me).get("league"))) fail("Your league cannot lose another club to the breakaways.", 409);
+        const c = C(w, me), fee = applyFee(w, me); if (c.get("funds") * X(w) < fee) fail("The tryout fee is " + fee + "M; the club does not have it.", 409);
+        c.set("funds", c.get("funds") - fee / X(w)); o[K + "_apply"] = w.season; return { ok: true, msg: "Application sent (" + fee + "M). Your tryout is played in the summer." };
+      }
+      if (action === "accept" || action === "decline") { if (!a.invite || a.invite.club !== me) fail("There is no invitation.", 409); a.invite.answer = action === "accept" ? "apex" : "stay"; return { ok: true, msg: action === "accept" ? "Accepted. You join at the end of this season." : "Declined." }; }
+      if (["ask", "std", "safe"].includes(action)) { o[K + "_stance"] = action; return { ok: true, msg: "Review stance set." }; }
+      if (action === "friendly_on" || action === "friendly_off") { o[K + "_friendly"] = action === "friendly_on" ? "on" : "off"; return { ok: true, msg: "Saved." }; }
+    }
+    if (!a || a.state !== "contracts" || !a.pending || a.pending.club !== me) fail("There is no " + NAME + " contract waiting for you.", 409);
     if (action !== "apex" && action !== "stay") fail("Choose apex or stay.");
     a.choice = action; return { ok: true, choice: action };
   }
+  const applyFee = (w, n) => r1(Math.max(2, 0.04 * C(w, n).get("income") * X(w)));
   function mustDecide(w) { const a = w && w[K]; return !!(a && a.on && a.state === "contracts" && a.pending && !a.choice && w.ow && w.ow.club === a.pending.club && w.season === a.inaugural - 1); }
 
 
@@ -138,7 +152,7 @@ $mods["breakaway"] = function (CF) {
   function fileScore(w, n) {
     const last = w.hist[w.hist.length - 1], tb = last && last.get("tables"), t = tb && tb.get(NAME), c = C(w, n);
     const i = t ? t.indexOf(n) : -1, fin = i < 0 || t.length < 2 ? 50 : 100 * (1 - i / (t.length - 1));
-    const m = w[K].members.find((x) => x.club === n), cb = m && m.cont !== undefined ? 8 * (m.cont - 0.4) : 0;
+    const m = w[K].members.find((x) => x.club === n), cb = (m && m.cont !== undefined ? 8 * (m.cont - 0.4) : 0) + (m && m.mark ? m.mark : 0);
     return r1(0.4 * fin + 0.35 * c.get("stature") + 0.25 * c.get("eff") + cb);
   }
   const verdictOf = (f, n) => (n <= 8 ? "renew" : f >= 66 ? "renew" : f >= 52 ? "review" : "release");
@@ -168,17 +182,20 @@ $mods["breakaway"] = function (CF) {
   function boardVote(w) {
     const a = w[K], A = apexL(w), mem = new Set(a.members.map((m) => m.club)), me = w.ow && w.ow.club, rel = leagueRel(w), tried = new Set();
     for (let round = 0; round < 3; round++) {
-      const pool = ranking(w).filter((r) => !mem.has(r.club) && r.club !== me && !tried.has(r.club) && canLeave(w, C(w, r.club).get("league"))).slice(0, 5);
+      const cands = a.cands || {}, okC = (n) => !mem.has(n) && !tried.has(n) && canLeave(w, C(w, n).get("league")) && (n !== me || cands[n]);
+      const rk = ranking(w), pool = rk.filter((r) => okC(r.club) && r.club !== me).slice(0, 5);
+      for (const r of rk) if (cands[r.club] && okC(r.club) && !pool.includes(r)) pool.push(r);
       if (pool.length < 2) return false;
       const tally = {}; pool.forEach((p) => (tally[p.club] = 0));
       for (const m of a.members) {
         let best = null, bs = -1e9;
-        for (const p of pool) { const v = p.score + (confedOf(w, p.club) === CF.bloc ? CF.bloc_bias : 0) + H(key(w, "vote", m.club, p.club, w.season)) * 9; if (v > bs) { bs = v; best = p.club; } }
+        for (const p of pool) { const v = p.score + ((a.cands || {})[p.club] ? a.cands[p.club].bonus : 0) + (confedOf(w, p.club) === CF.bloc ? CF.bloc_bias : 0) + H(key(w, "vote", m.club, p.club, w.season)) * 9; if (v > bs) { bs = v; best = p.club; } }
         tally[best]++;
       }
       const win = pool.slice().sort((x, y) => tally[y.club] - tally[x.club] || y.score - x.score)[0].club, o = makeOffer(w, win, rel);
       o.apex_pay = r1(o.apex_pay * (0.8 + 0.4 * a.health / 100)); o.dom_pay = r1(o.apex_pay * o.ratio);
-      if (aiChoice(w, o)) { a.offers[win] = o; toApex(w, win, o); say(w, "The " + CF.short + " board votes " + tally[win] + " to " + (a.members.length - 1 - tally[win]) + " to admit " + win + ". They take the open seat."); return true; }
+      if (win === me) { a.invite = { club: me, offer: o, season: w.season, answer: null }; say(w, "The " + CF.short + " board votes to invite " + me + " to the " + NAME + "."); w.ow[K + "_note"] = { season: w.season, t: "The " + NAME + " board voted for you. Answer the invitation on the " + CF.short + " tab this season: " + o.apex_pay + "M a year for " + o.years + " seasons." }; return true; }
+      if (aiChoice(w, o)) { a.offers[win] = o; toApex(w, win, o); delete (a.cands || {})[win]; say(w, "The " + CF.short + " board votes " + tally[win] + " to " + (a.members.length - 1 - tally[win]) + " to admit " + win + ". They take the open seat."); return true; }
       say(w, win + " turns the " + NAME + " down."); tried.add(win);
     }
     return false;
@@ -265,6 +282,65 @@ $mods["breakaway"] = function (CF) {
     say(w, NAME + " clubs in the continental cups: " + (perf >= expect ? "beat" : "fell short of") + " expectations (" + Math.round(perf * 100) + " vs " + Math.round(expect * 100) + ").");
   }
 
+  // ---- summer: benchmark friendlies and tryouts --------------------------------------------------------------------------------------------
+  // a one-off game: home side gets the usual edge; the result is read against the strength gap, so one fluke cannot swing much
+  function oneGame(w, h, a_, tag) {
+    const r = new $Random(); r.seed(w.seed + "|" + w.season + "|" + K + "|" + tag + "|" + h + "|" + a_);
+    const eh = C(w, h).get("eff"), ea = C(w, a_).get("eff"), [hg, ag] = $mods.comps.score(r, eh, ea, false, 1.0, 0);
+    return { h, a: a_, hg, ag, exp: r1((eh - ea) / 8 + 0.4) };            // expected goal difference for the home side
+  }
+  function summer(w) {
+    const a = w[K], o = w.ow, me = o && o.club, last = w.hist[w.hist.length - 1], tb = last && last.get("tables"); if (!tb) return;
+    a.cands = a.cands || {}; for (const c of Object.keys(a.cands)) if (w.season - a.cands[c].season > 2) delete a.cands[c];
+    const games = [], mem = new Set(a.members.map((m) => m.club)), at = tableOf(w, tb);
+    // 1: benchmarks: the champion of each league that lost clubs against its best former club
+    for (const ln of Object.keys(a.rel || {})) {
+      const t = $M.get(tb, ln, null); if (!t || !t.length) continue;
+      const champ = Array.from(t)[0], ours = at.filter((n) => mem.has(n) && a.members.find((m) => m.club === n).home === ln)[0]; if (!ours || mem.has(champ)) continue;
+      const lv = (a.sanc && a.sanc[ln]) || 0, mineA = ours === me, mineD = champ === me;
+      let why = null;
+      if (lv >= 3) why = "Forbidden";
+      else if (mineA ? o[K + "_friendly"] === "off" : H(key(w, "decA", ours, w.season)) < 0.1) { why = ours + " declined"; const m = a.members.find((x) => x.club === ours); m.mark = (m.mark || 0) - 4; }
+      else if (mineD ? o[K + "_friendly"] === "off" : H(key(w, "decD", champ, w.season)) < 0.15) why = champ + " declined";
+      if (why) { games.push({ k: "benchmark", h: champ, a: ours, note: why }); continue; }
+      const g = oneGame(w, champ, ours, "bm"), surprise = (g.hg - g.ag) - g.exp;         // positive: the domestic side did better than expected
+      const m = a.members.find((x) => x.club === ours); m.mark = r1(clamp(-surprise, -2, 2) * 2);
+      a.health = r1(clamp(a.health - clamp(surprise, -2, 2), 0, 100));
+      if (surprise > -0.5 && canLeave(w, ln)) a.cands[champ] = { season: w.season, bonus: surprise > 1 ? 14 : 8, how: "benchmark" };
+      g.k = "benchmark"; games.push(g);
+    }
+    // 2: tryouts: up to two clubs apply (the owner's club first if it applied). The Apex picks a mid-table opponent; a giant for a big name.
+    const apps = []; if (me && o[K + "_apply"] === w.season && !mem.has(me)) apps.push(me);
+    for (const r of ranking(w)) { if (apps.length >= 2) break; const n = r.club; if (mem.has(n) || n === me || a.cands[n] || C(w, n).get("stature") < 68) continue; if (H(key(w, "app", n, w.season)) < 0.25 && canLeave(w, C(w, n).get("league"))) apps.push(n); }
+    for (const n of apps) {
+      const big = C(w, n).get("stature") >= 82, opp = at.filter((x) => mem.has(x))[big ? 1 : Math.floor(at.length / 2)] || at[0]; if (!opp) continue;
+      const ln = C(w, n).get("league"), lv = (a.sanc && a.sanc[ln]) || 0;
+      if (lv >= 3) { const c = C(w, n); c.set("funds", c.get("funds") - 0.03 * c.get("income")); }      // a hostile league fines a club for applying
+      const g = oneGame(w, opp, n, "try"), d = g.ag - g.hg, surprise = -((g.hg - g.ag) - g.exp);
+      const bonus = d > 0 ? 15 : d === 0 ? 10 : surprise > 0 ? 6 : d === -1 ? 3 : 0;
+      if (bonus) a.cands[n] = { season: w.season, bonus, how: "tryout" }; else delete a.cands[n];
+      g.k = "tryout"; g.bonus = bonus; games.push(g);
+      if (n === me) o[K + "_note"] = { season: w.season, t: "Your tryout: " + g.h + " " + g.hg + "-" + g.ag + " " + g.a + ". " + (bonus >= 15 ? "A win: you are a strong candidate for the next open seat." : bonus >= 10 ? "A draw against an Apex club: you are a candidate for the next open seat." : bonus >= 6 ? "You lost, but held your own better than expected: you are a candidate." : bonus ? "A close loss: you are a long shot for a seat." : "Not good enough. You can try again next season.") };
+    }
+    a.summer = { season: w.season, games: games.map((g) => ({ k: g.k, h: g.h, a: g.a, hg: g.hg, ag: g.ag, note: g.note || null, bonus: g.bonus })) };
+    for (const g of games) if (g.hg !== undefined) say(w, (g.k === "tryout" ? "Apex tryout: " : "Summer benchmark: ").replace("Apex", CF.short) + g.h + " " + g.hg + "-" + g.ag + " " + g.a + ".");
+  }
+  // the owner's answer to an invitation made at the last rollover: join now, or the seat goes to someone else
+  function settleInvite(w) {
+    const a = w[K], o = w.ow, inv = a.invite; if (!inv) return; a.invite = null;
+    if (inv.answer === "apex" && o && o.club === inv.club && canLeave(w, C(w, inv.club).get("league"))) {
+      a.offers[inv.club] = inv.offer; toApex(w, inv.club, inv.offer); o.fans = clamp(o.fans - CF.fan_hit, 0, 100); o[K + "_fans"] = CF.fan_hit; delete (a.cands || {})[inv.club];
+      say(w, inv.club + " accepts the invitation and joins the " + NAME + "."); o[K + "_note"] = { season: w.season, t: "You joined the " + NAME + ". Your first season starts now." };
+    } else say(w, inv.club + " turns down the " + NAME + " invitation.");
+  }
+
+  // cup places from this season's tables, without the clubs that now play in a breakaway league (they enter only through deals)
+  function recomputeCups(w) {
+    const last = w.hist[w.hist.length - 1], tb = last && last.get("tables"); if (!tb) return;
+    const brk = new Set(); for (const k of ["apex", "omega"]) { const b = w[k]; if (b && b.members) for (const m of b.members) brk.add(m.club); }
+    const t2 = new $Dict(); for (const ln of tb.keysArr()) { const L = w.leagues.get(ln); t2.set(ln, L && L.get("confed") === "WORLD" ? tb.get(ln) : tb.get(ln).filter((x) => !brk.has(x))); }
+    w.compute_cup_fields(t2);
+  }
   // each rollover while the league lives
   function afterSeason(w) {
     const a = w[K]; if (!a || !a.on || a.state !== "live") return;
@@ -273,22 +349,28 @@ $mods["breakaway"] = function (CF) {
     if (o && o[K + "_fans"] > 0) { const back = Math.min(4, o[K + "_fans"]); o[K + "_fans"] -= back; o.fans = clamp(o.fans + back, 0, 100); }
     // health
     const h0 = healthNow(w); a.health = a.health === undefined ? r1(h0) : r1(0.6 * a.health + 0.4 * h0); a.hh = (a.hh || []).concat([{ season: w.season, h: a.health }]).slice(-20);
+    settleInvite(w);
     judge(w);
     sanctions(w);
+    summer(w);
     // contract reviews
     for (const m of a.members.slice()) {
       if (m.years > 0) continue;
-      const f = fileScore(w, m.club), v = verdictOf(f, a.members.length), rel = leagueRel(w);
+      const f = fileScore(w, m.club), rel = leagueRel(w), st = m.club === me ? (o[K + "_stance"] || "std") : "std";
+      let v = verdictOf(f, a.members.length);
+      if (st === "ask") v = a.members.length <= 8 ? "renew" : f >= 72 ? "renew" : f >= 58 ? "review" : "release";        // pushing hard raises the bar
+      if (st === "safe" && v === "release" && f >= 44) v = "review";                                                          // taking any deal keeps a weak club on review
+      m.mark = 0;
       if (v === "release") { const ln = fromApex(w, m.club); say(w, "The " + NAME + " lets " + m.club + " go: their contract is up and the file is weak. They return to " + ln + "."); if (m.club === me) o[K + "_note"] = { season: w.season, t: "The " + NAME + " did not renew your contract. You are back in " + ln + "." }; continue; }
-      const off = makeOffer(w, m.club, rel), mult = (v === "renew" ? 1 + (f - 66) / 100 : 0.85) * (0.8 + 0.4 * a.health / 100);
+      const off = makeOffer(w, m.club, rel), mult = (v === "renew" ? 1 + (f - 66) / 100 : 0.85) * (0.8 + 0.4 * a.health / 100) * (st === "ask" && v === "renew" ? 1.15 : st === "safe" ? 0.85 : 1);
       m.pay = r1(off.apex_pay * mult); m.years = v === "renew" ? off.years : 1 + Math.floor(H(key(w, "ry", m.club, w.season)) * 2);
       say(w, "The " + NAME + " " + (v === "renew" ? "renews" : "keeps on review") + " " + m.club + " for " + m.years + " season" + (m.years === 1 ? "" : "s") + ".");
       if (m.club === me) o[K + "_note"] = { season: w.season, t: v === "renew" ? "Your " + CF.short + " contract was renewed for " + m.years + " seasons." : "The " + NAME + " kept you on review: one or two more seasons, lower pay." };
     }
     // fill open seats up to the size a league of this health can run
-    let guard = 0; while (a.members.length < wantSize(a.health) && guard++ < 4) { if (!boardVote(w)) break; }
+    let guard = 0; while (a.members.length + (a.invite ? 1 : 0) < wantSize(a.health) && guard++ < 4) { if (!boardVote(w)) break; }
     negotiate(w);
-    { const last = w.hist[w.hist.length - 1], tb = last && last.get("tables"); if (tb) w.compute_cup_fields(tb); }
+    recomputeCups(w);
     if (a.health < 22 && a.members.length < 6) { /* pause and collapse come in a later slice */ }
   }
 
@@ -342,6 +424,9 @@ $mods["breakaway"] = function (CF) {
       out.members = a.members.map((m) => ({ club: m.club, years: m.years, pay: m.pay, file: fileScore(w, m.club), mine: m.club === me }));
       const mm = a.members.find((m) => m.club === me); if (mm) { const f = fileScore(w, me); out.mine = { years: mm.years, pay: mm.pay, file: f, verdict: verdictOf(f, a.members.length) }; }
       out.note = w.ow && w.ow[K + "_note"] || null;
+      out.summer = a.summer || null; out.cands = Object.keys(a.cands || {}).map((c) => ({ club: c, bonus: a.cands[c].bonus, how: a.cands[c].how, mine: c === me }));
+      if (w.ow && me) { const o = w.ow; out.stance = o[K + "_stance"] || "std"; out.friendly = o[K + "_friendly"] || "on"; out.invite = a.invite && a.invite.club === me ? { pay: a.invite.offer.apex_pay, years: a.invite.offer.years, answer: a.invite.answer } : null;
+        if (!mm) { const ln = C(w, me).get("league"); out.apply = { fee: applyFee(w, me), applied: o[K + "_apply"] === w.season, open: canLeave(w, ln), league: ln }; } }
       out.deals = Object.keys(a.deals || {}).map((cf) => ({ confed: cf, slots: a.deals[cf].slots, until: a.deals[cf].until, clubs: a.members.filter((m) => clubConfed(w, m.club) === cf).length })); out.fifa = fifaBids(a); out.cont = a.cont || null;
       out.rel = Object.keys(a.rel || {}).map((ln) => ({ league: ln, rel: a.rel[ln], level: a.sanc[ln] || 0, label: SANC[a.sanc[ln] || 0], clubs: a.members.filter((m) => m.home === ln).length, mine: !!(mm && mm.home === ln) })).sort((x, y) => y.level - x.level || x.rel - y.rel);
     }
