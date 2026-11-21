@@ -566,6 +566,7 @@ async function viewStart() {
       <div class="field"><label for="start-year">First season starts in</label><input type="number" id="start-year" value="${esc((st.rules || {}).start_year ?? 2026)}" min="1900" max="2200" style="width:90px"></div>
       <details class="opts"><summary>Options</summary>
         <label class="check"><input type="checkbox" id="su-anim" ${animOn() ? "checked" : ""}> Winner animation when a league or cup finishes</label>
+        <label class="check"><input type="checkbox" id="su-form" checked> Team form: clubs on a hot or cold run get a small nudge (set when the world is made)</label>
         <label class="check"><input type="checkbox" id="su-god" ${st.god ? "checked" : ""}> God mode (commissioner editor)</label>
         <label class="check"><input type="checkbox" id="rules-on"> Change rules before starting</label>
         <div class="rules" id="rules" hidden>${rules.map(([k, v]) => `<div class="field"><span>${esc(k)}</span><input data-rule="${esc(k)}" data-def="${esc(v)}" value="${esc(v)}" style="width:130px"></div>`).join("")}</div>
@@ -586,7 +587,7 @@ async function viewStart() {
     if ($("#start-year").value && $("#start-year").value !== String((st.rules || {}).start_year ?? 2026)) rules.start_year = $("#start-year").value;
     try { localStorage.setItem("ssb_anim", $("#su-anim").checked ? "1" : "0"); } catch (e) {}
     await api("/api/settings_set", { god: $("#su-god").checked });
-    const ok = await busy("Building the world (about 2 seconds)...", () => api("/api/new", { seed: $("#seed").value, rules }));
+    const ok = await busy("Building the world (about 2 seconds)...", () => api("/api/new", { seed: $("#seed").value, rules, form: $("#su-form") && $("#su-form").checked ? "1" : "" }));
     if (ok) { PICK_ASKED = false; location.hash = "#/world"; await refreshStatus(); await route(); }
   };
   wireSaves(false); wireSaveTools(false); wireLogoPanel(); storageNote(); if (typeof owWireStart === "function") owWireStart();
@@ -1690,8 +1691,9 @@ async function viewMatchup(cid, h, a) {
   if (tour) { h = m.home.name; a = m.away.name; }               // the tournament game's own home / first team goes on the left
   let fx = null;
   if (m.comp && m.comp.kind === "league") { const f = await api("/api/fixtures?name=" + enc(m.comp.title)).catch(() => null); fx = f && f.rows.find((r) => r.h === h && r.a === a); }
-  const side = (s) => `<div class="card"><h3>${L(s.name)} <small>${esc(nat ? s.confed : s.league)}</small></h3>
-    <div class="row"><span>${nat ? "Rating" : "Team OVR"}</span><b>${nat ? s.ovr : ovr(s.ovr)}</b></div>
+  const FM = m.form || null, fmTag = (v) => (Math.abs(v) >= 1 ? `<span class="fmtag ${v > 0 ? "hot" : "cold"}" title="${v > 0 ? "Hot: results better than expected lately" : "Cold: results worse than expected lately"}">${v > 0 ? "\u{1F525}" : "\u2744\uFE0F"} ${v > 0 ? "+" : ""}${v.toFixed(1)} form</span>` : "");
+  const side = (s, fv) => `<div class="card"><h3>${L(s.name)} <small>${esc(nat ? s.confed : s.league)}</small></h3>
+    <div class="row"><span>${nat ? "Rating" : "Team OVR"}</span><b>${nat ? s.ovr : ovr(s.ovr)}</b></div>${fv && Math.abs(fv) >= 1 ? `<div class="row"><span>Form</span>${fmTag(fv)}</div>` : ""}
     ${s.pos && s.group ? `<div class="row"><span>${esc(s.group)}</span><b>${s.pos}${["st", "nd", "rd"][s.pos - 1] || "th"} of ${s.size}</b></div><div class="row"><span>Points / played</span><b>${s.pts} / ${s.p}</b></div><div class="row"><span>Goals for / against</span><b>${s.gf} / ${s.ga}</b></div>` : ""}
     ${s.pos && !s.group ? `<div class="row"><span>League position</span><b>${s.pos}</b></div><div class="row"><span>Points / played</span><b>${s.pts} / ${s.p}</b></div><div class="row"><span>Goals for / against</span><b>${s.gf} / ${s.ga}</b></div><div class="row"><span>Form</span><span>${chips(s.form)}</span></div>` : ""}
     ${s.reached != null ? `<div class="row"><span>Rounds won so far</span><b>${s.reached}</b></div>` : ""}</div>`;
@@ -1708,8 +1710,15 @@ async function viewMatchup(cid, h, a) {
     ${gameCard}
     ${fx && fx.done ? `<div class="card" style="text-align:center"><div class="meta">Full time this matchweek</div><div style="font-size:30px;font-weight:800">${fx.hg} - ${fx.ag}</div></div>` : fx ? `<p><button class="pri" id="mu-sim">Sim this game</button> <span class="meta">${esc(m.comp.title)}, matchweek ${(await api("/api/fixtures?name=" + enc(m.comp.title))).week}</span></p>` : ""}
     <div class="odds"><div class="o-h" style="flex:${m.odds.home}"><b>${pct(m.odds.home)}</b><span>${esc(h)}</span></div><div class="o-d" style="flex:${m.odds.draw}"><b>${pct(m.odds.draw)}</b><span>${tour && g.playable && g.leg !== 1 && g.leg !== 2 && m.comp.kind !== "qual" && /^(cup|cwc|wc|ct|ic)$/.test(m.comp.kind) ? "draw after 90" : "draw"}</span></div><div class="o-a" style="flex:${m.odds.away}"><b>${pct(m.odds.away)}</b><span>${esc(a)}</span></div></div>
-    <div class="cols" style="margin-top:14px">${side(m.home)}${side(m.away)}</div>
+    ${FM && (Math.abs(FM.home) >= 1 || Math.abs(FM.away) >= 1) ? `<div class="fmline">${Math.abs(FM.home) >= 1 ? esc(h) + " " + fmTag(FM.home) : ""} ${Math.abs(FM.away) >= 1 ? esc(a) + " " + fmTag(FM.away) : ""}<div class="meta">${Math.abs(FM.shift) >= 1 ? "Form moves the " + esc(FM.shift > 0 ? h : a) + " win chance by about " + Math.abs(Math.round(FM.shift)) + " points. It is a tiebreaker, not a promise." : "Form is a small nudge: here it barely changes the odds."}</div></div>` : ""}
+    <div id="mu-scorers"></div>
+    <div class="cols" style="margin-top:14px">${side(m.home, FM && FM.home)}${side(m.away, FM && FM.away)}</div>
     <h2>Head to head</h2>${h2hBlock(m.h2h, h, a)}`;
+  if (m.comp) api(`/api/match_scorers?comp=${enc(m.comp.id)}&home=${enc(h)}&away=${enc(a)}`).then((r) => {
+    const box = $("#mu-scorers"); if (!box || !r.games.length) return;
+    const lines = (arr) => (arr.length ? arr.map((x) => `${esc(x.name)} ${x.min}'`).join("<br>") : '<span class="meta">-</span>');
+    box.innerHTML = `<h2>Goalscorers</h2>` + r.games.map((x) => `<div class="card scr"><div class="meta">${esc(x.label)}</div><div class="scr-h"><span>${L(x.h)}</span><b>${x.hg} - ${x.ag}</b><span>${L(x.a)}</span></div><div class="scr-c"><div>${lines(x.hs)}</div><div>${lines(x.as)}</div></div></div>`).join("");
+  }).catch(() => {});
   if ($("#mu-sim")) $("#mu-sim").onclick = async () => { await simComp(m.comp.id, { fixture: { h, a } }); };
   if ($("#mu-gsim")) $("#mu-gsim").onclick = async () => { await simComp(m.comp.id, { game: g.key }); await route(); };
   if ($("#rv-rename")) $("#rv-rename").onclick = () => renameRivalry(h, a, rv.name, () => route());

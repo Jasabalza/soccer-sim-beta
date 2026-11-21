@@ -125,11 +125,14 @@ $mods["tourney"] = (function () {
     const lab = nation ? $mods.rivals.label(w, home, away) : $mods.rivals.label(w, home, away);
     const st = game ? game.stakes : 1.0, hv = game ? game.home : null;
     const neutral = !hv, flip = hv === away;
-    const o = $mods.rivals.odds(flip ? eff(away) : eff(home), flip ? eff(home) : eff(away), lab ? lab.intensity * st : 0, neutral);
+    const fxh = nation ? 0 : $mods.rivals.formfx(w, home), fxa = nation ? 0 : $mods.rivals.formfx(w, away), rvx = lab ? lab.intensity * st : 0;
+    const o0 = $mods.rivals.odds(flip ? eff(away) : eff(home), flip ? eff(home) : eff(away), rvx, neutral);
+    const o = fxh || fxa ? $mods.rivals.odds((flip ? eff(away) + fxa : eff(home) + fxh), (flip ? eff(home) + fxh : eff(away) + fxa), rvx, neutral) : o0;
     const odds = flip ? { home: o.away, draw: o.draw, away: o.home, exp: [o.exp[1], o.exp[0]] } : o;
     const past = !game ? pastTie(c, home, away) : null;
     const leg1 = c.leg1 && c.leg1.has && game && game.leg === 2 ? gv(c.leg1, [game.a, game.b]) : null;
-    return { nation, home: side(home), away: side(away), h2h: $mods.rivals.h2h(w, home, away), rivalry: lab, stakes: st, odds,
+    const form = w.fm && !nation ? { home: fxh, away: fxa, shift: Math.round(((flip ? o.away - o0.away : o.home - o0.home)) * 1000) / 10 } : null;
+    return { nation, home: side(home), away: side(away), h2h: $mods.rivals.h2h(w, home, away), rivalry: lab, stakes: st, odds, form,
       comp: { id: cid, title: c.title, kind: c.kind },
       game: game ? { key: game.key, round: info ? info.label : "", date: info ? info.date : null, venue: hv, neutral, leg: game.leg, leg1, done: game.done, text: game.text, winner: game.winner, playable: !game.done, why: null }
         : { key: home + "|" + away, round: info ? info.label : "", venue: null, neutral: true, done: !!past, winner: past ? gv(past, "winner") : null, text: past ? (gv(past, "legs").map((l) => l[0] + "-" + l[1]).join(", ") + (gv(past, "how") ? " " + gv(past, "how") : "")) : null,

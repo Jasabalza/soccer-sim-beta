@@ -307,5 +307,43 @@ function comp_stats(w, cid, squads = null) {
 function public_(s) {
   return (() => { const $r = new $Dict(); let k, v; for (const $c0 of $iter($M.items(s))) { [k, v] = $iter($c0); if (!(!$M.startswith(k, "_"))) continue; $r.set(k, v); } return $r; })();
 }
-return {ASSIST_W: ASSIST_W, Counter: Counter, FORMATION: FORMATION, GOAL_W: GOAL_W, KIND_NAME: KIND_NAME, MVP_BALLOT: MVP_BALLOT, NATION_KINDS: NATION_KINDS, _draw: _draw, _xi: _xi, comp_kind: comp_kind, comp_stats: comp_stats, defaultdict: defaultdict, public: public_, random: random, team_data: team_data};
+
+// Goalscorers of the games two teams have played in one competition this season. Nothing here changes a result: the goals are the real ones, and
+// the scorers are drawn after the fact from the squad with the same seeded draw the competition's goal tables use, so a game always shows the
+// same scorers and the totals agree with the top-scorer lists.
+function scorers_between(w, cid, A, B) {
+  const comp = w.comps.get_(cid), kind = comp_kind(cid), nation = NATION_KINDS.includes(kind), meet = [];
+  const cap = (x) => String(x || "").charAt(0).toUpperCase() + String(x || "").slice(1);
+  if (kind === "league") {
+    comp.all_results().forEach((md, mi) => { for (const [h, a, hg, ag] of md) if ((h === A && a === B) || (h === B && a === A)) meet.push({ key: "m" + mi, h, a, hg, ag, label: "Matchweek " + (mi + 1) }); });
+  } else {
+    (comp.tlog || []).forEach((t, ti) => {
+      const ta = $idx(t, "a"), tb = $idx(t, "b"), legs = $idx(t, "legs");
+      if (!((ta === A && tb === B) || (ta === B && tb === A))) return;
+      legs.forEach((l, li) => { const flip = legs.length > 1 && li === 1; meet.push({ key: "t" + ti + "." + li, h: flip ? tb : ta, a: flip ? ta : tb, hg: flip ? l[1] : l[0], ag: flip ? l[0] : l[1], label: cap($idx(t, "name")) + (legs.length > 1 ? ", leg " + (li + 1) : "") }); });
+    });
+    (comp.glog || []).forEach(([md, a, b, sa, sb], gi) => { if ((a === A && b === B) || (a === B && b === A)) meet.push({ key: "g" + gi, h: a, a: b, hg: sa, ag: sb, label: "Group stage" }); });
+  }
+  if (!meet.length) return [];
+  w.ensure_uids();
+  let squads = null, by_nat = null; const cache = {};
+  const prep = (n) => {
+    if (cache[n]) return cache[n];
+    let pl;
+    if (nation) { if (!by_nat) { by_nat = {}; for (const p of w.players) if (p.club) (by_nat[p.nat] = by_nat[p.nat] || []).push(p); } pl = (by_nat[n] || []).slice().sort((x, y) => (y.ovr - x.ovr) || (x.name < y.name ? -1 : 1)).slice(0, 23); }
+    else { if (!squads) squads = w.squads(); pl = $sorted($M.get(squads, n, []), $kw({"key": ((p) => [(-p.ovr), p.name])})); }
+    const [xi, bench] = _xi(pl), pool = xi.map((p) => [p, 1.0]).concat(bench.map((p) => [p, 0.2]));
+    return (cache[n] = { pool, gw: pool.map(([p, m]) => $idx(GOAL_W, p.pos) * m * Math.pow(p.ovr / 70, 6)) });
+  };
+  const draw = (m, n, g) => {
+    if (g <= 0) return [];
+    const { pool, gw } = prep(n), r = random.Random($str(w.seed) + "|" + $str(w.season) + "|cs|" + $str(cid) + "|" + $str(m.key) + "|" + $str(n));
+    const out = [];
+    for (const [i, c] of $iter($M.items(_draw(r, g, gw)))) { const p = pool[i][0]; for (let k = 0; k < c; k++) out.push({ uid: p.uid, name: p.name, pos: p.pos }); }
+    const rm = random.Random($str(w.seed) + "|" + $str(w.season) + "|cs|" + $str(cid) + "|" + $str(m.key) + "|" + $str(n) + "|min");
+    return out.map((o) => ({ ...o, min: 1 + Math.floor(rm.random() * 90) })).sort((x, y) => (x.min - y.min) || (x.name < y.name ? -1 : 1));
+  };
+  return meet.map((m) => ({ label: m.label, h: m.h, a: m.a, hg: m.hg, ag: m.ag, hs: draw(m, m.h, m.hg), as: draw(m, m.a, m.ag) }));
+}
+return {scorers_between: scorers_between, ASSIST_W: ASSIST_W, Counter: Counter, FORMATION: FORMATION, GOAL_W: GOAL_W, KIND_NAME: KIND_NAME, MVP_BALLOT: MVP_BALLOT, NATION_KINDS: NATION_KINDS, _draw: _draw, _xi: _xi, comp_kind: comp_kind, comp_stats: comp_stats, defaultdict: defaultdict, public: public_, random: random, team_data: team_data};
 })();

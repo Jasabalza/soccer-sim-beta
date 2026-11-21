@@ -14,6 +14,7 @@ async function viewOwner(tab) {
   const tabs = [["hub", "Hub"], ["sched", "Schedule"], ["window", "Window"], ["squad", "Squad"], ["staff", "Staff"], ["money", "Money"], ["board", "Board"]];
   OWT.tab = tabs.some((t) => t[0] === tab) ? tab : OWT.tab || "hub";
   const sched0 = OWT.tab === "hub" && st.state !== "ended" ? await api("/api/ow_schedule").catch(() => null) : null;
+  if (sched0 && sched0.last) { const l = sched0.last; try { const r = await api(`/api/match_scorers?comp=${enc(l.cid)}&home=${enc(l.h)}&away=${enc(l.a)}`); sched0.lastScorers = (r.games || []).find((x) => x.hg === l.hg && x.ag === l.ag && x.h === l.h && (x.label === l.label || (/^Matchweek/.test(x.label) && l.kind === "league"))) || null; } catch (e) { /* no scorers */ } }
   const body = OWT.tab === "hub" ? owHub(st, sched0) : OWT.tab === "sched" ? await owSched(st) : OWT.tab === "window" ? await owWindow(st) : OWT.tab === "squad" ? await owSquad(st) : OWT.tab === "staff" ? await owStaff(st) : OWT.tab === "money" ? await owMoney(st) : owBoard(st);
   $("#view").innerHTML = `<div class="v2 ow"><div class="dim small">${esc(st.name)} &middot; ${esc(st.back)} &middot; age ${st.age} &middot; ${st.mode === "sandbox" ? "Sandbox" : "Classic"}</div>
     <h1>${esc(st.club.name)}</h1>
@@ -27,6 +28,7 @@ function owStartCard() {
   return `<div class="card"><h3>Owner mode <small>beta</small></h3><div class="dim small" style="margin-bottom:8px">You are the owner. Buy or inherit a club, hire the right people, run the transfer window, answer to the board. Your career ends when you die, go broke or retire.</div>
     <div class="field"><label>Name</label><input id="ow-name" value="The Owner" maxlength="30" style="width:170px"></div>
     <div class="field"><label>Seed</label><input type="number" id="ow-seed" value="1" min="1" style="width:90px"></div>
+    <div class="field"><label>Form</label><label class="check"><input type="checkbox" id="ow-form" checked> Hot and cold runs (small nudge)</label></div>
     <div class="field"><label>Mode</label><select id="ow-mode"><option value="classic">Classic (injections capped)</option><option value="sandbox">Sandbox (no caps)</option></select></div>
     <div class="ow-back" id="ow-back">${[["selfmade", "Self-made", 32, "700M", "Little money, lots of time"], ["trust", "Trust fund", 35, "1.2B", "A family club, handed down"], ["founder", "Founder", 42, "2B", "A big exit and a big ego"], ["fan", "Local fan", 48, "500M", "Save the club you grew up with"], ["veteran", "Veteran", 62, "4B", "Rich, with little time left"]]
       .map(([k, t, a, m, d], i) => `<label class="owb"><input type="radio" name="owb" value="${k}" ${i === 0 ? "checked" : ""}><span><b>${t}</b> &middot; age ${a} &middot; ${m}<br><span class="dim small">${d}</span></span></label>`).join("")}</div>
@@ -36,7 +38,7 @@ function owWireStart() {
   const go = $("#ow-go"); if (!go) return;
   go.onclick = async () => {
     const back = document.querySelector("input[name=owb]:checked").value;
-    const ok = await busy("Building the world (about 2 seconds)...", () => api("/api/ow_new", { seed: $("#ow-seed").value, backstory: back, name: $("#ow-name").value, mode: $("#ow-mode").value }));
+    const ok = await busy("Building the world (about 2 seconds)...", () => api("/api/ow_new", { seed: $("#ow-seed").value, backstory: back, name: $("#ow-name").value, mode: $("#ow-mode").value, form: $("#ow-form") && $("#ow-form").checked ? "1" : "" }));
     if (ok) { PICK_ASKED = false; await refreshStatus(); location.hash = "#/owner"; await route(); }
   };
 }
@@ -69,13 +71,14 @@ function owEnded(st) {
 }
 // ---- schedule: your games in the league and in every other competition your club is in ----
 OWT.sc = "";
+const owGoals = (arr) => (arr.length ? arr.map((x) => esc(x.name) + " " + x.min + "'").join("<br>") : '<span class="dim small">-</span>');
 const owEmb = (c, size) => { try { return compEmb(c.title, c.emblem, size || 16); } catch (e) { return ""; } };
 const owTeam = (n, me, size) => `<span class="owt">${crest(n, size || 18)}<span>${n === me ? "<b>" + esc(n) + "</b>" : esc(n)}</span></span>`;
 const owTeams = (g, me) => (g.h ? `${owTeam(g.h, me)}<span class="dim small"> v </span>${owTeam(g.a, me)}` : `<span>${esc(g.label)}</span>`);
-const owScore = (g, me) => { const mine = g.h === me ? g.hg - g.ag : g.ag - g.hg; return `<b class="owres ${mine > 0 ? "w" : mine < 0 ? "l" : "d"}">${g.hg}-${g.ag}</b>`; };
+const owScore = (g, me, ext) => { const mine = g.h === me ? g.hg - g.ag : g.ag - g.hg, x = g.agg ? `<span class="dim small owagg">agg ${g.agg[0]}-${g.agg[1]}${g.how ? " " + esc(g.how) : ""}</span>` : g.how ? `<span class="dim small owagg">${esc(g.how)}</span>` : ""; return `<b class="owres ${mine > 0 ? "w" : mine < 0 ? "l" : "d"}">${g.hg}-${g.ag}</b>${ext === false ? "" : x}`; };
 // one game of the owner's club: date, competition, both teams with crests, and either the score or home/away
 function owGameRow(g, me, emb, showComp) {
-  const side = g.played ? owScore(g, me) : g.tentative && !g.h ? '<span class="dim small">if still in</span>' : `<span class="dim small">${g.neutral ? "neutral" : g.h === me ? "home" : "away"}</span>`;
+  const side = g.played ? `<span class="owsd">${owScore(g, me)}</span>` : g.tentative && !g.h ? '<span class="dim small">if still in</span>' : `<span class="dim small">${g.neutral ? "neutral" : g.h === me ? "home" : "away"}</span>`;
   return `<div class="row owg"><span class="small owd">${esc(g.date ? g.date.text : "")}</span><span class="rt"><span class="dim small">${showComp ? (emb || "") + " " + esc(g.comp) + " &middot; " : ""}${esc(g.label || "")}</span>${g.h ? `<div>${owTeam(g.h, me)}</div><div>${owTeam(g.a, me)}</div>` : ""}</span>${side}</div>`;
 }
 const OW_MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
@@ -155,7 +158,7 @@ function owHub(st, sc) {
   if (sc && !st.reneg && !(st.window && st.window.open) && !off) {
     const me = st.club.name, n = sc.next, l = sc.last, cc = (x) => sc.comps.find((c) => c.id === x.cid), em = (x) => { const c = cc(x); return c ? owEmb(c, 14) : ""; };
     nextCard = `<div class="card"><h3>Next game${n ? `<small>${esc(n.date ? n.date.text : "")}</small>` : ""}</h3>${n ? `<div class="dim small">${em(n)} ${esc(n.comp)} &middot; ${esc(n.label || "")}</div><div class="owbig">${n.h ? owTeams(n, me) : "<span>" + esc(n.label) + " <span class='dim small'>(if still in)</span></span>"}</div><div class="dim small">${n.h ? (n.neutral ? "Neutral ground" : n.h === me ? "Home" : "Away") : ""}</div><button class="pri wide" id="ow-game" style="margin-top:8px">Play this game</button>` : '<div class="dim small">No games left this season.</div>'}
-      ${l ? `<h3 style="margin-top:14px">Last result</h3><div class="dim small">${em(l)} ${esc(l.comp)} &middot; ${esc(l.label || "")} &middot; ${esc(l.date ? l.date.text : "")}</div><div class="owbig">${owTeam(l.h, me)} ${owScore(l, me)} ${owTeam(l.a, me)}</div>` : ""}</div>`;
+      ${l ? `<h3 style="margin-top:14px">Last result</h3><div class="dim small">${em(l)} ${esc(l.comp)} &middot; ${esc(l.label || "")} &middot; ${esc(l.date ? l.date.text : "")}</div><div class="owbig">${owTeam(l.h, me)} ${owScore(l, me)} ${owTeam(l.a, me)}</div>${sc.lastScorers ? `<div class="scr-c"><div>${owGoals(sc.lastScorers.hs)}</div><div>${owGoals(sc.lastScorers.as)}</div></div>` : ""}` : ""}</div>`;
   }
   const bo = st.buyout ? `<div class="card ow-alert"><h3>Buyout offer</h3>The board offers <b>${owM(st.buyout.offer)}</b> for the club.<div class="owbtns"><button data-bo="accept">Accept</button><button data-bo="counter" ${st.buyout.counter ? "disabled" : ""}>Counter (+15%)</button><button data-bo="refuse">Refuse</button></div><div class="dim small">Refusing makes the next offer worse.</div></div>` : "";
   return `${bo}${nextCard}${staffAlert ? `<div class="card ow-alert">${staffAlert} <button class="mini" data-tab="staff">Open staff</button></div>` : ""}<div class="card"><h3>${phase}<small>Season ${st.season}</small></h3>${act}</div>

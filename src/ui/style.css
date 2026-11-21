@@ -1220,3 +1220,8 @@ select { padding-right: 30px; }
 .ow .owres { padding: 2px 8px; border-radius: 8px; background: var(--panel2, #1b2a22); } .ow .owres.w { color: #4fbf7a; } .ow .owres.l { color: #e05a4f; } .ow .owres.d { color: #e0b44f; }
 .ow .chips button { display: inline-flex; align-items: center; gap: 6px; } .ow .bk-box { margin-top: 6px; }
 .ow .owmon { margin: 12px 0 2px; font-weight: 700; color: var(--accent, #3ddc84); font-size: 13px; text-transform: uppercase; letter-spacing: .04em; } .ow .owres { white-space: nowrap; } .ow .owdone summary { cursor: pointer; padding: 6px 0; }
+.ow .owsd { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; } .ow .owagg { white-space: nowrap; margin-left: 6px; }
+
+.fmtag { font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 10px; background: var(--panel2, #1b2a22); white-space: nowrap; } .fmtag.hot { color: #ff9a4d; } .fmtag.cold { color: #6cc4ff; }
+.fmline { margin: 8px 0; display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; } .fmline .meta { flex-basis: 100%; }
+.scr { margin: 8px 0; } .scr-h { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 15px; } .scr-c { display: flex; justify-content: space-between; gap: 12px; margin-top: 6px; font-size: 13px; } .scr-c > div:last-child { text-align: right; }

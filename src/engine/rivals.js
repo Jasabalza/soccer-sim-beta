@@ -273,6 +273,38 @@ $mods["rivals"] = (function () {
     const s = h + d + a;
     return { home: h / s, draw: d / s, away: a / s, exp: [hl, al] };
   }
+
+  // ---- team form: a small, capped rating nudge from how a club's last results compare with what was expected of it ----
+  // Off unless the world was made with form (w.fm). Uses only finished matchweeks, so it never depends on the order games are simmed in.
+  const FXC = new WeakMap(), FX_K = 1.5, FX_N = 5;
+  function formfx(w, n) {
+    const fm = w.fm; if (!fm || !w.clubs.has(n)) return 0;
+    const lc = w.comps.get_("L:" + w.clubs.get_(n).get_("league")); if (!lc || !lc.results || !lc.eff) return 0;
+    const key = w.season + "|" + lc.results.length;
+    let c = FXC.get(w); if (!c || c.w !== w) { c = { w, m: new Map() }; FXC.set(w, c); }
+    const hit = c.m.get(n); if (hit && hit.key === key) return hit.v;
+    const got = [];
+    for (let i = lc.results.length - 1; i >= 0 && got.length < FX_N; i--) for (const m of lc.results[i]) if (m[0] === n || m[1] === n) { got.push(m); break; }
+    let v = 0;
+    if (got.length >= 3) {
+      let sum = 0;
+      for (const m of got) {
+        const home = m[0] === n, o = odds(gv(lc.eff, m[0]), gv(lc.eff, m[1]), 0, false), pw = home ? o.home : o.away, e = 3 * pw + o.draw;
+        const gf = home ? m[2] : m[3], ga = home ? m[3] : m[2];
+        sum += (gf > ga ? 3 : gf === ga ? 1 : 0) - e;
+      }
+      v = Math.max(-fm.cap, Math.min(fm.cap, FX_K * sum / got.length));
+    }
+    v = Math.round(v * 10) / 10; c.m.set(n, { key, v });
+    return v;
+  }
+  // the strength table with form added for the two clubs about to play (the same table when form is off or both are level)
+  function fxEff(w, eff, a, b) {
+    if (!w.fm) return eff;
+    const da = formfx(w, a), db = formfx(w, b); if (!da && !db) return eff;
+    const e2 = $dict(eff); $setidx(e2, a, gv(eff, a) + da); $setidx(e2, b, gv(eff, b) + db);
+    return e2;
+  }
   function form(c, name) {
     const out = [], weeks = (c.results || []).concat(c.partial && c.partial.length ? [c.partial] : []);
     for (let i = weeks.length - 1; i >= 0 && out.length < 5; i--) for (const m of weeks[i]) {
@@ -298,8 +330,9 @@ $mods["rivals"] = (function () {
     const comp = cid && w.comps.has(cid) ? w.comps.get_(cid) : null;
     const lab = label(w, h, a), stakes = 1.0;
     const effH = comp && comp.eff ? gv(comp.eff, h) : C(h).get_("eff"), effA = comp && comp.eff ? gv(comp.eff, a) : C(a).get_("eff");
+    const fh = formfx(w, h), fa = formfx(w, a), rvv = lab ? lab.intensity * stakes : 0, o0 = odds(effH, effA, rvv, false), o1 = fh || fa ? odds(effH + fh, effA + fa, rvv, false) : o0;
     return { home: side(h, comp), away: side(a, comp), h2h: h2h(w, h, a), rivalry: lab, stakes, comp: comp ? { id: cid, title: comp.title, kind: comp.kind } : null,
-      odds: odds(effH, effA, lab ? lab.intensity * stakes : 0, false) };
+      odds: o1, form: w.fm ? { home: fh, away: fa, shift: Math.round((o1.home - o0.home) * 1000) / 10 } : null };
   }
   function list(w, club) {
     load();
@@ -388,5 +421,5 @@ $mods["rivals"] = (function () {
     if (path === "/api/rivalry_name") return rename(w, q.a, q.b, q.name);
     return null;
   }
-  return { odds, poissonPmf, effect, intensity, derby, derby_fx, update_season, label, h2h, matchup, list, rename, transfer_heat, api, key, known: () => { load(); return KN; } };
+  return { formfx, fxEff, odds, poissonPmf, effect, intensity, derby, derby_fx, update_season, label, h2h, matchup, list, rename, transfer_heat, api, key, known: () => { load(); return KN; } };
 })();

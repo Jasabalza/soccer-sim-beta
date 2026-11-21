@@ -302,7 +302,7 @@ class LeagueComp extends Comp {
   }
   _fixture(h, a) {
     const self = this, st = self.st;
-    const [hg, ag] = score(self.fixture_rng(h, a), self.eff.get_(h), self.eff.get_(a), false, 1.0, $mods.rivals.effect(self.w, h, a, 1.0));
+    const fe = $mods.rivals.fxEff(self.w, self.eff, h, a), [hg, ag] = score(self.fixture_rng(h, a), fe.get_(h), fe.get_(a), false, 1.0, $mods.rivals.effect(self.w, h, a, 1.0));
     const sh = st.get_(h), sa = st.get_(a);
     sh.set("p", sh.get_("p") + 1); sa.set("p", sa.get_("p") + 1);
     sh.set("gf", sh.get_("gf") + hg); sh.set("ga", sh.get_("ga") + ag);
@@ -414,7 +414,7 @@ class CupComp extends Comp {
     return pairs.map(([a, b]) => ({ key: a + "|" + b, a, b, leg, left }));
   }
   _sim(ev, g, rng) {
-    const self = this, eff = self.eff, { a, b, leg, left } = g;
+    const self = this, { a, b, leg, left } = g, eff = $mods.rivals.fxEff(self.w, self.eff, a, b);
     const stk = left <= 2 ? 1.7 : left <= 4 ? 1.45 : left <= 8 ? 1.3 : 1.2;       // bigger stakes, bigger rivalry effect
     const rv = $mods.rivals.effect(self.w, a, b, stk);
     if (leg === 1) return { legs: [score(rng, $idx(eff, a), $idx(eff, b), false, 1.0, rv)] };
@@ -783,7 +783,7 @@ class WorldCup extends Comp {
     return out;
   }
   _sim(ev, g, rng) {
-    const self = this, eff = self.eff, { a, b } = g;
+    const self = this, { a, b } = g, eff = $mods.rivals.fxEff(self.w, self.eff, a, b);
     const n = g.n || 0, rv = self.rvfx(a, b, g.phase === "grp" ? 1.0 : n <= 2 ? 1.7 : n <= 4 ? 1.45 : n <= 8 ? 1.3 : 1.2);
     const [sa, sb] = pair_score(rng, eff, a, b, self.host, 1.0, true, rv);
     if (g.phase === "grp") return { sa, sb };

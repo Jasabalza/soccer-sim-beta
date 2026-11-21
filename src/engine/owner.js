@@ -593,7 +593,7 @@ function cupGames(w, c, me, dateOf) {
     if (t.season !== w.season || (t.a !== me && t.b !== me)) continue;
     (t.legs || []).forEach((l, i) => {
       const flip = two && t.legs.length > 1 && i === 1;
-      games.push({ h: flip ? t.b : t.a, a: flip ? t.a : t.b, hg: flip ? l[1] : l[0], ag: flip ? l[0] : l[1], played: true, neutral: !two || t.legs.length < 2, label: cap(t.name) + (t.legs.length > 1 ? ", leg " + (i + 1) : ""), date: evDate(t.round, i + 1) || (i === t.legs.length - 1 && t.date ? { iso: t.date, text: t.date } : null) });
+      games.push({ h: flip ? t.b : t.a, a: flip ? t.a : t.b, hg: flip ? l[1] : l[0], ag: flip ? l[0] : l[1], played: true, neutral: !two || t.legs.length < 2, agg: t.legs.length > 1 && i === t.legs.length - 1 && g_(t0, "agg") ? (flip ? [g_(t0, "agg")[1], g_(t0, "agg")[0]] : [g_(t0, "agg")[0], g_(t0, "agg")[1]]) : null, how: i === t.legs.length - 1 ? g_(t0, "how") || "" : "", label: cap(t.name) + (t.legs.length > 1 ? ", leg " + (i + 1) : ""), date: evDate(t.round, i + 1) || (i === t.legs.length - 1 && t.date ? { iso: t.date, text: t.date } : null) });
     });
     if (t.winner && t.winner !== me) out = true;
   }

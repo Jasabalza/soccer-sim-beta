@@ -678,6 +678,7 @@ function review(rec, why) {
   p = $M.get(rec, "potY");
   return $dict($kw({"season": $idx(rec, "season"), "champs": $idx(rec, "champs"), "cups": (() => { const $r = new $Dict(); let a, b, c, $t1; for (const $c0 of $iter($M.items($idx(rec, "cups")))) { ($t1 = $iter($c0), c = $t1[0], [a, b] = $iter($t1[1])); $r.set(c, $dict($kw({"name": $idx($idx(w.cups, c), "name"), "winner": a, "runner_up": b}))); } return $r; })(), "cwc": $idx(rec, "cwc"), "wc": $idx(rec, "wc"), "potY": ($T(p) ? $dict($kw({"name": $idx(p, 0), "ovr": $idx(p, 1), "club": $idx(p, 2), "nat": $idx(p, 3)})) : null), "news": (() => { const $r = []; let _, k, t; for (const $c0 of $iter(news)) { [_, _, k, t] = $iter($c0); $r.push($dict($kw({"kind": k, "text": t}))); } return $r; })(), "reasons": why, "awards": awards_brief($M.get(rec, "awards")), "transfers": $dict($kw({"n": $idx($idx(rec, "transfers"), "n"), "total": mx($idx($idx(rec, "transfers"), "total"))}))}));
 }
+const FORM_CAP = 2;
 function a_new(body) {
   let cfg, cur, k, seed, v, val, $t1, $t2;
   cfg = $new(S.Settings, [$kw({"label": "game"})]);
@@ -706,6 +707,7 @@ function a_new(body) {
     else throw $e1;
   }
   ST.world = $new(S.World, [cfg, seed]);
+  if ($T($M.get(body, "form")) && ["1", "true", "yes", "on"].includes($M.lower($str($idx(body, "form"))))) ST.world.fm = { cap: FORM_CAP };      // team form is chosen when the world is made
   ST.stops = $new(Stops, []);
   ST.last_review = null;
   return $dict($kw({"ok": true}));
@@ -972,6 +974,7 @@ POST = $lit_dict([["/api/favs", a_favs], ["/api/favnations", a_favnations], ["/a
   const O = $mods.owner, pl = (q) => $plain(q), bad = (m, c = 409) => { throw $new(ApiError, [m, c]); };
   const own = () => { const w = need_world(); if (!w.ow) bad("This world has no owner run. Start one from New game > Owner mode."); return w; };
   const R = (f) => (q) => { const w = own(); const r = f(w, pl(q)); return $dict($kw(Object.assign({ ok: true }, r || {}))); };
+  GET.set("/api/match_scorers", (q) => { const w = need_world(), cid = $plain(q).comp; if (!cid || !w.comps.has(cid)) bad("unknown competition", 404); return $dict($kw({ games: $mods.compstats.scorers_between(w, cid, $plain(q).home, $plain(q).away) })); });
   GET.set("/api/ow_state", (q) => { const w = need_world(); return $dict($kw(O.view(w))); });
   GET.set("/api/ow_clubs", (q) => { const w = own(); return $dict($kw({ rows: O.priceList(w) })); });
   GET.set("/api/ow_market", (q) => { const w = own(); return $dict($kw({ rows: O.market(w, pl(q)) })); });
