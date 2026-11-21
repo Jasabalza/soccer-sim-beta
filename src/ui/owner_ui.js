@@ -16,7 +16,7 @@ async function viewOwner(tab) {
   OWT.tab = tabs.some((t) => t[0] === tab) ? tab : OWT.tab || "hub";
   const sched0 = OWT.tab === "hub" && st.state !== "ended" ? await api("/api/ow_schedule").catch(() => null) : null;
   if (sched0 && sched0.last) { const l = sched0.last; try { const r = await api(`/api/match_scorers?comp=${enc(l.cid)}&home=${enc(l.h)}&away=${enc(l.a)}`); sched0.lastScorers = (r.games || []).find((x) => x.hg === l.hg && x.ag === l.ag && x.h === l.h && (x.label === l.label || (/^Matchweek/.test(x.label) && l.kind === "league"))) || null; } catch (e) { /* no scorers */ } }
-  const body = OWT.tab === "hub" ? owHub(st, sched0) : OWT.tab === "sched" ? await owSched(st) : OWT.tab === "window" ? await owWindow(st) : OWT.tab === "squad" ? await owSquad(st) : OWT.tab === "staff" ? await owStaff(st) : OWT.tab === "money" ? await owMoney(st) : OWT.tab === "apex" ? owApex(st) : owBoard(st);
+  const body = OWT.tab === "hub" ? owHub(st, sched0) : OWT.tab === "sched" ? await owSched(st) : OWT.tab === "window" ? await owWindow(st) : OWT.tab === "squad" ? await owSquad(st) : OWT.tab === "staff" ? await owStaff(st) : OWT.tab === "money" ? await owMoney(st) : OWT.tab === "apex" ? await owApex(st) : owBoard(st);
   $("#view").innerHTML = `<div class="v2 ow"><div class="dim small">${esc(st.name)} &middot; ${esc(st.back)} &middot; age ${st.age} &middot; ${st.mode === "sandbox" ? "Sandbox" : "Classic"}</div>
     <h1>${esc(st.club.name)}</h1>
     <div class="owtop"><div><span class="dim small">Your money</span><b>${owM(st.wealth)}</b></div><div><span class="dim small">Club cash</span><b>${owM(st.club.cash)}</b></div><div><span class="dim small">Debt</span><b>${st.club.debt ? owM(st.club.debt) : "none"}</b></div></div>
@@ -213,7 +213,7 @@ function owHub(st, sc) {
     <div class="card"><button class="btn wide" id="ow-retire">Retire from ownership</button></div>`;
 }
 // ---- Apex League (stage 1: the countdown, the rumours and the two contracts) ----
-function owApex(st) {
+async function owApex(st) {
   const A = st.apex, me = st.club.name;
   const log = A.log.length ? `<div class="card"><h3>News</h3>${A.log.map((f) => `<div class="row"><span class="small">${esc(f.t)}</span><span class="dim small">S${f.season}</span></div>`).join("")}</div>` : "";
   const said = { signed: "#4fbf7a", staying: "#e0b44f", "very likely": "#e06a5a", likely: "#e0b44f", possible: "#9aa3a8" };
@@ -231,8 +231,14 @@ function owApex(st) {
       <div class="dim small" style="margin-top:6px">Either contract locks the club in. Leaving early costs fines and sanctions, depending on relations. You can change your answer until the season ends.</div></div>`;
     else main += `<div class="card"><div class="dim small">Your club has not been approached. Strong seasons and a bigger name bring an invitation.</div></div>`;
     main += `<div class="card"><h3>Signed so far</h3>${A.signed.map((x) => `<div class="row"><span class="owt">${crest(x.club, 18)}${esc(x.club)}</span><span class="dim small">stature ${x.stature}${x.mine ? " &middot; you" : ""}</span></div>`).join("") || '<div class="dim small">Nobody yet.</div>'}</div>`;
-  } else if (A.state === "live") main = `<div class="card"><h3>Apex League <small>founded season ${A.inaugural}</small></h3><div class="dim small">${A.members.length} clubs signed. Beta: the league's own matches are not played yet, so clubs stay in their domestic leagues for now.</div>${A.members.map((m) => `<div class="row"><span class="owt">${crest(m.club, 18)}<span ${m.mine ? 'style="font-weight:800"' : ""}>${esc(m.club)}</span></span><span class="dim small">${m.years} yr contract</span></div>`).join("")}</div>`;
-  else main = `<div class="card"><h3>Apex League</h3><div class="dim small">The league collapsed before it started: too few big clubs signed.</div></div>`;
+  } else if (A.state === "live") {
+    let tbl = "";
+    try {
+      const d = await api("/api/league?name=" + enc("Apex League"));
+      tbl = `<div class="ow-tbl"><div class="ow-tr ow-th"><span>#</span><span class="cl">Club</span><span>P</span><span>W</span><span>D</span><span>L</span><span>GD</span><span>Pts</span></div>${d.rows.map((r) => `<div class="ow-tr${r.club === me ? " me" : ""}"><span>${r.pos}</span><span class="cl">${esc(r.club)}</span><span>${r.p}</span><span>${r.w}</span><span>${r.d}</span><span>${r.l}</span><span>${r.gd > 0 ? "+" : ""}${r.gd}</span><b>${r.pts}</b></div>`).join("")}</div>`;
+    } catch (e) { tbl = ""; }
+    main = `<div class="card"><h3>Apex League <small>founded season ${A.inaugural}</small></h3>${tbl}<div class="dim small" style="margin-top:6px">${A.members.length} clubs. Every match is a heavyweight.</div></div><div class="card"><h3>Contracts</h3>${A.members.map((m) => `<div class="row"><span class="owt">${crest(m.club, 18)}<span ${m.mine ? 'style="font-weight:800"' : ""}>${esc(m.club)}</span></span><span class="dim small">${m.years} yr left</span></div>`).join("")}</div>`;
+  } else main = `<div class="card"><h3>Apex League</h3><div class="dim small">The league collapsed before it started: too few big clubs signed.</div></div>`;
   return main + (A.state === "contracts" || A.state === "live" ? "" : rum) + (A.state === "contracts" ? rum : "") + log;
 }
 // ---- window ----

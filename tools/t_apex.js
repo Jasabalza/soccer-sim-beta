@@ -26,6 +26,24 @@ vm.runInThisContext(fs.readFileSync(__dirname + "/../dist/bundle_engine.js", "ut
   if (!["live", "dead", "contracts"].includes(v.state)) fail.push("unexpected final state " + v.state);
   if (v.state === "live") { if (v.members.length < 4 || v.members.length > 16) fail.push("member count " + v.members.length); }
   if (!w.news_log.some((n) => n[2] === "apex")) fail.push("no apex news");
+  // 2b: stage 2: the league is real, members left their leagues, everything still answers
+  if (v.state === "live") {
+    const AL = w.leagues.get("Apex League"), mem = AL.get("clubs"), set = new Set(mem);
+    if (mem.length !== v.members.length) fail.push("league clubs != members");
+    for (const m of mem) if (w.clubs.get(m).get("league") !== "Apex League") fail.push(m + " still in an old league");
+    for (const ln of w.leagues.keysArr()) { if (ln === "Apex League") continue; const L = w.leagues.get(ln); for (const m of L.get("clubs")) if (set.has(m)) fail.push(m + " listed in " + ln); }
+    for (const ln of new Set(mem.map((m) => w.apex.offers[m].league))) { const L = w.leagues.get(ln); if (L.get("games") > R.ap.fullLen(L.get("clubs").length)) fail.push(ln + " games " + L.get("games") + " for " + L.get("clubs").length + " clubs"); }
+    const lc = w.comps.get("L:Apex League"); if (!lc || lc.st.size !== mem.length) fail.push("no Apex comp or wrong size");
+    const champs = w.hist.map((r) => r.get("champs").get("Apex League")).filter(Boolean); if (champs.length < 2) fail.push("Apex champions not recorded (" + champs.length + ")");
+    for (const [cf, f] of w.cup_fields.itemsArr()) for (const m of f) if (set.has(m)) fail.push(m + " in the " + cf + " cup field");
+    const tab = (await call("/api/league?name=" + "Apex League")); if (!tab.rows || tab.rows.length !== mem.length) fail.push("league page rows");
+    const bad = [];
+    for (const u of ["/api/world", "/api/status", "/api/news", "/api/nations", "/api/awards", "/api/trophies", "/api/worldmoney", "/api/leaguemoney", "/api/records", "/api/years", "/api/charts", "/api/halloffame", "/api/hof_clubs", "/api/comp?id=" + "L:Apex League", "/api/club?name=" + mem[0], "/api/money?club=" + mem[0], "/api/compstats?id=" + "L:Apex League", "/api/comphist?id=" + "L:Apex League", "/api/fixtures?comp=" + "L:Apex League", "/api/league?name=Premier League", "/api/hofleague?league=" + "Apex League", "/api/moves", "/api/movemoney"]) {
+      let r; try { r = await R.request(u); } catch (e) { bad.push(u + " threw " + String(e.message).slice(0, 60)); continue; } if (r.code >= 500) bad.push(u + " " + r.code + " " + JSON.stringify(r.body).slice(0, 80));
+    }
+    if (bad.length) fail.push("endpoints: " + bad.join(" | "));
+    const prem = w.leagues.get("Premier League").get("clubs").length; console.log("Apex", mem.length, "clubs; Premier League now", prem, "clubs; champions", champs.join(", "));
+  }
   // 3: determinism and save round trip
   const w2 = $deser($ser(w)); if (JSON.stringify(w2.apex) !== JSON.stringify(w.apex)) fail.push("save round trip changed apex state");
   // 4: an owner at a giant gets an offer and cannot end the season without answering

@@ -257,7 +257,7 @@ function v_league(ln) {
   last_date = ((lc.ptr > 0) ? ev_date(w, lc, $idx(lc.events, (lc.ptr - 1))) : null);
   next_date = ($lt(lc.ptr, $len(lc.events)) ? ev_date(w, lc, $idx(lc.events, lc.ptr)) : null);
   fdate = (() => { const $r = new $Dict(); let f; for (const $c0 of $iter($getattr(w, "finals", []))) { f = $c0; $r.set([$idx(f, "season"), $idx(f, "title")], $idx(f, "date")); } return $r; })();
-  champs = (() => { const $r = []; let r; for (const $c0 of $iter(w.hist)) { r = $c0; $r.push($dict($kw({"season": $idx(r, "season"), "club": $idx($idx(r, "champs"), ln), "coach": $M.get($idx(r, "champ_coach"), ln), "pts": $idx($idx($idx(r, "pts"), ln), $idx($idx(r, "champs"), ln)), "date": $M.get(fdate, [$idx(r, "season"), ln])}))); } return $r; })();
+  champs = (() => { const $r = []; let r; for (const $c0 of $iter(w.hist)) { r = $c0; if (!$in(ln, $idx(r, "champs"))) continue; $r.push($dict($kw({"season": $idx(r, "season"), "club": $idx($idx(r, "champs"), ln), "coach": $M.get($idx(r, "champ_coach"), ln), "pts": $idx($idx($idx(r, "pts"), ln), $idx($idx(r, "champs"), ln)), "date": $M.get(fdate, [$idx(r, "season"), ln])}))); } return $r; })();
   cup = $M.get($M.get(w.cups, $idx(L, "confed"), new $Dict()), "name", "cup");
   return $dict($kw({"name": ln, "confed": $idx(L, "confed"), "games": $idx(L, "games"), "slots": $idx(L, "slots"), "cup": cup, "header": header(w), "progress": comp_progress(w, lc), "rows": rows, "last": last, "next": nxt, "last_date": last_date, "next_date": next_date, "emblem": T.spec_league(ln), "tv": $idx(L, "tvmult"), "champs": $slice(champs, null, null, (-1)), "seasons": (() => { const $r = []; let r; for (const $c0 of $iter(w.hist)) { r = $c0; $r.push($idx(r, "season")); } return $r; })(), "id": cid, "avg": r1($idx(w.league_avgs(), ln)), "tvmult": $idx(L, "tvmult")}));
 }
@@ -617,7 +617,7 @@ function v_money() {
   rows = [];
   for (const $f17 of $iter($M.items(w.leagues))) {
     [ln, L] = $iter($f17);
-    last = ($T(w.hist) ? $idx($idx($idx(w.hist, (-1)), "champs"), ln) : null);
+    last = ($T(w.hist) ? $M.get($idx($idx(w.hist, (-1)), "champs"), ln, null) : null);
     bud = $div($sum((() => { const $r = []; let n; for (const $c0 of $iter($idx(L, "clubs"))) { n = $c0; $r.push($idx($idx(w.clubs, n), "budget")); } return $r; })()), $len($idx(L, "clubs")));
     $M.append(rows, $dict($kw({"league": ln, "confed": $idx(L, "confed"), "avg": r1($idx(avg, ln)), "budget": mx(bud), "tv": $idx(L, "tvmult"), "places": $idx(L, "slots"), "champion": last})));
   }

@@ -80,6 +80,50 @@ $mods["apex"] = (function () {
   }
   function mustDecide(w) { const a = w && w.apex; return !!(a && a.on && a.state === "contracts" && a.pending && !a.choice && w.ow && w.ow.club === a.pending.club && w.season === a.inaugural - 1); }
 
+
+  // ---- stage 2: the league itself --------------------------------------------------------------------------------------------------------
+  const NAME = "Apex League", KEEP = 10;                       // a domestic league never drops under 10 clubs
+  const fullLen = (n) => (n % 2 === 0 ? 2 * (n - 1) : 2 * n);     // matchweeks of a home-and-away season (an odd field has byes)
+  // clubs may only leave while their league keeps enough clubs to play a season
+  function eligible(w, list) {
+    const out = [], gone = {};
+    for (const n of list) {
+      const ln = C(w, n).get("league"), size = w.leagues.get(ln).get("clubs").length;
+      if (size - (gone[ln] || 0) > KEEP) { gone[ln] = (gone[ln] || 0) + 1; out.push(n); } else say(w, ln + " refuses to let " + n + " go: it would not have enough clubs left to play a season.");
+    }
+    return out;
+  }
+  function formLeague(w, list) {
+    const a = w.apex, n = list.length, bases = $dict($kw({}));
+    // 1: the clubs leave their domestic leagues, and those leagues shrink to a full home-and-away season of what is left
+    const touched = new Set();
+    for (const m of list) {
+      const c = C(w, m), ln = c.get("league"), L = w.leagues.get(ln), arr = L.get("clubs"), i = arr.indexOf(m);
+      if (i >= 0) arr.splice(i, 1);                                // in place: league_clubs shares this array
+      touched.add(ln); c.set("league", NAME); bases.set(m, c.get("base"));
+      for (const p of w.players) if (p.club === m) p.league = NAME;
+      c.set("last_finish", list.indexOf(m) + 1);
+    }
+    for (const ln of touched) { const L = w.leagues.get(ln); L.set("games", Math.min(L.get("games"), fullLen(L.get("clubs").length))); }
+    // 2: the league itself: a real entry in the world's league list, so tables, income, awards and history all work
+    const avg = list.reduce((s, m) => s + C(w, m).get("base"), 0) / n, sd = Math.sqrt(list.reduce((s, m) => s + Math.pow(C(w, m).get("base") - avg, 2), 0) / n);
+    const A = $dict($kw({ name: NAME, country: "World", confed: "WORLD", prestige: 100, games: fullLen(n), foreign: 0.6, clubs: list.slice(), bases, target: avg, start_avg: avg, start_std: sd, tvmult: 1.1, slots: 0, coef_hist: [2.5, 2.5, 2.5, 2.5, 2.5] }));
+    A.set("coef0", 12.5);
+    w.leagues.set(NAME, A); w.league_clubs.set(NAME, A.get("clubs"));
+    for (const nm of w.nations.keysArr()) { const lst = w.prox.get(nm); if (lst && !lst.some((x) => x[0] === NAME)) lst.push([NAME, 0.4]); }
+    // 3: the continental cups lose these clubs, and the places pass down each league's table
+    const last = w.hist[w.hist.length - 1], tb = last && last.get("tables"), mem = new Set(list);
+    if (tb) { const t2 = new $Dict(); for (const ln of tb.keysArr()) t2.set(ln, tb.get(ln).filter((x) => !mem.has(x))); w.compute_cup_fields(t2); }
+    // 4: next season's income already includes the contract money
+    for (const m of list) { const c = C(w, m), add = a.offers[m].apex_pay / X(w); c.set("income", c.get("income") + add); c.set("budget", Math.max(c.get("budget"), c.get("income"))); }
+  }
+  // each rollover while the league lives: contract money, and the owner's fan backlash fading
+  function afterSeason(w) {
+    const a = w.apex; if (!a || !a.on || a.state !== "live") return;
+    for (const m of a.members) { const c = C(w, m.club); if (c) c.set("prize", c.get("prize", 0) + m.pay / X(w)); m.years = Math.max(0, m.years - 1); }
+    const o = w.ow; if (o && o.apex_fans > 0) { const back = Math.min(4, o.apex_fans); o.apex_fans -= back; o.fans = clamp(o.fans + back, 0, 100); }
+  }
+
   // ---- hooks ------------------------------------------------------------------------------------------------------------------------------
   // the start of a season: word gets out, then the contracts open in the third season of the countdown
   function startSeason(w) {
@@ -93,14 +137,18 @@ $mods["apex"] = (function () {
   }
   // the end of the season before the first one: contracts are locked and the league goes ahead, is delayed or never starts
   function resolve(w) {
-    const a = w.apex; if (!a || !a.on || a.state !== "contracts" || w.season < a.inaugural - 1) return;
+    const a = w.apex; if (!a || !a.on) return;
+    if (a.state === "live") return afterSeason(w);
+    if (a.state !== "contracts" || w.season < a.inaugural - 1) return;
     const me = w.ow && w.ow.club; let list = signedList(w);
     if (me && a.pending && !a.choice) a.choice = "stay";
     if (list.length > MAXN) { for (const n of list.slice(MAXN)) { if (n !== me) a.ai[n] = "stay"; } list = list.slice(0, MAXN); }
+    list = eligible(w, list);
     const st = strength(w, list);
     if (st.go) {
       a.state = "live"; a.members = list.map((n) => ({ club: n, years: a.offers[n].years, from: a.inaugural, pay: a.offers[n].apex_pay })); a.founded = a.inaugural;
       say(w, "The Apex League is a go: " + list.length + " clubs will play in season " + a.inaugural + ".");
+      formLeague(w, list);
       if (me && list.includes(me)) { const o = w.ow; o.fans = clamp(o.fans - 14, 0, 100); o.apex_fans = 14; }
     } else if (a.delays < MAX_DELAYS) {
       a.delays++; a.inaugural++; const rel = leagueRel(w), rk = ranking(w);
@@ -124,5 +172,5 @@ $mods["apex"] = (function () {
     if (a.state === "live") out.members = a.members.map((m) => ({ club: m.club, years: m.years, mine: m.club === me }));
     return out;
   }
-  return { init, startSeason, resolve, choose, mustDecide, view, ranking, strength, need, leagueRel };
+  return { NAME, fullLen, init, startSeason, resolve, choose, mustDecide, view, ranking, strength, need, leagueRel };
 })();

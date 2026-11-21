@@ -8,7 +8,7 @@ const BAD = !!process.env.BAD, RECK = !!process.env.RECKLESS, ACC = !!process.en
   const R = globalThis.__R; await R.init(); const fail = [], stat = { buys: 0, sells: 0, wars: 0, collapsed: 0, buyouts: 0, bankrupt: 0, deals: 0 };
   const raw = (p, b) => R.request(p, b);
   const call = async (p, b) => { const r = await raw(p, b); if (r.code !== 200) throw new Error(p + " " + r.code + " " + JSON.stringify(r.body)); return r.body; };
-  await call("/api/ow_new", { seed, backstory: back, name: "Bot", mode: "classic" });
+  await call("/api/ow_new", Object.assign({ seed, backstory: back, name: "Bot", mode: "classic" }, process.env.APEX ? { apex: "1", apex_year: 2 } : {}));
   const w = R.A.ST.world; const base = () => w.league_avgs ? 0 : 0;
   const pickClub = async () => {
     const rows = (await call("/api/ow_clubs")).rows;
@@ -21,6 +21,7 @@ const BAD = !!process.env.BAD, RECK = !!process.env.RECKLESS, ACC = !!process.en
     let st = await call("/api/ow_state"); if (st.state === "ended") { console.log("run ended:", JSON.stringify(st.ended)); break; }
     if (st.state === "between") { club = await pickClub(); if (!club) { console.log("cannot buy again"); break; } st = await call("/api/ow_state"); }
     if (BAD && st.club) { const f = st.club.cash - 0.15 * st.club.income; if (f > 1 && st.club.debt === 0) await raw("/api/ow_dividend", { amount: Math.floor(f) }); }
+    if (process.env.APEX) { const ss = await call("/api/ow_state"); if (ss.apex && ss.apex.offer && !ss.apex.offer.choice) await call("/api/ow_apex", { action: process.env.APEX === "join" ? "apex" : "stay" }); }
     // play the season
     for (let k = 0; k < 60; k++) { const a = await call("/api/ow_advance", { unit: "season" }); if (a.rolled) break; }
     st = await call("/api/ow_state");

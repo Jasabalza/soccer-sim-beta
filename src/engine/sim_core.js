@@ -785,6 +785,7 @@ class World {
     let L, ln, rel;
     for (const $f25 of $iter($M.items(self.leagues))) {
       [ln, L] = $iter($f25);
+      if (ln === "Apex League") { $setidx(L, "tvmult", 1.1); continue; }          // the Apex League is paid by its own deal, not by continental results
       rel = $div(self.coef(ln), $idx(L, "coef0"));
       $setidx(L, "tvmult", fclamp((1 + (0.35 * (rel - 1))), 0.8, 1.4));
     }

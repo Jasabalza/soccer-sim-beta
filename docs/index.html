@@ -3736,7 +3736,7 @@ class Stops {
     if ((($in("dynasty", self.on)) && ($len(h) >= 4))) {
       for (const $f3 of $iter(w.leagues)) {
         ln = $f3;
-        last = (() => { const $r = []; let r; for (const $c0 of $iter(h)) { r = $c0; $r.push($idx($idx(r, "champs"), ln)); } return $r; })();
+        last = (() => { const $r = []; let r; for (const $c0 of $iter(h)) { r = $c0; if (!$in(ln, $idx(r, "champs"))) continue; $r.push($idx($idx(r, "champs"), ln)); } return $r; })();
         run = 1;
         while (($lt(run, $len(last)) && ($eq($idx(last, $sub((-1), run)), $idx(last, (-1)))))) {
           run = run + 1;
@@ -6777,6 +6777,50 @@ $mods["apex"] = (function () {
   }
   function mustDecide(w) { const a = w && w.apex; return !!(a && a.on && a.state === "contracts" && a.pending && !a.choice && w.ow && w.ow.club === a.pending.club && w.season === a.inaugural - 1); }
 
+
+  // ---- stage 2: the league itself --------------------------------------------------------------------------------------------------------
+  const NAME = "Apex League", KEEP = 10;                       // a domestic league never drops under 10 clubs
+  const fullLen = (n) => (n % 2 === 0 ? 2 * (n - 1) : 2 * n);     // matchweeks of a home-and-away season (an odd field has byes)
+  // clubs may only leave while their league keeps enough clubs to play a season
+  function eligible(w, list) {
+    const out = [], gone = {};
+    for (const n of list) {
+      const ln = C(w, n).get("league"), size = w.leagues.get(ln).get("clubs").length;
+      if (size - (gone[ln] || 0) > KEEP) { gone[ln] = (gone[ln] || 0) + 1; out.push(n); } else say(w, ln + " refuses to let " + n + " go: it would not have enough clubs left to play a season.");
+    }
+    return out;
+  }
+  function formLeague(w, list) {
+    const a = w.apex, n = list.length, bases = $dict($kw({}));
+    // 1: the clubs leave their domestic leagues, and those leagues shrink to a full home-and-away season of what is left
+    const touched = new Set();
+    for (const m of list) {
+      const c = C(w, m), ln = c.get("league"), L = w.leagues.get(ln), arr = L.get("clubs"), i = arr.indexOf(m);
+      if (i >= 0) arr.splice(i, 1);                                // in place: league_clubs shares this array
+      touched.add(ln); c.set("league", NAME); bases.set(m, c.get("base"));
+      for (const p of w.players) if (p.club === m) p.league = NAME;
+      c.set("last_finish", list.indexOf(m) + 1);
+    }
+    for (const ln of touched) { const L = w.leagues.get(ln); L.set("games", Math.min(L.get("games"), fullLen(L.get("clubs").length))); }
+    // 2: the league itself: a real entry in the world's league list, so tables, income, awards and history all work
+    const avg = list.reduce((s, m) => s + C(w, m).get("base"), 0) / n, sd = Math.sqrt(list.reduce((s, m) => s + Math.pow(C(w, m).get("base") - avg, 2), 0) / n);
+    const A = $dict($kw({ name: NAME, country: "World", confed: "WORLD", prestige: 100, games: fullLen(n), foreign: 0.6, clubs: list.slice(), bases, target: avg, start_avg: avg, start_std: sd, tvmult: 1.1, slots: 0, coef_hist: [2.5, 2.5, 2.5, 2.5, 2.5] }));
+    A.set("coef0", 12.5);
+    w.leagues.set(NAME, A); w.league_clubs.set(NAME, A.get("clubs"));
+    for (const nm of w.nations.keysArr()) { const lst = w.prox.get(nm); if (lst && !lst.some((x) => x[0] === NAME)) lst.push([NAME, 0.4]); }
+    // 3: the continental cups lose these clubs, and the places pass down each league's table
+    const last = w.hist[w.hist.length - 1], tb = last && last.get("tables"), mem = new Set(list);
+    if (tb) { const t2 = new $Dict(); for (const ln of tb.keysArr()) t2.set(ln, tb.get(ln).filter((x) => !mem.has(x))); w.compute_cup_fields(t2); }
+    // 4: next season's income already includes the contract money
+    for (const m of list) { const c = C(w, m), add = a.offers[m].apex_pay / X(w); c.set("income", c.get("income") + add); c.set("budget", Math.max(c.get("budget"), c.get("income"))); }
+  }
+  // each rollover while the league lives: contract money, and the owner's fan backlash fading
+  function afterSeason(w) {
+    const a = w.apex; if (!a || !a.on || a.state !== "live") return;
+    for (const m of a.members) { const c = C(w, m.club); if (c) c.set("prize", c.get("prize", 0) + m.pay / X(w)); m.years = Math.max(0, m.years - 1); }
+    const o = w.ow; if (o && o.apex_fans > 0) { const back = Math.min(4, o.apex_fans); o.apex_fans -= back; o.fans = clamp(o.fans + back, 0, 100); }
+  }
+
   // ---- hooks ------------------------------------------------------------------------------------------------------------------------------
   // the start of a season: word gets out, then the contracts open in the third season of the countdown
   function startSeason(w) {
@@ -6790,14 +6834,18 @@ $mods["apex"] = (function () {
   }
   // the end of the season before the first one: contracts are locked and the league goes ahead, is delayed or never starts
   function resolve(w) {
-    const a = w.apex; if (!a || !a.on || a.state !== "contracts" || w.season < a.inaugural - 1) return;
+    const a = w.apex; if (!a || !a.on) return;
+    if (a.state === "live") return afterSeason(w);
+    if (a.state !== "contracts" || w.season < a.inaugural - 1) return;
     const me = w.ow && w.ow.club; let list = signedList(w);
     if (me && a.pending && !a.choice) a.choice = "stay";
     if (list.length > MAXN) { for (const n of list.slice(MAXN)) { if (n !== me) a.ai[n] = "stay"; } list = list.slice(0, MAXN); }
+    list = eligible(w, list);
     const st = strength(w, list);
     if (st.go) {
       a.state = "live"; a.members = list.map((n) => ({ club: n, years: a.offers[n].years, from: a.inaugural, pay: a.offers[n].apex_pay })); a.founded = a.inaugural;
       say(w, "The Apex League is a go: " + list.length + " clubs will play in season " + a.inaugural + ".");
+      formLeague(w, list);
       if (me && list.includes(me)) { const o = w.ow; o.fans = clamp(o.fans - 14, 0, 100); o.apex_fans = 14; }
     } else if (a.delays < MAX_DELAYS) {
       a.delays++; a.inaugural++; const rel = leagueRel(w), rk = ranking(w);
@@ -6821,7 +6869,7 @@ $mods["apex"] = (function () {
     if (a.state === "live") out.members = a.members.map((m) => ({ club: m.club, years: m.years, mine: m.club === me }));
     return out;
   }
-  return { init, startSeason, resolve, choose, mustDecide, view, ranking, strength, need, leagueRel };
+  return { NAME, fullLen, init, startSeason, resolve, choose, mustDecide, view, ranking, strength, need, leagueRel };
 })();
 
 $mods["sim_core"] = (function() {
@@ -7611,6 +7659,7 @@ class World {
     let L, ln, rel;
     for (const $f25 of $iter($M.items(self.leagues))) {
       [ln, L] = $iter($f25);
+      if (ln === "Apex League") { $setidx(L, "tvmult", 1.1); continue; }          // the Apex League is paid by its own deal, not by continental results
       rel = $div(self.coef(ln), $idx(L, "coef0"));
       $setidx(L, "tvmult", fclamp((1 + (0.35 * (rel - 1))), 0.8, 1.4));
     }
@@ -10265,7 +10314,7 @@ function v_league(ln) {
   last_date = ((lc.ptr > 0) ? ev_date(w, lc, $idx(lc.events, (lc.ptr - 1))) : null);
   next_date = ($lt(lc.ptr, $len(lc.events)) ? ev_date(w, lc, $idx(lc.events, lc.ptr)) : null);
   fdate = (() => { const $r = new $Dict(); let f; for (const $c0 of $iter($getattr(w, "finals", []))) { f = $c0; $r.set([$idx(f, "season"), $idx(f, "title")], $idx(f, "date")); } return $r; })();
-  champs = (() => { const $r = []; let r; for (const $c0 of $iter(w.hist)) { r = $c0; $r.push($dict($kw({"season": $idx(r, "season"), "club": $idx($idx(r, "champs"), ln), "coach": $M.get($idx(r, "champ_coach"), ln), "pts": $idx($idx($idx(r, "pts"), ln), $idx($idx(r, "champs"), ln)), "date": $M.get(fdate, [$idx(r, "season"), ln])}))); } return $r; })();
+  champs = (() => { const $r = []; let r; for (const $c0 of $iter(w.hist)) { r = $c0; if (!$in(ln, $idx(r, "champs"))) continue; $r.push($dict($kw({"season": $idx(r, "season"), "club": $idx($idx(r, "champs"), ln), "coach": $M.get($idx(r, "champ_coach"), ln), "pts": $idx($idx($idx(r, "pts"), ln), $idx($idx(r, "champs"), ln)), "date": $M.get(fdate, [$idx(r, "season"), ln])}))); } return $r; })();
   cup = $M.get($M.get(w.cups, $idx(L, "confed"), new $Dict()), "name", "cup");
   return $dict($kw({"name": ln, "confed": $idx(L, "confed"), "games": $idx(L, "games"), "slots": $idx(L, "slots"), "cup": cup, "header": header(w), "progress": comp_progress(w, lc), "rows": rows, "last": last, "next": nxt, "last_date": last_date, "next_date": next_date, "emblem": T.spec_league(ln), "tv": $idx(L, "tvmult"), "champs": $slice(champs, null, null, (-1)), "seasons": (() => { const $r = []; let r; for (const $c0 of $iter(w.hist)) { r = $c0; $r.push($idx(r, "season")); } return $r; })(), "id": cid, "avg": r1($idx(w.league_avgs(), ln)), "tvmult": $idx(L, "tvmult")}));
 }
@@ -10625,7 +10674,7 @@ function v_money() {
   rows = [];
   for (const $f17 of $iter($M.items(w.leagues))) {
     [ln, L] = $iter($f17);
-    last = ($T(w.hist) ? $idx($idx($idx(w.hist, (-1)), "champs"), ln) : null);
+    last = ($T(w.hist) ? $M.get($idx($idx(w.hist, (-1)), "champs"), ln, null) : null);
     bud = $div($sum((() => { const $r = []; let n; for (const $c0 of $iter($idx(L, "clubs"))) { n = $c0; $r.push($idx($idx(w.clubs, n), "budget")); } return $r; })()), $len($idx(L, "clubs")));
     $M.append(rows, $dict($kw({"league": ln, "confed": $idx(L, "confed"), "avg": r1($idx(avg, ln)), "budget": mx(bud), "tv": $idx(L, "tvmult"), "places": $idx(L, "slots"), "champion": last})));
   }
@@ -14729,7 +14778,7 @@ async function viewOwner(tab) {
   OWT.tab = tabs.some((t) => t[0] === tab) ? tab : OWT.tab || "hub";
   const sched0 = OWT.tab === "hub" && st.state !== "ended" ? await api("/api/ow_schedule").catch(() => null) : null;
   if (sched0 && sched0.last) { const l = sched0.last; try { const r = await api(`/api/match_scorers?comp=${enc(l.cid)}&home=${enc(l.h)}&away=${enc(l.a)}`); sched0.lastScorers = (r.games || []).find((x) => x.hg === l.hg && x.ag === l.ag && x.h === l.h && (x.label === l.label || (/^Matchweek/.test(x.label) && l.kind === "league"))) || null; } catch (e) { /* no scorers */ } }
-  const body = OWT.tab === "hub" ? owHub(st, sched0) : OWT.tab === "sched" ? await owSched(st) : OWT.tab === "window" ? await owWindow(st) : OWT.tab === "squad" ? await owSquad(st) : OWT.tab === "staff" ? await owStaff(st) : OWT.tab === "money" ? await owMoney(st) : OWT.tab === "apex" ? owApex(st) : owBoard(st);
+  const body = OWT.tab === "hub" ? owHub(st, sched0) : OWT.tab === "sched" ? await owSched(st) : OWT.tab === "window" ? await owWindow(st) : OWT.tab === "squad" ? await owSquad(st) : OWT.tab === "staff" ? await owStaff(st) : OWT.tab === "money" ? await owMoney(st) : OWT.tab === "apex" ? await owApex(st) : owBoard(st);
   $("#view").innerHTML = `<div class="v2 ow"><div class="dim small">${esc(st.name)} &middot; ${esc(st.back)} &middot; age ${st.age} &middot; ${st.mode === "sandbox" ? "Sandbox" : "Classic"}</div>
     <h1>${esc(st.club.name)}</h1>
     <div class="owtop"><div><span class="dim small">Your money</span><b>${owM(st.wealth)}</b></div><div><span class="dim small">Club cash</span><b>${owM(st.club.cash)}</b></div><div><span class="dim small">Debt</span><b>${st.club.debt ? owM(st.club.debt) : "none"}</b></div></div>
@@ -14926,7 +14975,7 @@ function owHub(st, sc) {
     <div class="card"><button class="btn wide" id="ow-retire">Retire from ownership</button></div>`;
 }
 // ---- Apex League (stage 1: the countdown, the rumours and the two contracts) ----
-function owApex(st) {
+async function owApex(st) {
   const A = st.apex, me = st.club.name;
   const log = A.log.length ? `<div class="card"><h3>News</h3>${A.log.map((f) => `<div class="row"><span class="small">${esc(f.t)}</span><span class="dim small">S${f.season}</span></div>`).join("")}</div>` : "";
   const said = { signed: "#4fbf7a", staying: "#e0b44f", "very likely": "#e06a5a", likely: "#e0b44f", possible: "#9aa3a8" };
@@ -14944,8 +14993,14 @@ function owApex(st) {
       <div class="dim small" style="margin-top:6px">Either contract locks the club in. Leaving early costs fines and sanctions, depending on relations. You can change your answer until the season ends.</div></div>`;
     else main += `<div class="card"><div class="dim small">Your club has not been approached. Strong seasons and a bigger name bring an invitation.</div></div>`;
     main += `<div class="card"><h3>Signed so far</h3>${A.signed.map((x) => `<div class="row"><span class="owt">${crest(x.club, 18)}${esc(x.club)}</span><span class="dim small">stature ${x.stature}${x.mine ? " &middot; you" : ""}</span></div>`).join("") || '<div class="dim small">Nobody yet.</div>'}</div>`;
-  } else if (A.state === "live") main = `<div class="card"><h3>Apex League <small>founded season ${A.inaugural}</small></h3><div class="dim small">${A.members.length} clubs signed. Beta: the league's own matches are not played yet, so clubs stay in their domestic leagues for now.</div>${A.members.map((m) => `<div class="row"><span class="owt">${crest(m.club, 18)}<span ${m.mine ? 'style="font-weight:800"' : ""}>${esc(m.club)}</span></span><span class="dim small">${m.years} yr contract</span></div>`).join("")}</div>`;
-  else main = `<div class="card"><h3>Apex League</h3><div class="dim small">The league collapsed before it started: too few big clubs signed.</div></div>`;
+  } else if (A.state === "live") {
+    let tbl = "";
+    try {
+      const d = await api("/api/league?name=" + enc("Apex League"));
+      tbl = `<div class="ow-tbl"><div class="ow-tr ow-th"><span>#</span><span class="cl">Club</span><span>P</span><span>W</span><span>D</span><span>L</span><span>GD</span><span>Pts</span></div>${d.rows.map((r) => `<div class="ow-tr${r.club === me ? " me" : ""}"><span>${r.pos}</span><span class="cl">${esc(r.club)}</span><span>${r.p}</span><span>${r.w}</span><span>${r.d}</span><span>${r.l}</span><span>${r.gd > 0 ? "+" : ""}${r.gd}</span><b>${r.pts}</b></div>`).join("")}</div>`;
+    } catch (e) { tbl = ""; }
+    main = `<div class="card"><h3>Apex League <small>founded season ${A.inaugural}</small></h3>${tbl}<div class="dim small" style="margin-top:6px">${A.members.length} clubs. Every match is a heavyweight.</div></div><div class="card"><h3>Contracts</h3>${A.members.map((m) => `<div class="row"><span class="owt">${crest(m.club, 18)}<span ${m.mine ? 'style="font-weight:800"' : ""}>${esc(m.club)}</span></span><span class="dim small">${m.years} yr left</span></div>`).join("")}</div>`;
+  } else main = `<div class="card"><h3>Apex League</h3><div class="dim small">The league collapsed before it started: too few big clubs signed.</div></div>`;
   return main + (A.state === "contracts" || A.state === "live" ? "" : rum) + (A.state === "contracts" ? rum : "") + log;
 }
 // ---- window ----

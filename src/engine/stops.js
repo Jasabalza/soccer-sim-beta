@@ -49,7 +49,7 @@ class Stops {
     if ((($in("dynasty", self.on)) && ($len(h) >= 4))) {
       for (const $f3 of $iter(w.leagues)) {
         ln = $f3;
-        last = (() => { const $r = []; let r; for (const $c0 of $iter(h)) { r = $c0; $r.push($idx($idx(r, "champs"), ln)); } return $r; })();
+        last = (() => { const $r = []; let r; for (const $c0 of $iter(h)) { r = $c0; if (!$in(ln, $idx(r, "champs"))) continue; $r.push($idx($idx(r, "champs"), ln)); } return $r; })();
         run = 1;
         while (($lt(run, $len(last)) && ($eq($idx(last, $sub((-1), run)), $idx(last, (-1)))))) {
           run = run + 1;
