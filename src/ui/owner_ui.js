@@ -40,14 +40,21 @@ function owWireStart() {
 }
 async function owBuy(st) {
   const d = await api("/api/ow_clubs"), inh = st.back === "Trust fund" && st.clubs.length === 0;
-  const ord = { open: 0, rep: 1, money: 2, member: 3 };
-  d.rows.sort((x, y) => ord[x.status] - ord[y.status] || y.stature - x.stature);
-  const rows = d.rows.filter((r) => (inh ? r.stature >= 40 && r.stature <= 80 && !r.member : true));
+  const F = OWT.bf || (OWT.bf = { q: "", lg: "", sort: "best", open: true }), ord = { open: 0, rep: 1, money: 2, member: 3 };
+  const leagues = [...new Set(d.rows.map((r) => r.league))].sort();
+  let rows = d.rows.filter((r) => (inh ? r.stature >= 40 && r.stature <= 80 && !r.member : true));
+  if (F.q) rows = rows.filter((r) => r.club.toLowerCase().includes(F.q.toLowerCase()));
+  if (F.lg) rows = rows.filter((r) => r.league === F.lg);
+  if (F.open && !inh) rows = rows.filter((r) => r.status === "open");
+  rows.sort(F.sort === "price" ? (x, y) => y.price - x.price : F.sort === "cheap" ? (x, y) => x.price - y.price : F.sort === "name" ? (x, y) => (x.club < y.club ? -1 : 1) : F.sort === "league" ? (x, y) => (x.league < y.league ? -1 : x.league > y.league ? 1 : y.stature - x.stature) : (x, y) => ord[x.status] - ord[y.status] || y.stature - x.stature);
   const tag = (r) => r.member ? `<span class="dim small">member-owned</span>` : r.status === "rep" ? `<span class="dim small">needs reputation ${r.need_rep}</span>` : r.status === "money" ? `<span class="dim small">too expensive</span>` : `<button class="pri mini" data-buy="${esc(r.club)}">${inh ? "Take over" : "Buy"}</button>`;
   $("#view").innerHTML = `<div class="v2 ow"><h1>${st.state === "between" ? "Buy another club" : inh ? "Your family club" : "Buy a club"}</h1>
     <div class="owtop"><div><span class="dim small">Your money</span><b>${owM(st.wealth)}</b></div><div><span class="dim small">Reputation</span><b>${st.rep}</b></div><div><span class="dim small">Age</span><b>${st.age}</b></div></div>
     <div class="dim small" style="margin:8px 0">${inh ? "Pick the club your family has held. You get it without paying." : "You must keep 15% of your money in reserve. Bigger clubs need a bigger reputation. Member-owned clubs are not for sale."}</div>
-    <div class="card">${rows.map((r) => `<div class="row"><span class="rl"><span class="rt">${clubLink(r.club)}<div class="meta">${esc(r.league)} &middot; income ${owM(r.income)}${r.debt ? " &middot; debt " + owM(r.debt) : ""}</div></span></span><span class="prow"><b>${inh ? "free" : owM(r.price)}</b> ${tag(r)}</span></div>`).join("")}</div></div>`;
+    <div class="owf"><input id="bf-q" placeholder="Search club" value="${esc(F.q)}"><select id="bf-lg"><option value="">All leagues</option>${leagues.map((l) => `<option ${F.lg === l ? "selected" : ""}>${esc(l)}</option>`).join("")}</select><select id="bf-sort">${[["best", "Biggest first"], ["price", "Price: high"], ["cheap", "Price: low"], ["league", "By league"], ["name", "A to Z"]].map(([k, t]) => `<option value="${k}" ${F.sort === k ? "selected" : ""}>${t}</option>`).join("")}</select>${inh ? "" : `<label class="check"><input type="checkbox" id="bf-open" ${F.open ? "checked" : ""}> Can buy now</label>`}</div><div class="dim small">${rows.length} clubs</div>
+    <div class="card">${rows.map((r) => `<div class="row"><span class="rl"><span class="rt"><b>${esc(r.club)}</b><div class="meta">${esc(r.league)} &middot; income ${owM(r.income)}${r.debt ? " &middot; debt " + owM(r.debt) : ""}</div></span></span><span class="prow"><b>${inh ? "free" : owM(r.price)}</b> ${tag(r)}</span></div>`).join("")}</div></div>`;
+  const bf = (id, k, ev, f) => { const e = $(id); if (e) e[ev] = () => { OWT.bf[k] = f ? e.checked : e.value; owBuy(st); }; };
+  bf("#bf-q", "q", "onchange"); bf("#bf-lg", "lg", "onchange"); bf("#bf-sort", "sort", "onchange"); bf("#bf-open", "open", "onchange", true);
   document.querySelectorAll("[data-buy]").forEach((b) => (b.onclick = async () => { if (await owPost("/api/ow_buy", { club: b.dataset.buy }, "Done.")) { await refreshStatus(); location.hash = "#/owner/hub"; await route(); } }));
 }
 function owEnded(st) {
@@ -77,27 +84,27 @@ async function owSched(st) {
       <div class="row"><span>Your ranking</span><span>#${f.rank} in ${esc(f.confed)} (score ${f.score})${f.gap > 0 ? ", " + f.gap + " behind the last place" : ""}</span></div>
       <div class="dim small" style="margin:6px 0">${esc(f.cup)} winners go in. The other places go to the best four-season records (league finishes and continental cup runs) in ${esc(f.confed)}.${f.field_set ? "" : " The field is set after the continental cups end."}</div>
       <h3>Who is in the places</h3>${f.top.map((t) => `<div class="row"><span ${t.club === me ? 'style="font-weight:800"' : ""}>${esc(t.club)}</span><span class="dim small">${t.score}${t.in ? " &middot; in" : ""}</span></div>`).join("")}`;
-    const cc = d.comps.find((x) => x.kind === "cwc"); if (cc) body += `<div class="owbtns"><a class="btn mini" href="#/comp/${enc(cc.id)}">Club World Cup page</a></div>`;
   } else {
     const c = d.comps.find((x) => x.id === OWT.sc);
     if (c.kind === "league") body = `${await owTable(st, true)}<h3 style="margin-top:12px">Next games</h3>${c.next.map((g) => game(g, false)).join("") || '<div class="dim small">No games left this season.</div>'}<h3 style="margin-top:12px">Results</h3>${c.past.map((g) => game(g, true)).join("") || '<div class="dim small">No games played yet.</div>'}`;
+    else if (c.notIn) body = `<div class="row"><span>Your status</span><b style="color:${c.pos && c.pos <= c.slots ? "#4fbf7a" : "#e0b44f"}">${c.pos && c.pos <= c.slots ? "in a qualifying place" : "not in this season's field"}</b></div><div class="dim small" style="margin-top:6px">The top ${c.slots} of ${esc(c.league)} qualify for the ${esc(c.title)}. ${c.pos ? "You are " + c.pos + (["th", "st", "nd", "rd"][(c.pos % 100 > 10 && c.pos % 100 < 14) ? 0 : (c.pos % 10 < 4 ? c.pos % 10 : 0)]) + " this season." : ""} The field is set from the league finish${c.progress.next ? "" : ""}.</div>`;
     else body = `<div class="dim small">${c.out ? "Your club is out." : c.progress.next ? "Next: " + esc(c.progress.next) + (c.progress.next_date ? " &middot; " + c.progress.next_date.text : "") : (c.progress.done >= c.progress.total && c.progress.total ? "Finished" : "Not started")}</div>
       ${c.winner ? `<div class="row"><span>Winner</span><b>${esc(c.winner)}</b></div>` : ""}${c.ties.map((t) => `<div class="row"><span class="small">${esc(String(t.round))}</span><span class="rt">${esc(t.text || t.a + " v " + t.b)}</span><span class="dim small">${t.winner ? (t.winner === me ? "won" : "lost") : ""}</span></div>`).join("") || '<div class="dim small">Your club has no games here yet.</div>'}
       ${!c.out && c.upcoming.length ? `<h3 style="margin-top:10px">Still to come</h3>${c.upcoming.map((u) => `<div class="row"><span class="small">${dt(u.date)}</span><span class="rt">${esc(u.label)}</span><span class="dim small">if still in</span></div>`).join("")}` : ""}
-      <div class="owbtns"><a class="btn mini" href="#/comp/${enc(c.id)}">Full competition page</a></div>`;
+      `;
   }
   return `<div class="card"><nav class="chips">${chips.map(([id, t]) => `<button class="${id === OWT.sc ? "on" : ""}" data-sc="${esc(id)}">${esc(t)}</button>`).join("")}</nav><div style="margin-top:10px">${body}</div></div>`;
 }
 // ---- league: table, next games, and the way into every competition page ----
 async function owTable(st, inner) {
   const d = await api("/api/league?name=" + enc(st.club.league)), me = st.club.name;
-  const links = `<div class="owbtns"><a class="btn mini" href="#/league/${enc(st.club.league)}">Full league page</a><a class="btn mini" href="#/club/${enc(me)}">Your club page</a><a class="btn mini" href="#/world">All competitions</a><a class="btn mini" href="#/news">News</a><a class="btn mini" href="#/players">Players</a><a class="btn mini" href="#/money">Money</a></div>`;
+  const links = "";
   const nx = (d.next || []).filter((g) => g.h === me || g.a === me)[0];
-  if (inner) return `${links}<div class="ow-tbl"><div class="ow-tr ow-th"><span>#</span><span class="cl">Club</span><span>P</span><span>W</span><span>D</span><span>L</span><span>GD</span><span>Pts</span></div>${d.rows.map((r) => `<div class="ow-tr${r.club === me ? " me" : ""}"><span>${r.pos}</span><span class="cl"><a href="#/club/${enc(r.club)}">${esc(r.club)}</a></span><span>${r.p}</span><span>${r.w}</span><span>${r.d}</span><span>${r.l}</span><span>${r.gd > 0 ? "+" : ""}${r.gd}</span><b>${r.pts}</b></div>`).join("")}</div>`;
+  if (inner) return `${links}<div class="ow-tbl"><div class="ow-tr ow-th"><span>#</span><span class="cl">Club</span><span>P</span><span>W</span><span>D</span><span>L</span><span>GD</span><span>Pts</span></div>${d.rows.map((r) => `<div class="ow-tr${r.club === me ? " me" : ""}"><span>${r.pos}</span><span class="cl">${esc(r.club)}</span><span>${r.p}</span><span>${r.w}</span><span>${r.d}</span><span>${r.l}</span><span>${r.gd > 0 ? "+" : ""}${r.gd}</span><b>${r.pts}</b></div>`).join("")}</div>`;
   return `<div class="card"><h3>${esc(st.club.league)} <small>${esc(STATUS.header.season_label || "")}</small></h3>${links}
     ${nx ? `<div class="dim small" style="margin-top:6px">Next game: <b>${esc(nx.h)}</b> v <b>${esc(nx.a)}</b>${d.next_date ? " &middot; " + d.next_date.text : ""}</div>` : ""}
     <div class="ow-tbl"><div class="ow-tr ow-th"><span>#</span><span class="cl">Club</span><span>P</span><span>W</span><span>D</span><span>L</span><span>GD</span><span>Pts</span></div>
-    ${d.rows.map((r) => `<div class="ow-tr${r.club === me ? " me" : ""}"><span>${r.pos}</span><span class="cl"><a href="#/club/${enc(r.club)}">${esc(r.club)}</a></span><span>${r.p}</span><span>${r.w}</span><span>${r.d}</span><span>${r.l}</span><span>${r.gd > 0 ? "+" : ""}${r.gd}</span><b>${r.pts}</b></div>`).join("")}</div>
+    ${d.rows.map((r) => `<div class="ow-tr${r.club === me ? " me" : ""}"><span>${r.pos}</span><span class="cl">${esc(r.club)}</span><span>${r.p}</span><span>${r.w}</span><span>${r.d}</span><span>${r.l}</span><span>${r.gd > 0 ? "+" : ""}${r.gd}</span><b>${r.pts}</b></div>`).join("")}</div>
     <div class="dim small" style="margin-top:6px">Playing games happens on the Hub. Competitions your club is in (cups, continental) are under All competitions.</div></div>`;
 }
 // ---- hub ----

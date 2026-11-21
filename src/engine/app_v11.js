@@ -995,6 +995,13 @@ POST = $lit_dict([["/api/favs", a_favs], ["/api/favnations", a_favnations], ["/a
       if (!out && c.events) for (let k = c.ptr; k < c.events.length; k++) { const d = dateOf(c, c.events[k]); upcoming.push({ label: c.events[k].label, date: d }); all.push({ comp: c.title, kind: c.kind, label: c.events[k].label, date: d, tentative: c.kind === "cup" || (c.events[k].phase === "ko") }); }
       comps.push({ id: cid, title: c.title, kind: c.kind, progress: comp_progress(w, c), ties, winner: c.winner || null, runner_up: c.runner_up || null, out, upcoming });
     }
+    {   // the continental cup of your confederation, even when you are not in it yet: how you qualify and where you stand
+      const cc = w.comps.get("C:" + confed);
+      if (cc && !comps.some((x) => x.id === "C:" + confed)) {
+        const L = w.leagues.get(lg), slots = L.get("slots") || 0, trs = w.table_rows(lg), me_row = trs.find((x) => x.get("club") === me);
+        comps.push({ id: "C:" + confed, title: cc.title, kind: "cup", notIn: true, league: lg, slots, pos: me_row ? me_row.get("pos") : null, ties: [], upcoming: [], progress: comp_progress(w, cc) });
+      }
+    }
     // Club World Cup: your qualification stance (it is played in the second season of each four-year cycle)
     let cwc = w.comps.itemsArr().map((x) => x[1]).find((c) => c.kind === "cwc"), stance = null, nextYear = w.season;
     while (((nextYear - 1) % 4) + 1 !== 2) nextYear++;

@@ -1216,6 +1216,7 @@ select { padding-right: 30px; }
 .ow-dlg { min-width: 260px; } .ow-dlg .field { margin: 8px 0; display: flex; justify-content: space-between; gap: 8px; align-items: center; } .ow-dlg input { width: 110px; }
 .ow-tbl { margin-top: 8px; font-size: 12.5px; } .ow-tr { display: grid; grid-template-columns: 22px 1fr 24px 24px 24px 24px 34px 30px; gap: 2px; padding: 5px 2px; border-bottom: 1px solid var(--line); align-items: center; text-align: right; } .ow-tr .cl { text-align: left; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; } .ow-tr > span:first-child { text-align: left; color: var(--dim); } .ow-th { color: var(--dim); font-size: 11px; } .ow-tr.me { background: rgba(79,191,122,.16); font-weight: 700; border-radius: 6px; }
 .ow a.btn { display: inline-flex; align-items: center; text-decoration: none; padding: 4px 10px; min-height: 30px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel2); color: var(--text); font-size: 12px; }
+#ow-pill { position: fixed; left: 12px; bottom: calc(76px + env(safe-area-inset-bottom)); z-index: 20; background: var(--accent); color: #06210f; font-weight: 800; padding: 10px 16px; border-radius: 999px; text-decoration: none; box-shadow: 0 4px 16px rgba(0,0,0,.5); font-size: 14px; } #ow-pill[hidden] { display: none; }
 
 </style>
 
@@ -10635,6 +10636,13 @@ POST = $lit_dict([["/api/favs", a_favs], ["/api/favnations", a_favnations], ["/a
       if (!out && c.events) for (let k = c.ptr; k < c.events.length; k++) { const d = dateOf(c, c.events[k]); upcoming.push({ label: c.events[k].label, date: d }); all.push({ comp: c.title, kind: c.kind, label: c.events[k].label, date: d, tentative: c.kind === "cup" || (c.events[k].phase === "ko") }); }
       comps.push({ id: cid, title: c.title, kind: c.kind, progress: comp_progress(w, c), ties, winner: c.winner || null, runner_up: c.runner_up || null, out, upcoming });
     }
+    {   // the continental cup of your confederation, even when you are not in it yet: how you qualify and where you stand
+      const cc = w.comps.get("C:" + confed);
+      if (cc && !comps.some((x) => x.id === "C:" + confed)) {
+        const L = w.leagues.get(lg), slots = L.get("slots") || 0, trs = w.table_rows(lg), me_row = trs.find((x) => x.get("club") === me);
+        comps.push({ id: "C:" + confed, title: cc.title, kind: "cup", notIn: true, league: lg, slots, pos: me_row ? me_row.get("pos") : null, ties: [], upcoming: [], progress: comp_progress(w, cc) });
+      }
+    }
     // Club World Cup: your qualification stance (it is played in the second season of each four-year cycle)
     let cwc = w.comps.itemsArr().map((x) => x[1]).find((c) => c.kind === "cwc"), stance = null, nextYear = w.season;
     while (((nextYear - 1) % 4) + 1 !== 2) nextYear++;
@@ -12283,6 +12291,9 @@ function renderShell() {
   const items = [...(STATUS && STATUS.owner ? [["owner", "Owner"]] : []), ["world", "World"], ["nations", "Nations"], ["news", "News"], ["money", "Money"], ["moves", "Off-season"], ["rivals", "Rivals"], ["players", "Players"], ["ceremony", "Awards"], ["hof", "Hall of Fame"], ["trophies", "Trophies"], ["records", "Records"]];
   $("#nav").innerHTML = has ? items.map(([k, t]) => `<a href="#/${k}" class="${route === k || (k === "moves" && route === "ledger") ? "on" : ""}">${t}</a>`).join("") : "";
   renderTabbar(has, route);
+  { let pill = $("#ow-pill"); const show = !!(STATUS && STATUS.owner) && route !== "owner" && has;
+    if (show && !pill) { pill = document.createElement("a"); pill.id = "ow-pill"; pill.href = "#/owner"; pill.textContent = "\u2190 Back to Owner"; document.body.appendChild(pill); }
+    if (pill) pill.hidden = !show; }
   document.body.classList.toggle("inapp", !!has);
   document.body.classList.toggle("nosim", !has || !SIM_ROUTES.has(route));
   const h = STATUS && STATUS.header;
@@ -12301,16 +12312,17 @@ const TAB_ICONS = {
   leagues: '<path d="M4 6h16M4 12h16M4 18h10"/>',
   players: '<circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/>',
   history: '<path d="M8 4h8v5a4 4 0 0 1-8 0zM8 6H4v1a4 4 0 0 0 4 4M16 6h4v1a4 4 0 0 1-4 4M12 13v4M8 21h8M10 17h4"/>',
+  owner: '<path d="M4 18l-1-10 5 4 4-7 4 7 5-4-1 10zM5 21h14"/>',
   more: '<circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/>',
 };
-const TAB_OF = { more: "more", history: "history", leagues: "leagues", world: "season", moves: "season", ledger: "season", prospects: "season", ceremony: "history", continent: "leagues", league: "leagues", club: "leagues", comp: "leagues", c: "leagues", matchup: "leagues", rivals: "leagues", nations: "leagues", nation: "leagues", players: "players", player: "players", coach: "players", academies: "players", news: "history", hof: "history", hofcard: "history", hofday: "history", hofnation: "history", hofleague: "history", trophies: "history", prestige: "history", records: "history", money: "more" };
+const TAB_OF = { owner: "owner", more: "more", history: "history", leagues: "leagues", world: "season", moves: "season", ledger: "season", prospects: "season", ceremony: "history", continent: "leagues", league: "leagues", club: "leagues", comp: "leagues", c: "leagues", matchup: "leagues", rivals: "leagues", nations: "leagues", nation: "leagues", players: "players", player: "players", coach: "players", academies: "players", news: "history", hof: "history", hofcard: "history", hofday: "history", hofnation: "history", hofleague: "history", trophies: "history", prestige: "history", records: "history", money: "more" };
 function renderTabbar(has, route) {
   const el = $("#tabbar"); if (!el) return;
   if (!has) { el.innerHTML = ""; el.hidden = true; return; }
   el.hidden = false;
   const cur = TAB_OF[route] || "season";
   const tab = (k, t, href) => `<a data-tab="${k}" href="${href || "#"}" class="${cur === k ? "on" : ""}"><svg width="22" height="22" viewBox="0 0 24 24" fill="${k === "more" ? "currentColor" : "none"}" stroke="${k === "more" ? "none" : "currentColor"}" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${TAB_ICONS[k]}</svg><span>${t}</span></a>`;
-  el.innerHTML = tab("season", "Season", "#/world") + tab("leagues", "Leagues", "#/leagues") + tab("players", "Players", "#/players") + tab("history", "History", "#/history") + tab("more", "More", "#/more");
+  el.innerHTML = (STATUS && STATUS.owner ? tab("owner", "Owner", "#/owner") : "") + tab("season", "Season", "#/world") + tab("leagues", "Leagues", "#/leagues") + tab("players", "Players", "#/players") + tab("history", "History", "#/history") + tab("more", "More", "#/more");
 }
 const CHEV = '<svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg>';
 const MENU_ICON = (d) => `<span class="mi"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg></span>`;
@@ -12968,7 +12980,7 @@ async function viewWorld() {
   document.querySelectorAll(".sim-others").forEach((b) => b.onclick = () => simOthersDialog(others, d));
   if ($("#edit-favs")) $("#edit-favs").onclick = () => favPicker(d);
   if ($("#edit-favs2")) $("#edit-favs2").onclick = () => favPicker(d);
-  if (!chosen && !PICK_ASKED) { PICK_ASKED = true; favPicker(d); }
+  if (!chosen && !PICK_ASKED && !(STATUS && STATUS.owner)) { PICK_ASKED = true; favPicker(d); }
 }
 
 // viewContinent and viewLeague live in pages.js (v15.2)
@@ -14339,14 +14351,21 @@ function owWireStart() {
 }
 async function owBuy(st) {
   const d = await api("/api/ow_clubs"), inh = st.back === "Trust fund" && st.clubs.length === 0;
-  const ord = { open: 0, rep: 1, money: 2, member: 3 };
-  d.rows.sort((x, y) => ord[x.status] - ord[y.status] || y.stature - x.stature);
-  const rows = d.rows.filter((r) => (inh ? r.stature >= 40 && r.stature <= 80 && !r.member : true));
+  const F = OWT.bf || (OWT.bf = { q: "", lg: "", sort: "best", open: true }), ord = { open: 0, rep: 1, money: 2, member: 3 };
+  const leagues = [...new Set(d.rows.map((r) => r.league))].sort();
+  let rows = d.rows.filter((r) => (inh ? r.stature >= 40 && r.stature <= 80 && !r.member : true));
+  if (F.q) rows = rows.filter((r) => r.club.toLowerCase().includes(F.q.toLowerCase()));
+  if (F.lg) rows = rows.filter((r) => r.league === F.lg);
+  if (F.open && !inh) rows = rows.filter((r) => r.status === "open");
+  rows.sort(F.sort === "price" ? (x, y) => y.price - x.price : F.sort === "cheap" ? (x, y) => x.price - y.price : F.sort === "name" ? (x, y) => (x.club < y.club ? -1 : 1) : F.sort === "league" ? (x, y) => (x.league < y.league ? -1 : x.league > y.league ? 1 : y.stature - x.stature) : (x, y) => ord[x.status] - ord[y.status] || y.stature - x.stature);
   const tag = (r) => r.member ? `<span class="dim small">member-owned</span>` : r.status === "rep" ? `<span class="dim small">needs reputation ${r.need_rep}</span>` : r.status === "money" ? `<span class="dim small">too expensive</span>` : `<button class="pri mini" data-buy="${esc(r.club)}">${inh ? "Take over" : "Buy"}</button>`;
   $("#view").innerHTML = `<div class="v2 ow"><h1>${st.state === "between" ? "Buy another club" : inh ? "Your family club" : "Buy a club"}</h1>
     <div class="owtop"><div><span class="dim small">Your money</span><b>${owM(st.wealth)}</b></div><div><span class="dim small">Reputation</span><b>${st.rep}</b></div><div><span class="dim small">Age</span><b>${st.age}</b></div></div>
     <div class="dim small" style="margin:8px 0">${inh ? "Pick the club your family has held. You get it without paying." : "You must keep 15% of your money in reserve. Bigger clubs need a bigger reputation. Member-owned clubs are not for sale."}</div>
-    <div class="card">${rows.map((r) => `<div class="row"><span class="rl"><span class="rt">${clubLink(r.club)}<div class="meta">${esc(r.league)} &middot; income ${owM(r.income)}${r.debt ? " &middot; debt " + owM(r.debt) : ""}</div></span></span><span class="prow"><b>${inh ? "free" : owM(r.price)}</b> ${tag(r)}</span></div>`).join("")}</div></div>`;
+    <div class="owf"><input id="bf-q" placeholder="Search club" value="${esc(F.q)}"><select id="bf-lg"><option value="">All leagues</option>${leagues.map((l) => `<option ${F.lg === l ? "selected" : ""}>${esc(l)}</option>`).join("")}</select><select id="bf-sort">${[["best", "Biggest first"], ["price", "Price: high"], ["cheap", "Price: low"], ["league", "By league"], ["name", "A to Z"]].map(([k, t]) => `<option value="${k}" ${F.sort === k ? "selected" : ""}>${t}</option>`).join("")}</select>${inh ? "" : `<label class="check"><input type="checkbox" id="bf-open" ${F.open ? "checked" : ""}> Can buy now</label>`}</div><div class="dim small">${rows.length} clubs</div>
+    <div class="card">${rows.map((r) => `<div class="row"><span class="rl"><span class="rt"><b>${esc(r.club)}</b><div class="meta">${esc(r.league)} &middot; income ${owM(r.income)}${r.debt ? " &middot; debt " + owM(r.debt) : ""}</div></span></span><span class="prow"><b>${inh ? "free" : owM(r.price)}</b> ${tag(r)}</span></div>`).join("")}</div></div>`;
+  const bf = (id, k, ev, f) => { const e = $(id); if (e) e[ev] = () => { OWT.bf[k] = f ? e.checked : e.value; owBuy(st); }; };
+  bf("#bf-q", "q", "onchange"); bf("#bf-lg", "lg", "onchange"); bf("#bf-sort", "sort", "onchange"); bf("#bf-open", "open", "onchange", true);
   document.querySelectorAll("[data-buy]").forEach((b) => (b.onclick = async () => { if (await owPost("/api/ow_buy", { club: b.dataset.buy }, "Done.")) { await refreshStatus(); location.hash = "#/owner/hub"; await route(); } }));
 }
 function owEnded(st) {
@@ -14376,27 +14395,27 @@ async function owSched(st) {
       <div class="row"><span>Your ranking</span><span>#${f.rank} in ${esc(f.confed)} (score ${f.score})${f.gap > 0 ? ", " + f.gap + " behind the last place" : ""}</span></div>
       <div class="dim small" style="margin:6px 0">${esc(f.cup)} winners go in. The other places go to the best four-season records (league finishes and continental cup runs) in ${esc(f.confed)}.${f.field_set ? "" : " The field is set after the continental cups end."}</div>
       <h3>Who is in the places</h3>${f.top.map((t) => `<div class="row"><span ${t.club === me ? 'style="font-weight:800"' : ""}>${esc(t.club)}</span><span class="dim small">${t.score}${t.in ? " &middot; in" : ""}</span></div>`).join("")}`;
-    const cc = d.comps.find((x) => x.kind === "cwc"); if (cc) body += `<div class="owbtns"><a class="btn mini" href="#/comp/${enc(cc.id)}">Club World Cup page</a></div>`;
   } else {
     const c = d.comps.find((x) => x.id === OWT.sc);
     if (c.kind === "league") body = `${await owTable(st, true)}<h3 style="margin-top:12px">Next games</h3>${c.next.map((g) => game(g, false)).join("") || '<div class="dim small">No games left this season.</div>'}<h3 style="margin-top:12px">Results</h3>${c.past.map((g) => game(g, true)).join("") || '<div class="dim small">No games played yet.</div>'}`;
+    else if (c.notIn) body = `<div class="row"><span>Your status</span><b style="color:${c.pos && c.pos <= c.slots ? "#4fbf7a" : "#e0b44f"}">${c.pos && c.pos <= c.slots ? "in a qualifying place" : "not in this season's field"}</b></div><div class="dim small" style="margin-top:6px">The top ${c.slots} of ${esc(c.league)} qualify for the ${esc(c.title)}. ${c.pos ? "You are " + c.pos + (["th", "st", "nd", "rd"][(c.pos % 100 > 10 && c.pos % 100 < 14) ? 0 : (c.pos % 10 < 4 ? c.pos % 10 : 0)]) + " this season." : ""} The field is set from the league finish${c.progress.next ? "" : ""}.</div>`;
     else body = `<div class="dim small">${c.out ? "Your club is out." : c.progress.next ? "Next: " + esc(c.progress.next) + (c.progress.next_date ? " &middot; " + c.progress.next_date.text : "") : (c.progress.done >= c.progress.total && c.progress.total ? "Finished" : "Not started")}</div>
       ${c.winner ? `<div class="row"><span>Winner</span><b>${esc(c.winner)}</b></div>` : ""}${c.ties.map((t) => `<div class="row"><span class="small">${esc(String(t.round))}</span><span class="rt">${esc(t.text || t.a + " v " + t.b)}</span><span class="dim small">${t.winner ? (t.winner === me ? "won" : "lost") : ""}</span></div>`).join("") || '<div class="dim small">Your club has no games here yet.</div>'}
       ${!c.out && c.upcoming.length ? `<h3 style="margin-top:10px">Still to come</h3>${c.upcoming.map((u) => `<div class="row"><span class="small">${dt(u.date)}</span><span class="rt">${esc(u.label)}</span><span class="dim small">if still in</span></div>`).join("")}` : ""}
-      <div class="owbtns"><a class="btn mini" href="#/comp/${enc(c.id)}">Full competition page</a></div>`;
+      `;
   }
   return `<div class="card"><nav class="chips">${chips.map(([id, t]) => `<button class="${id === OWT.sc ? "on" : ""}" data-sc="${esc(id)}">${esc(t)}</button>`).join("")}</nav><div style="margin-top:10px">${body}</div></div>`;
 }
 // ---- league: table, next games, and the way into every competition page ----
 async function owTable(st, inner) {
   const d = await api("/api/league?name=" + enc(st.club.league)), me = st.club.name;
-  const links = `<div class="owbtns"><a class="btn mini" href="#/league/${enc(st.club.league)}">Full league page</a><a class="btn mini" href="#/club/${enc(me)}">Your club page</a><a class="btn mini" href="#/world">All competitions</a><a class="btn mini" href="#/news">News</a><a class="btn mini" href="#/players">Players</a><a class="btn mini" href="#/money">Money</a></div>`;
+  const links = "";
   const nx = (d.next || []).filter((g) => g.h === me || g.a === me)[0];
-  if (inner) return `${links}<div class="ow-tbl"><div class="ow-tr ow-th"><span>#</span><span class="cl">Club</span><span>P</span><span>W</span><span>D</span><span>L</span><span>GD</span><span>Pts</span></div>${d.rows.map((r) => `<div class="ow-tr${r.club === me ? " me" : ""}"><span>${r.pos}</span><span class="cl"><a href="#/club/${enc(r.club)}">${esc(r.club)}</a></span><span>${r.p}</span><span>${r.w}</span><span>${r.d}</span><span>${r.l}</span><span>${r.gd > 0 ? "+" : ""}${r.gd}</span><b>${r.pts}</b></div>`).join("")}</div>`;
+  if (inner) return `${links}<div class="ow-tbl"><div class="ow-tr ow-th"><span>#</span><span class="cl">Club</span><span>P</span><span>W</span><span>D</span><span>L</span><span>GD</span><span>Pts</span></div>${d.rows.map((r) => `<div class="ow-tr${r.club === me ? " me" : ""}"><span>${r.pos}</span><span class="cl">${esc(r.club)}</span><span>${r.p}</span><span>${r.w}</span><span>${r.d}</span><span>${r.l}</span><span>${r.gd > 0 ? "+" : ""}${r.gd}</span><b>${r.pts}</b></div>`).join("")}</div>`;
   return `<div class="card"><h3>${esc(st.club.league)} <small>${esc(STATUS.header.season_label || "")}</small></h3>${links}
     ${nx ? `<div class="dim small" style="margin-top:6px">Next game: <b>${esc(nx.h)}</b> v <b>${esc(nx.a)}</b>${d.next_date ? " &middot; " + d.next_date.text : ""}</div>` : ""}
     <div class="ow-tbl"><div class="ow-tr ow-th"><span>#</span><span class="cl">Club</span><span>P</span><span>W</span><span>D</span><span>L</span><span>GD</span><span>Pts</span></div>
-    ${d.rows.map((r) => `<div class="ow-tr${r.club === me ? " me" : ""}"><span>${r.pos}</span><span class="cl"><a href="#/club/${enc(r.club)}">${esc(r.club)}</a></span><span>${r.p}</span><span>${r.w}</span><span>${r.d}</span><span>${r.l}</span><span>${r.gd > 0 ? "+" : ""}${r.gd}</span><b>${r.pts}</b></div>`).join("")}</div>
+    ${d.rows.map((r) => `<div class="ow-tr${r.club === me ? " me" : ""}"><span>${r.pos}</span><span class="cl">${esc(r.club)}</span><span>${r.p}</span><span>${r.w}</span><span>${r.d}</span><span>${r.l}</span><span>${r.gd > 0 ? "+" : ""}${r.gd}</span><b>${r.pts}</b></div>`).join("")}</div>
     <div class="dim small" style="margin-top:6px">Playing games happens on the Hub. Competitions your club is in (cups, continental) are under All competitions.</div></div>`;
 }
 // ---- hub ----

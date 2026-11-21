@@ -64,6 +64,9 @@ function renderShell() {
   const items = [...(STATUS && STATUS.owner ? [["owner", "Owner"]] : []), ["world", "World"], ["nations", "Nations"], ["news", "News"], ["money", "Money"], ["moves", "Off-season"], ["rivals", "Rivals"], ["players", "Players"], ["ceremony", "Awards"], ["hof", "Hall of Fame"], ["trophies", "Trophies"], ["records", "Records"]];
   $("#nav").innerHTML = has ? items.map(([k, t]) => `<a href="#/${k}" class="${route === k || (k === "moves" && route === "ledger") ? "on" : ""}">${t}</a>`).join("") : "";
   renderTabbar(has, route);
+  { let pill = $("#ow-pill"); const show = !!(STATUS && STATUS.owner) && route !== "owner" && has;
+    if (show && !pill) { pill = document.createElement("a"); pill.id = "ow-pill"; pill.href = "#/owner"; pill.textContent = "\u2190 Back to Owner"; document.body.appendChild(pill); }
+    if (pill) pill.hidden = !show; }
   document.body.classList.toggle("inapp", !!has);
   document.body.classList.toggle("nosim", !has || !SIM_ROUTES.has(route));
   const h = STATUS && STATUS.header;
@@ -82,16 +85,17 @@ const TAB_ICONS = {
   leagues: '<path d="M4 6h16M4 12h16M4 18h10"/>',
   players: '<circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/>',
   history: '<path d="M8 4h8v5a4 4 0 0 1-8 0zM8 6H4v1a4 4 0 0 0 4 4M16 6h4v1a4 4 0 0 1-4 4M12 13v4M8 21h8M10 17h4"/>',
+  owner: '<path d="M4 18l-1-10 5 4 4-7 4 7 5-4-1 10zM5 21h14"/>',
   more: '<circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/>',
 };
-const TAB_OF = { more: "more", history: "history", leagues: "leagues", world: "season", moves: "season", ledger: "season", prospects: "season", ceremony: "history", continent: "leagues", league: "leagues", club: "leagues", comp: "leagues", c: "leagues", matchup: "leagues", rivals: "leagues", nations: "leagues", nation: "leagues", players: "players", player: "players", coach: "players", academies: "players", news: "history", hof: "history", hofcard: "history", hofday: "history", hofnation: "history", hofleague: "history", trophies: "history", prestige: "history", records: "history", money: "more" };
+const TAB_OF = { owner: "owner", more: "more", history: "history", leagues: "leagues", world: "season", moves: "season", ledger: "season", prospects: "season", ceremony: "history", continent: "leagues", league: "leagues", club: "leagues", comp: "leagues", c: "leagues", matchup: "leagues", rivals: "leagues", nations: "leagues", nation: "leagues", players: "players", player: "players", coach: "players", academies: "players", news: "history", hof: "history", hofcard: "history", hofday: "history", hofnation: "history", hofleague: "history", trophies: "history", prestige: "history", records: "history", money: "more" };
 function renderTabbar(has, route) {
   const el = $("#tabbar"); if (!el) return;
   if (!has) { el.innerHTML = ""; el.hidden = true; return; }
   el.hidden = false;
   const cur = TAB_OF[route] || "season";
   const tab = (k, t, href) => `<a data-tab="${k}" href="${href || "#"}" class="${cur === k ? "on" : ""}"><svg width="22" height="22" viewBox="0 0 24 24" fill="${k === "more" ? "currentColor" : "none"}" stroke="${k === "more" ? "none" : "currentColor"}" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${TAB_ICONS[k]}</svg><span>${t}</span></a>`;
-  el.innerHTML = tab("season", "Season", "#/world") + tab("leagues", "Leagues", "#/leagues") + tab("players", "Players", "#/players") + tab("history", "History", "#/history") + tab("more", "More", "#/more");
+  el.innerHTML = (STATUS && STATUS.owner ? tab("owner", "Owner", "#/owner") : "") + tab("season", "Season", "#/world") + tab("leagues", "Leagues", "#/leagues") + tab("players", "Players", "#/players") + tab("history", "History", "#/history") + tab("more", "More", "#/more");
 }
 const CHEV = '<svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg>';
 const MENU_ICON = (d) => `<span class="mi"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg></span>`;
@@ -749,7 +753,7 @@ async function viewWorld() {
   document.querySelectorAll(".sim-others").forEach((b) => b.onclick = () => simOthersDialog(others, d));
   if ($("#edit-favs")) $("#edit-favs").onclick = () => favPicker(d);
   if ($("#edit-favs2")) $("#edit-favs2").onclick = () => favPicker(d);
-  if (!chosen && !PICK_ASKED) { PICK_ASKED = true; favPicker(d); }
+  if (!chosen && !PICK_ASKED && !(STATUS && STATUS.owner)) { PICK_ASKED = true; favPicker(d); }
 }
 
 // viewContinent and viewLeague live in pages.js (v15.2)
