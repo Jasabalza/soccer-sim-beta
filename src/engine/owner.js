@@ -669,17 +669,51 @@ function cupGames(w, c, me, dateOf) {
   games.sort((x, y) => (iso(x) < iso(y) ? -1 : iso(x) > iso(y) ? 1 : 0));
   return { games, out };
 }
+// ---- Club World Cup games of the owner's club: group matchdays (opponents known once the draw is made) and single-leg knockouts ----
+function cwcGames(w, c, me, dateOf) {
+  const g_ = (o, k) => (o && typeof o.get === "function" ? o.get(k) : o && o[k]), evs = c.events || [], games = [];
+  const grpEvs = evs.filter((e) => g_(e, "phase") === "grp"), koEvs = evs.filter((e) => g_(e, "phase") === "ko");
+  const cap = (x) => String(x || "").charAt(0).toUpperCase() + String(x || "").slice(1);
+  const gi = (c.groups || []).findIndex((g) => Array.from(g).includes(me)), glog = c.glog || [];
+  if (gi >= 0 && c.gsched) {
+    const sched = c.gsched[gi] || [];
+    for (let md = 0; md < Math.min(3, sched.length); md++) {
+      const pr = sched[md].find((q) => q[0] === me || q[1] === me); if (!pr) continue;
+      const done = glog.find((x) => x[0] === md && x[1] === pr[0] && x[2] === pr[1]);
+      games.push({ h: pr[0], a: pr[1], neutral: true, played: !!done, hg: done ? done[3] : undefined, ag: done ? done[4] : undefined, label: "Group matchday " + (md + 1), date: grpEvs[md] ? dateOf(c, grpEvs[md]) : null });
+    }
+  }
+  const mine = (c.ties || []).filter((t) => t[1] === me || t[2] === me);
+  mine.forEach((t, i) => {
+    const m = /^(\d+)-(\d+)(.*)$/.exec(String(t[3] || "")), win = t[4];
+    games.push({ h: t[1], a: t[2], neutral: true, played: true, hg: m ? +m[1] : 0, ag: m ? +m[2] : 0, how: m ? m[3].trim() : "", winner: win, label: cap(t[0]), date: koEvs[i] ? dateOf(c, koEvs[i]) : null });
+  });
+  const groupsDone = c.ptr >= grpEvs.length, cur = c.ko_current || [];
+  const lost = mine.some((t) => t[4] && t[4] !== me), alive = cur.includes(me) && !lost;
+  const out = lost || (groupsDone && cur.length > 0 && !alive && !c.winner);
+  if (!out && !c.winner) {
+    for (let r = mine.length; r < koEvs.length; r++) {
+      const ev = koEvs[r], e = { label: String(g_(ev, "label")), date: dateOf(c, ev), tentative: true };
+      if (r === mine.length && alive) { const n = cur.length, i = cur.indexOf(me), j = i < n / 2 ? n - 1 - i : n - 1 - i, o = cur[j]; if (o && o !== me) { e.h = i < j ? me : o; e.a = i < j ? o : me; e.neutral = true; e.tentative = false; } }
+      games.push(e);
+    }
+  }
+  const iso = (g) => { const d = g.date; return (d && (typeof d.get === "function" ? d.get("iso") : d.iso)) || "9"; };
+  games.sort((x, y) => (iso(x) < iso(y) ? -1 : iso(x) > iso(y) ? 1 : 0));
+  return { games, out };
+}
 // how many games of his the world has played so far (league and cups): the play-one-game button waits for this to change
 function gameCount(w) {
   const me = w.ow && w.ow.club; if (!me) return 0;
   const MC = w.clubs.get(me), lc = w.comps.get("L:" + MC.get("league")); let n = 0;
   for (const r of (lc && lc.results) || []) for (const g of r) if (g[0] === me || g[1] === me) n++;
   for (const [, c] of w.comps.itemsArr()) {
+    if (c.kind === "cwc" && c.field && Array.from(c.field).includes(me)) { for (const x of c.glog || []) if (x[1] === me || x[2] === me) n++; for (const t of c.ties || []) if (t[1] === me || t[2] === me) n++; continue; }
     if (c.kind !== "cup" || !c.field || !Array.from(c.field).includes(me)) continue;
     for (const t of c.tlog || []) { const gg = (k) => (t && typeof t.get === "function" ? t.get(k) : t[k]); if (gg("season") === w.season && (gg("a") === me || gg("b") === me)) n += (gg("legs") || []).length; }
     if (c.leg1) for (const [k] of c.leg1.itemsArr()) if (k[0] === me || k[1] === me) n++;
   }
   return n;
 }
-return { needs, cupGames, gameCount, create, buy, priceList, dividend, inject, lifestyle, sponsorOffers, takeSponsor, market, bid, release, sell, sellReply, dealAct, inboxAct, nextRound, renegAct, persuade, staffView, coachAct, beforeRollover, closeWindow, afterRollover, buyoutAct, retire, view, squadView, setSpeed, afterFlowDone, blocked, BACK, ROUNDS, openWindow };
+return { needs, cupGames, cwcGames, gameCount, create, buy, priceList, dividend, inject, lifestyle, sponsorOffers, takeSponsor, market, bid, release, sell, sellReply, dealAct, inboxAct, nextRound, renegAct, persuade, staffView, coachAct, beforeRollover, closeWindow, afterRollover, buyoutAct, retire, view, squadView, setSpeed, afterFlowDone, blocked, BACK, ROUNDS, openWindow };
 })();

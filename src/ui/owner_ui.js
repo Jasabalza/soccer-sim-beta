@@ -84,7 +84,7 @@ const owScore = (g, me, ext) => {
 // one game of the owner's club: date, competition, both teams with crests, and either the score or home/away
 function owGameRow(g, me, emb, showComp) {
   const side = g.played ? `<span class="owsd">${owScore(g, me)}</span>` : g.tentative && !g.h ? '<span class="dim small">if still in</span>' : `<span class="dim small">${g.neutral ? "neutral" : g.h === me ? "home" : "away"}</span>`;
-  return `<div class="row owg"><span class="small owd">${esc(g.date ? g.date.text : "")}</span><span class="rt"><span class="dim small">${showComp ? (emb || "") + " " + esc(g.comp) + " &middot; " : ""}${esc(g.label || "")}</span>${g.h ? `<div>${owTeam(g.h, me)}</div><div>${owTeam(g.a, me)}</div>` : ""}</span>${side}</div>`;
+  return `<div class="row owg"><span class="rt"><div class="dim small owgh">${esc(g.date ? g.date.text : "")}${showComp ? " &middot; " + (emb || "") + " " + esc(g.comp) : ""}${g.label ? " &middot; " + esc(g.label) : ""}</div>${g.h ? `<div>${owTeam(g.h, me)}</div><div>${owTeam(g.a, me)}</div>` : '<div class="dim small">Opponent not known yet</div>'}</span>${side}</div>`;
 }
 const OW_MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 // games grouped under a month heading, like a calendar
@@ -99,7 +99,7 @@ function owByMonth(list, me, embOf, showComp) {
 }
 async function owSched(st) {
   const d = await api("/api/ow_schedule"), me = st.club.name, W = d.cwc;
-  const chips = [["ALL", "All"], ...d.comps.map((c) => [c.id, c.title, owEmb(c, 16)]), ["CWC", "Club World Cup"]];
+  const chips = [["ALL", "All"], ...d.comps.map((c) => [c.id, c.title, owEmb(c, 16)]), ...(d.comps.some((c) => c.kind === "cwc") ? [] : [["CWC", "Club World Cup"]])];
   if (!OWT.sc || !chips.some((c) => c[0] === OWT.sc)) OWT.sc = "ALL";
   const embOf = {}; d.comps.forEach((c) => (embOf[c.id] = owEmb(c, 14)));
   let body;
@@ -124,10 +124,12 @@ async function owSched(st) {
       const left = mineAll.filter((g) => !g.played);
       const status = c.out ? "Your club is out." : c.winner ? "Finished." : left.length ? "Your club is still in." : "Not started";
       let bracket = "";
-      if (c.kind === "cup") {
+      if (c.kind === "cup" || c.kind === "cwc") {
         try {
           const x = await api("/api/comp?id=" + enc(c.id)), gm = await api("/api/games?comp=" + enc(c.id)).catch(() => null);
-          if (x.bracket && x.bracket.rounds && x.bracket.rounds.length) bracket = `<h3 style="margin-top:12px">Bracket</h3>` + bracketHTML(liveBracket(x.bracket, gm), false, { cid: c.id, ready: false }).replace(/<a [^>]*>|<\/a>/g, "");
+          const mg = (x.groups || []).find((g) => g.teams.some((r) => r.nation === me));
+          if (mg) bracket += `<h3 style="margin-top:12px">Your group</h3><div class="ow-tbl"><div class="ow-tr g5 ow-th"><span>#</span><span class="cl">Club</span><span>P</span><span>GD</span><span>Pts</span></div>${mg.teams.map((r, i) => `<div class="ow-tr g5${r.nation === me ? " me" : ""}"><span>${i + 1}</span><span class="cl">${esc(r.nation)}</span><span>${r.p}</span><span>${r.gf - r.ga > 0 ? "+" : ""}${r.gf - r.ga}</span><b>${r.pts}</b></div>`).join("")}</div><div class="dim small">Top two go through.</div>`;
+          if (x.bracket && x.bracket.rounds && x.bracket.rounds.length) bracket += `<h3 style="margin-top:12px">Knockout bracket</h3>` + bracketHTML(liveBracket(x.bracket, gm), false, { cid: c.id, ready: false }).replace(/<a [^>]*>|<\/a>/g, "");
         } catch (e) { /* no bracket yet */ }
       }
       body = `<div class="dim small">${status}${c.progress && c.progress.next ? " Next round: " + esc(c.progress.next) + (c.progress.next_date ? " &middot; " + c.progress.next_date.text : "") : ""}</div>
@@ -265,7 +267,7 @@ async function owMoney(st) {
     <div class="card"><h3>Sponsors</h3>${st.sponsors.map((s) => `<div class="row"><span>${esc(s.name)}</span><span>${owM(s.per_year)}/yr &middot; ${s.left}y left</span></div>`).join("") || '<div class="dim small">None signed.</div>'}
       ${sp.rows.map((s) => `<div class="row"><span class="rt"><b>${esc(s.name)}</b><div class="meta">${esc(s.note)}</div></span><span>${owM(s.per_year)}/yr &middot; ${s.years}y <button class="mini pri" data-sp="${s.id}">Sign</button></span></div>`).join("")}</div>
     <div class="card"><h3>Lifestyle <small>status ${st.status}</small></h3><div class="dim small">Money you spend on yourself. Fans notice, and so does your reputation.</div>${st.lifestyle.map((l) => `<div class="row"><span>${esc(l.label)}</span><span>${owM(l.cost)} <button class="mini" data-life="${l.id}" ${l.owned ? "disabled" : ""}>${l.owned ? "Owned" : "Buy"}</button></span></div>`).join("")}</div>
-    <div class="card"><h3>Money log <small>newest first</small></h3><div class="dim small">Every change to your wealth and the club's cash.</div>${mlog.slice(0, 40).map((m) => `<div class="row owml"><span class="small">${esc(m.t)}<div class="dim small">S${m.s}</div></span><span class="owd"><span class="dim small">You</span> ${owDelta(m.dw)}<br><span class="dim small">Club</span> ${owDelta(m.dc)}</span></div>`).join("") || '<div class="dim small">Nothing yet.</div>'}</div>
+    <div class="card"><h3>Money log <small>newest first</small></h3><div class="dim small">Every change to your wealth and the club's cash.</div>${mlog.slice(0, 40).map((m) => `<div class="row owml"><span class="small">${esc(m.t)}<div class="dim small">S${m.s}</div></span><span class="owmd"><span class="dim small">You</span> ${owDelta(m.dw)}<br><span class="dim small">Club</span> ${owDelta(m.dc)}</span></div>`).join("") || '<div class="dim small">Nothing yet.</div>'}</div>
     <div class="card"><h3>Your ledger</h3><div class="dim small">Your income swings from year to year.</div>${st.ledger.slice().reverse().map((l) => `<div class="row"><span>S${l.season}${l.club ? " &middot; " + esc(l.club) : ""}</span><span class="small">income ${owM(l.income)} &middot; divs ${owM(l.dividends)} &middot; in ${owM(l.injections)} &middot; worth ${owM(l.wealth)}</span></div>`).join("")}</div>`;
 }
 function owBoard(st) {

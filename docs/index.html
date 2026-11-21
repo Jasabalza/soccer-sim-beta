@@ -1239,10 +1239,12 @@ select { padding-right: 30px; }
 .owlv.short{background:#a8372a;color:#fff}.owlv.weak{background:#9a7418;color:#fff}.owlv.light{background:#3d6b52;color:#fff}.owlv.ok{background:#2f9e5a;color:#fff}
 .owsl{margin:10px 0}.owsl label{display:flex;justify-content:space-between}.owsl input[type=range]{width:100%;height:34px}
 .owleg{display:flex;gap:12px;flex-wrap:wrap;font-size:12px;margin-top:4px}.owleg i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px}
-.owup{color:#4fbf7a}.owdn{color:#e06a5a}.owml{align-items:flex-start}.owd{text-align:right;font-size:12px;white-space:nowrap}
+.owup{color:#4fbf7a}.owdn{color:#e06a5a}.owml{align-items:flex-start}.owmd{text-align:right;font-size:12px;white-space:nowrap}
 .owhon{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:6px 0 10px;text-align:center}.owhon b{display:block;font-size:20px}.owhon span{font-size:10px;opacity:.7}
 .owdot{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px}
 .ow-dlg .owsl{display:block}.ow-dlg .owsl label{display:flex!important;flex-direction:row;justify-content:space-between;align-items:baseline;width:100%;margin-bottom:2px}.ow-dlg .owsl label b{margin-left:auto;font-size:16px}.ow-dlg .owsl input[type=range]{display:block;width:100%;margin:4px 0}
+
+.ow-tr.g5{grid-template-columns:22px 1fr 28px 36px 34px}.ow .owg{align-items:flex-start;gap:10px}.ow .owg .owgh{line-height:1.35;margin-bottom:3px}.ow .owg .rt{flex:1;min-width:0}
 
 </style>
 
@@ -6644,19 +6646,53 @@ function cupGames(w, c, me, dateOf) {
   games.sort((x, y) => (iso(x) < iso(y) ? -1 : iso(x) > iso(y) ? 1 : 0));
   return { games, out };
 }
+// ---- Club World Cup games of the owner's club: group matchdays (opponents known once the draw is made) and single-leg knockouts ----
+function cwcGames(w, c, me, dateOf) {
+  const g_ = (o, k) => (o && typeof o.get === "function" ? o.get(k) : o && o[k]), evs = c.events || [], games = [];
+  const grpEvs = evs.filter((e) => g_(e, "phase") === "grp"), koEvs = evs.filter((e) => g_(e, "phase") === "ko");
+  const cap = (x) => String(x || "").charAt(0).toUpperCase() + String(x || "").slice(1);
+  const gi = (c.groups || []).findIndex((g) => Array.from(g).includes(me)), glog = c.glog || [];
+  if (gi >= 0 && c.gsched) {
+    const sched = c.gsched[gi] || [];
+    for (let md = 0; md < Math.min(3, sched.length); md++) {
+      const pr = sched[md].find((q) => q[0] === me || q[1] === me); if (!pr) continue;
+      const done = glog.find((x) => x[0] === md && x[1] === pr[0] && x[2] === pr[1]);
+      games.push({ h: pr[0], a: pr[1], neutral: true, played: !!done, hg: done ? done[3] : undefined, ag: done ? done[4] : undefined, label: "Group matchday " + (md + 1), date: grpEvs[md] ? dateOf(c, grpEvs[md]) : null });
+    }
+  }
+  const mine = (c.ties || []).filter((t) => t[1] === me || t[2] === me);
+  mine.forEach((t, i) => {
+    const m = /^(\d+)-(\d+)(.*)$/.exec(String(t[3] || "")), win = t[4];
+    games.push({ h: t[1], a: t[2], neutral: true, played: true, hg: m ? +m[1] : 0, ag: m ? +m[2] : 0, how: m ? m[3].trim() : "", winner: win, label: cap(t[0]), date: koEvs[i] ? dateOf(c, koEvs[i]) : null });
+  });
+  const groupsDone = c.ptr >= grpEvs.length, cur = c.ko_current || [];
+  const lost = mine.some((t) => t[4] && t[4] !== me), alive = cur.includes(me) && !lost;
+  const out = lost || (groupsDone && cur.length > 0 && !alive && !c.winner);
+  if (!out && !c.winner) {
+    for (let r = mine.length; r < koEvs.length; r++) {
+      const ev = koEvs[r], e = { label: String(g_(ev, "label")), date: dateOf(c, ev), tentative: true };
+      if (r === mine.length && alive) { const n = cur.length, i = cur.indexOf(me), j = i < n / 2 ? n - 1 - i : n - 1 - i, o = cur[j]; if (o && o !== me) { e.h = i < j ? me : o; e.a = i < j ? o : me; e.neutral = true; e.tentative = false; } }
+      games.push(e);
+    }
+  }
+  const iso = (g) => { const d = g.date; return (d && (typeof d.get === "function" ? d.get("iso") : d.iso)) || "9"; };
+  games.sort((x, y) => (iso(x) < iso(y) ? -1 : iso(x) > iso(y) ? 1 : 0));
+  return { games, out };
+}
 // how many games of his the world has played so far (league and cups): the play-one-game button waits for this to change
 function gameCount(w) {
   const me = w.ow && w.ow.club; if (!me) return 0;
   const MC = w.clubs.get(me), lc = w.comps.get("L:" + MC.get("league")); let n = 0;
   for (const r of (lc && lc.results) || []) for (const g of r) if (g[0] === me || g[1] === me) n++;
   for (const [, c] of w.comps.itemsArr()) {
+    if (c.kind === "cwc" && c.field && Array.from(c.field).includes(me)) { for (const x of c.glog || []) if (x[1] === me || x[2] === me) n++; for (const t of c.ties || []) if (t[1] === me || t[2] === me) n++; continue; }
     if (c.kind !== "cup" || !c.field || !Array.from(c.field).includes(me)) continue;
     for (const t of c.tlog || []) { const gg = (k) => (t && typeof t.get === "function" ? t.get(k) : t[k]); if (gg("season") === w.season && (gg("a") === me || gg("b") === me)) n += (gg("legs") || []).length; }
     if (c.leg1) for (const [k] of c.leg1.itemsArr()) if (k[0] === me || k[1] === me) n++;
   }
   return n;
 }
-return { needs, cupGames, gameCount, create, buy, priceList, dividend, inject, lifestyle, sponsorOffers, takeSponsor, market, bid, release, sell, sellReply, dealAct, inboxAct, nextRound, renegAct, persuade, staffView, coachAct, beforeRollover, closeWindow, afterRollover, buyoutAct, retire, view, squadView, setSpeed, afterFlowDone, blocked, BACK, ROUNDS, openWindow };
+return { needs, cupGames, cwcGames, gameCount, create, buy, priceList, dividend, inject, lifestyle, sponsorOffers, takeSponsor, market, bid, release, sell, sellReply, dealAct, inboxAct, nextRound, renegAct, persuade, staffView, coachAct, beforeRollover, closeWindow, afterRollover, buyoutAct, retire, view, squadView, setSpeed, afterFlowDone, blocked, BACK, ROUNDS, openWindow };
 })();
 
 $mods["sim_core"] = (function() {
@@ -10837,6 +10873,8 @@ POST = $lit_dict([["/api/favs", a_favs], ["/api/favnations", a_favnations], ["/a
       let games = [], out = ties.some((t) => t.winner && t.winner !== me);
       if (c.kind === "cup" && c.tlog) {
         const g = O.cupGames(w, c, me, dateOf); games = g.games; out = g.out;
+      } else if (c.kind === "cwc" && c.groups && c.groups.length) {
+        const g = O.cwcGames(w, c, me, dateOf); games = g.games; out = g.out;
       } else if (!out && c.events) {
         for (let k = c.ptr; k < c.events.length; k++) games.push({ label: String(c.events[k].get ? c.events[k].get("label") : c.events[k].label), date: dateOf(c, c.events[k]), tentative: true });
       }
@@ -14624,7 +14662,7 @@ const owScore = (g, me, ext) => {
 // one game of the owner's club: date, competition, both teams with crests, and either the score or home/away
 function owGameRow(g, me, emb, showComp) {
   const side = g.played ? `<span class="owsd">${owScore(g, me)}</span>` : g.tentative && !g.h ? '<span class="dim small">if still in</span>' : `<span class="dim small">${g.neutral ? "neutral" : g.h === me ? "home" : "away"}</span>`;
-  return `<div class="row owg"><span class="small owd">${esc(g.date ? g.date.text : "")}</span><span class="rt"><span class="dim small">${showComp ? (emb || "") + " " + esc(g.comp) + " &middot; " : ""}${esc(g.label || "")}</span>${g.h ? `<div>${owTeam(g.h, me)}</div><div>${owTeam(g.a, me)}</div>` : ""}</span>${side}</div>`;
+  return `<div class="row owg"><span class="rt"><div class="dim small owgh">${esc(g.date ? g.date.text : "")}${showComp ? " &middot; " + (emb || "") + " " + esc(g.comp) : ""}${g.label ? " &middot; " + esc(g.label) : ""}</div>${g.h ? `<div>${owTeam(g.h, me)}</div><div>${owTeam(g.a, me)}</div>` : '<div class="dim small">Opponent not known yet</div>'}</span>${side}</div>`;
 }
 const OW_MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 // games grouped under a month heading, like a calendar
@@ -14639,7 +14677,7 @@ function owByMonth(list, me, embOf, showComp) {
 }
 async function owSched(st) {
   const d = await api("/api/ow_schedule"), me = st.club.name, W = d.cwc;
-  const chips = [["ALL", "All"], ...d.comps.map((c) => [c.id, c.title, owEmb(c, 16)]), ["CWC", "Club World Cup"]];
+  const chips = [["ALL", "All"], ...d.comps.map((c) => [c.id, c.title, owEmb(c, 16)]), ...(d.comps.some((c) => c.kind === "cwc") ? [] : [["CWC", "Club World Cup"]])];
   if (!OWT.sc || !chips.some((c) => c[0] === OWT.sc)) OWT.sc = "ALL";
   const embOf = {}; d.comps.forEach((c) => (embOf[c.id] = owEmb(c, 14)));
   let body;
@@ -14664,10 +14702,12 @@ async function owSched(st) {
       const left = mineAll.filter((g) => !g.played);
       const status = c.out ? "Your club is out." : c.winner ? "Finished." : left.length ? "Your club is still in." : "Not started";
       let bracket = "";
-      if (c.kind === "cup") {
+      if (c.kind === "cup" || c.kind === "cwc") {
         try {
           const x = await api("/api/comp?id=" + enc(c.id)), gm = await api("/api/games?comp=" + enc(c.id)).catch(() => null);
-          if (x.bracket && x.bracket.rounds && x.bracket.rounds.length) bracket = `<h3 style="margin-top:12px">Bracket</h3>` + bracketHTML(liveBracket(x.bracket, gm), false, { cid: c.id, ready: false }).replace(/<a [^>]*>|<\/a>/g, "");
+          const mg = (x.groups || []).find((g) => g.teams.some((r) => r.nation === me));
+          if (mg) bracket += `<h3 style="margin-top:12px">Your group</h3><div class="ow-tbl"><div class="ow-tr g5 ow-th"><span>#</span><span class="cl">Club</span><span>P</span><span>GD</span><span>Pts</span></div>${mg.teams.map((r, i) => `<div class="ow-tr g5${r.nation === me ? " me" : ""}"><span>${i + 1}</span><span class="cl">${esc(r.nation)}</span><span>${r.p}</span><span>${r.gf - r.ga > 0 ? "+" : ""}${r.gf - r.ga}</span><b>${r.pts}</b></div>`).join("")}</div><div class="dim small">Top two go through.</div>`;
+          if (x.bracket && x.bracket.rounds && x.bracket.rounds.length) bracket += `<h3 style="margin-top:12px">Knockout bracket</h3>` + bracketHTML(liveBracket(x.bracket, gm), false, { cid: c.id, ready: false }).replace(/<a [^>]*>|<\/a>/g, "");
         } catch (e) { /* no bracket yet */ }
       }
       body = `<div class="dim small">${status}${c.progress && c.progress.next ? " Next round: " + esc(c.progress.next) + (c.progress.next_date ? " &middot; " + c.progress.next_date.text : "") : ""}</div>
@@ -14805,7 +14845,7 @@ async function owMoney(st) {
     <div class="card"><h3>Sponsors</h3>${st.sponsors.map((s) => `<div class="row"><span>${esc(s.name)}</span><span>${owM(s.per_year)}/yr &middot; ${s.left}y left</span></div>`).join("") || '<div class="dim small">None signed.</div>'}
       ${sp.rows.map((s) => `<div class="row"><span class="rt"><b>${esc(s.name)}</b><div class="meta">${esc(s.note)}</div></span><span>${owM(s.per_year)}/yr &middot; ${s.years}y <button class="mini pri" data-sp="${s.id}">Sign</button></span></div>`).join("")}</div>
     <div class="card"><h3>Lifestyle <small>status ${st.status}</small></h3><div class="dim small">Money you spend on yourself. Fans notice, and so does your reputation.</div>${st.lifestyle.map((l) => `<div class="row"><span>${esc(l.label)}</span><span>${owM(l.cost)} <button class="mini" data-life="${l.id}" ${l.owned ? "disabled" : ""}>${l.owned ? "Owned" : "Buy"}</button></span></div>`).join("")}</div>
-    <div class="card"><h3>Money log <small>newest first</small></h3><div class="dim small">Every change to your wealth and the club's cash.</div>${mlog.slice(0, 40).map((m) => `<div class="row owml"><span class="small">${esc(m.t)}<div class="dim small">S${m.s}</div></span><span class="owd"><span class="dim small">You</span> ${owDelta(m.dw)}<br><span class="dim small">Club</span> ${owDelta(m.dc)}</span></div>`).join("") || '<div class="dim small">Nothing yet.</div>'}</div>
+    <div class="card"><h3>Money log <small>newest first</small></h3><div class="dim small">Every change to your wealth and the club's cash.</div>${mlog.slice(0, 40).map((m) => `<div class="row owml"><span class="small">${esc(m.t)}<div class="dim small">S${m.s}</div></span><span class="owmd"><span class="dim small">You</span> ${owDelta(m.dw)}<br><span class="dim small">Club</span> ${owDelta(m.dc)}</span></div>`).join("") || '<div class="dim small">Nothing yet.</div>'}</div>
     <div class="card"><h3>Your ledger</h3><div class="dim small">Your income swings from year to year.</div>${st.ledger.slice().reverse().map((l) => `<div class="row"><span>S${l.season}${l.club ? " &middot; " + esc(l.club) : ""}</span><span class="small">income ${owM(l.income)} &middot; divs ${owM(l.dividends)} &middot; in ${owM(l.injections)} &middot; worth ${owM(l.wealth)}</span></div>`).join("")}</div>`;
 }
 function owBoard(st) {

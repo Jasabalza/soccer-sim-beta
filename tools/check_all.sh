@@ -17,4 +17,5 @@ echo "owner mode:"; node tools/t_owner.js 8 7 selfmade > $T/owner.txt 2>&1; echo
 echo "sim update (goalscorers, form):"; node tools/t_scorers.js > $T/scorers.txt 2>&1; echo "  t_scorers: $(tail -1 $T/scorers.txt)"; grep -q "SCORERS OK" $T/scorers.txt || fail=1
 node tools/t_form.js 2 3 0,2 > $T/form.txt 2>&1; echo "  t_form: $(tail -1 $T/form.txt | cut -c1-120)"; [ "$(grep -c "^cap" $T/form.txt)" = 2 ] || fail=1
 if [ -n "$OLD_BUNDLE" ]; then node tools/t_migrate_v15.js "$OLD_BUNDLE" > $T/mig.txt 2>&1; echo "  old save migration: $(tail -1 $T/mig.txt)"; grep -q "ALL OK" $T/mig.txt || fail=1; fi
+node tools/t_owner_cwc.js 7 > $T/cwco.txt 2>&1; echo "  t_owner_cwc: $(tail -1 $T/cwco.txt)"; grep -q "CWC OWNER OK" $T/cwco.txt || fail=1
 [ $fail = 0 ] && echo "ALL CHECKS PASSED" || echo "CHECKS FAILED"

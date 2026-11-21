@@ -996,6 +996,8 @@ POST = $lit_dict([["/api/favs", a_favs], ["/api/favnations", a_favnations], ["/a
       let games = [], out = ties.some((t) => t.winner && t.winner !== me);
       if (c.kind === "cup" && c.tlog) {
         const g = O.cupGames(w, c, me, dateOf); games = g.games; out = g.out;
+      } else if (c.kind === "cwc" && c.groups && c.groups.length) {
+        const g = O.cwcGames(w, c, me, dateOf); games = g.games; out = g.out;
       } else if (!out && c.events) {
         for (let k = c.ptr; k < c.events.length; k++) games.push({ label: String(c.events[k].get ? c.events[k].get("label") : c.events[k].label), date: dateOf(c, c.events[k]), tentative: true });
       }
