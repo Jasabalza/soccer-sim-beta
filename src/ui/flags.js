@@ -177,6 +177,7 @@ function setLogos(imp) {
 }
 // an imported picture for a nation, a league or a competition (a data URL), or null
 function logo2(kind, name) {
+  if (name === "Omega League" && (kind === "leagues" || kind === "comps") && typeof OMEGA_ART !== "undefined" && !(window.__LOGOS2 && window.__LOGOS2[kind] && window.__LOGOS2[kind][name])) return OMEGA_ART.mark;
   if (name === "Apex League" && (kind === "leagues" || kind === "comps") && typeof APEX_ART !== "undefined" && !(window.__LOGOS2 && window.__LOGOS2[kind] && window.__LOGOS2[kind][name])) return APEX_ART.mark;
   const s = window.__LOGOS2 && window.__LOGOS2[kind]; if (!s) return null;
   const k = kind + "|" + name; if (k in _lg2) return _lg2[k];
