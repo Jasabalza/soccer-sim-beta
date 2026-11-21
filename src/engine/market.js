@@ -54,7 +54,8 @@ $mods["market"] = (function () {
     if (globalThis.__NO_RULES) return true;           // test switch: the old behaviour
     why = null;
     const seller = p.club;
-    if (w.ow && $mods.owner.blocked(w, seller, buyer)) return false;      // owner mode: the owner trades for himself
+    if (w.ow && $mods.owner.blocked(w, seller, buyer)) return false;
+    if ((w.apex && $mods.apex.blocked(w, seller, buyer)) || (w.omega && $mods.omega && $mods.omega.blocked(w, seller, buyer))) return false;   // breakaway sanctions      // owner mode: the owner trades for himself
     const R = $mods.rivals.intensity(w, seller, buyer);
     const E = eliteSet(w, kind), top = E.has(seller) && E.has(buyer);
     const up = underperforming(w, p);

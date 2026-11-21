@@ -25,6 +25,7 @@ $mods["bids"] = (function () {
       const cand = [];
       for (const b of w.clubs.keysArr()) {
         if (b === seller || b === own) continue;
+        if ((w.apex && $mods.apex.blocked(w, seller, b)) || (w.omega && $mods.omega && $mods.omega.blocked(w, seller, b))) continue;   // breakaway sanctions
         const B = w.clubs.get_(b), funds = B.get_("funds");
         if (attr[b] < attr[seller] - 6 || p.ovr < floor[b] + 1 || funds < ask0 || by[b].length >= 27) continue;
         if (pay[b] + wageAsk > cfg.wage_cap * B.get_("budget")) continue;

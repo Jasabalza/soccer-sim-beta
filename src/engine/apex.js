@@ -86,11 +86,16 @@ $mods["breakaway"] = function (CF) {
   const NAME = CF.name, KEEP = CF.keep;                       // a domestic league never drops under 10 clubs
   const fullLen = (n) => (n % 2 === 0 ? 2 * (n - 1) : 2 * n);     // matchweeks of a home-and-away season (an odd field has byes)
   // clubs may only leave while their league keeps enough clubs to play a season
+  // how many clubs a domestic league has already lost to every breakaway (Apex and Omega share one cap)
+  function lostFrom(w, ln) { let n = 0; for (const k of ["apex", "omega"]) { const b = w[k]; if (b && b.members) for (const m of b.members) if (m.home === ln) n++; } return n; }
+  // a league lets a club go only while it keeps at least KEEP clubs and has lost no more than about a quarter of its field
+  function canLeave(w, ln, extra) { const size = w.leagues.get(ln).get("clubs").length - (extra || 0), lost = lostFrom(w, ln) + (extra || 0); return size - 1 >= KEEP && lost + 1 <= Math.max(1, Math.floor(0.25 * (size + lost))); }
   function eligible(w, list) {
-    const out = [], gone = {};
+    const out = [], gone = {}, me = w.ow && w.ow.club;
     for (const n of list) {
-      const ln = C(w, n).get("league"), size = w.leagues.get(ln).get("clubs").length;
-      if (size - (gone[ln] || 0) > KEEP) { gone[ln] = (gone[ln] || 0) + 1; out.push(n); } else say(w, ln + " refuses to let " + n + " go: it would not have enough clubs left to play a season.");
+      const ln = C(w, n).get("league");
+      if (canLeave(w, ln, gone[ln] || 0)) { gone[ln] = (gone[ln] || 0) + 1; out.push(n); }
+      else { say(w, ln + " refuses to let " + n + " go: it has already lost as many clubs as it can."); if (n === me) w.ow[K + "_note"] = { season: w.season, t: ln + " refused to let your club leave for the " + NAME + ". It has lost as many clubs as it can. You stay." }; }
     }
     return out;
   }
@@ -125,7 +130,8 @@ $mods["breakaway"] = function (CF) {
   function healthNow(w) {
     const a = w[K], l = a.members.map((m) => m.club), st = strength(w, l);
     const strengthPart = clamp((st.mean - 60) * 2.5, 0, 100), sizePart = l.length / MAXN * 100;
-    return clamp(0.65 * strengthPart + 0.35 * sizePart, 0, 100);
+    const hostile = a.sanc ? Object.values(a.sanc).filter((v) => v >= 3).length : 0;
+    return clamp(0.65 * strengthPart + 0.35 * sizePart - 3 * hostile, 0, 100);
   }
   const wantSize = (h) => clamp(Math.round(8 + h / 100 * 8), MINN, MAXN);          // a dying league runs smaller
   // a club's file: league finish, stature and squad rating. The owner sees this number before the review.
@@ -144,6 +150,7 @@ $mods["breakaway"] = function (CF) {
     c.set("last_finish", Math.ceil(A.get("clubs").length / 2));
     const add = offer.apex_pay / X(w); c.set("income", c.get("income") + add); c.set("budget", Math.max(c.get("budget"), c.get("income")));
     a.members.push({ club: m, years: offer.years, from: w.season + 1, pay: offer.apex_pay, home: ln });
+    a.rel = a.rel || {}; a.sanc = a.sanc || {}; if (a.rel[ln] === undefined) { a.rel[ln] = 60; a.sanc[ln] = 0; } a.rel[ln] = r1(Math.max(0, a.rel[ln] - 8));
   }
   function fromApex(w, m) {
     const a = w[K], A = apexL(w), c = C(w, m), rec = a.members.find((x) => x.club === m.club || x.club === m); const n = rec.club;
@@ -160,7 +167,7 @@ $mods["breakaway"] = function (CF) {
   function boardVote(w) {
     const a = w[K], A = apexL(w), mem = new Set(a.members.map((m) => m.club)), me = w.ow && w.ow.club, rel = leagueRel(w), tried = new Set();
     for (let round = 0; round < 3; round++) {
-      const pool = ranking(w).filter((r) => !mem.has(r.club) && r.club !== me && !tried.has(r.club) && w.leagues.get(C(w, r.club).get("league")).get("clubs").length > KEEP).slice(0, 5);
+      const pool = ranking(w).filter((r) => !mem.has(r.club) && r.club !== me && !tried.has(r.club) && canLeave(w, C(w, r.club).get("league"))).slice(0, 5);
       if (pool.length < 2) return false;
       const tally = {}; pool.forEach((p) => (tally[p.club] = 0));
       for (const m of a.members) {
@@ -175,6 +182,39 @@ $mods["breakaway"] = function (CF) {
     }
     return false;
   }
+  // ---- sanctions: each domestic league's relations with the breakaway, and the ladder they climb --------------------------------------------
+  // 0 none, 1 warning, 2 fines, 3 transfer block with that league, 4 boycott across its whole confederation. One step a season at most.
+  const SANC = ["None", "Warning", "Fines", "Transfer block", "Boycott"], LINE = [101, 45, 35, 25, 15];
+  function relInit(w) {
+    const a = w[K]; a.rel = a.rel || {}; a.sanc = a.sanc || {};
+    for (const m of a.members) if (m.home && a.rel[m.home] === undefined) { a.rel[m.home] = r1(Math.max(0, (CF.rel0 || 60) - 8 * a.members.filter((x) => x.home === m.home).length)); a.sanc[m.home] = 0; }
+  }
+  function sanctions(w) {
+    const a = w[K]; relInit(w);
+    for (const ln of Object.keys(a.rel)) {
+      const still = a.members.filter((m) => m.home === ln).length;
+      const age = w.season - (a.founded || w.season);           // anger builds for the first seasons, then slowly fades as everyone gets used to it
+      a.rel[ln] = r1(clamp(a.rel[ln] + (!still ? 4 : age < 4 ? -2 - 0.5 * (still - 1) : 1), 0, 100));
+      const lv = a.sanc[ln] || 0;
+      if (lv < 4 && a.rel[ln] < LINE[lv + 1]) { a.sanc[ln] = lv + 1; say(w, ln + " " + ["", "warns the " + NAME + " clubs", "fines its former clubs in the " + NAME, "blocks all transfers with " + NAME + " clubs", "leads a boycott: every league in " + w.leagues.get(ln).get("confed") + " stops dealing with the " + NAME][lv + 1] + "."); }
+      else if (lv > 0 && a.rel[ln] >= LINE[lv] + 10) { a.sanc[ln] = lv - 1; say(w, ln + " eases its sanctions on the " + NAME + " (now: " + SANC[lv - 1].toLowerCase() + ")."); }
+    }
+    // fines: members whose old league is at level 2 or more pay a share of their income each season
+    for (const m of a.members) { const lv = a.sanc[m.home] || 0; if (lv >= 2) { const c = C(w, m.club), f = c.get("income") * (lv === 2 ? 0.03 : lv === 3 ? 0.045 : 0.06); c.set("funds", c.get("funds") - f); m.fined = r1((m.fined || 0) + f * X(w)); } }
+  }
+  // will club x deal with club y? (both ways). Free agents are never blocked.
+  function blocked(w, x, y) {
+    const a = w[K]; if (!a || a.state !== "live" || !a.sanc || !x || !y) return false;
+    const mem = new Set(a.members.map((m) => m.club)), mx = mem.has(x), my = mem.has(y); if (mx === my) return false;
+    const other = mx ? y : x, ol = C(w, other).get("league"), oc = w.leagues.get(ol) ? w.leagues.get(ol).get("confed") : null;
+    for (const ln of Object.keys(a.sanc)) {
+      const lv = a.sanc[ln]; if (lv >= 3 && ln === ol) return true;
+      if (lv >= 4 && w.leagues.get(ln).get("confed") === oc) return true;
+      if (lv >= 2 && ln === ol && H(key(w, "refuse", other)) < 0.3) return true;       // some clubs simply refuse
+    }
+    return false;
+  }
+
   // each rollover while the league lives
   function afterSeason(w) {
     const a = w[K]; if (!a || !a.on || a.state !== "live") return;
@@ -183,11 +223,12 @@ $mods["breakaway"] = function (CF) {
     if (o && o[K + "_fans"] > 0) { const back = Math.min(4, o[K + "_fans"]); o[K + "_fans"] -= back; o.fans = clamp(o.fans + back, 0, 100); }
     // health
     const h0 = healthNow(w); a.health = a.health === undefined ? r1(h0) : r1(0.6 * a.health + 0.4 * h0); a.hh = (a.hh || []).concat([{ season: w.season, h: a.health }]).slice(-20);
+    sanctions(w);
     // contract reviews
     for (const m of a.members.slice()) {
       if (m.years > 0) continue;
       const f = fileScore(w, m.club), v = verdictOf(f, a.members.length), rel = leagueRel(w);
-      if (v === "release") { const ln = fromApex(w, m.club); say(w, "The " + NAME + " lets " + m.club + " go: their contract is up and the file is weak. They return to the " + ln + "."); if (m.club === me) o[K + "_note"] = { season: w.season, t: "The " + NAME + " did not renew your contract. You are back in the " + ln + "." }; continue; }
+      if (v === "release") { const ln = fromApex(w, m.club); say(w, "The " + NAME + " lets " + m.club + " go: their contract is up and the file is weak. They return to " + ln + "."); if (m.club === me) o[K + "_note"] = { season: w.season, t: "The " + NAME + " did not renew your contract. You are back in " + ln + "." }; continue; }
       const off = makeOffer(w, m.club, rel), mult = (v === "renew" ? 1 + (f - 66) / 100 : 0.85) * (0.8 + 0.4 * a.health / 100);
       m.pay = r1(off.apex_pay * mult); m.years = v === "renew" ? off.years : 1 + Math.floor(H(key(w, "ry", m.club, w.season)) * 2);
       say(w, "The " + NAME + " " + (v === "renew" ? "renews" : "keeps on review") + " " + m.club + " for " + m.years + " season" + (m.years === 1 ? "" : "s") + ".");
@@ -220,7 +261,7 @@ $mods["breakaway"] = function (CF) {
     list = eligible(w, list);
     const st = strength(w, list);
     if (st.go) {
-      a.state = "live"; a.members = list.map((n) => ({ club: n, years: a.offers[n].years, from: a.inaugural, pay: a.offers[n].apex_pay, home: C(w, n).get("league") })); a.founded = a.inaugural; a.health = r1(healthNow(w));
+      a.state = "live"; a.members = list.map((n) => ({ club: n, years: a.offers[n].years, from: a.inaugural, pay: a.offers[n].apex_pay, home: C(w, n).get("league") })); a.founded = a.inaugural; relInit(w); a.health = r1(healthNow(w));
       say(w, "The " + NAME + " is a go: " + list.length + " clubs will play in season " + a.inaugural + ".");
       formLeague(w, list);
       if (me && list.includes(me)) { const o = w.ow; o.fans = clamp(o.fans - CF.fan_hit, 0, 100); o[K + "_fans"] = CF.fan_hit; }
@@ -248,10 +289,11 @@ $mods["breakaway"] = function (CF) {
       out.members = a.members.map((m) => ({ club: m.club, years: m.years, pay: m.pay, file: fileScore(w, m.club), mine: m.club === me }));
       const mm = a.members.find((m) => m.club === me); if (mm) { const f = fileScore(w, me); out.mine = { years: mm.years, pay: mm.pay, file: f, verdict: verdictOf(f, a.members.length) }; }
       out.note = w.ow && w.ow[K + "_note"] || null;
+      out.rel = Object.keys(a.rel || {}).map((ln) => ({ league: ln, rel: a.rel[ln], level: a.sanc[ln] || 0, label: SANC[a.sanc[ln] || 0], clubs: a.members.filter((m) => m.home === ln).length, mine: !!(mm && mm.home === ln) })).sort((x, y) => y.level - x.level || x.rel - y.rel);
     }
     return out;
   }
-  return { NAME, fullLen, init, startSeason, resolve, choose, mustDecide, view, ranking, strength, need, leagueRel };
+  return { NAME, SANC, blocked, lostFrom, canLeave, fullLen, init, startSeason, resolve, choose, mustDecide, view, ranking, strength, need, leagueRel };
 };
-$mods["apex"] = $mods.breakaway({ key: "apex", name: "Apex League", countdown: 4, maxn: 16, minn: 4, extra: 4, max_delays: 2, keep: 10,
+$mods["apex"] = $mods.breakaway({ key: "apex", name: "Apex League", countdown: 4, maxn: 16, minn: 4, extra: 4, max_delays: 2, keep: 12,
   pay: 0.45, prestige: 100, tvmult: 1.1, short: "Apex", bloc: "UEFA", bloc_bias: 4, fan_hit: 14 });

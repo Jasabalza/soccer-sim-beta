@@ -46,6 +46,11 @@ vm.runInThisContext(fs.readFileSync(__dirname + "/../dist/bundle_engine.js", "ut
     const txt = JSON.stringify(w.news_log); const rv = (txt.match(/Apex League (renews|keeps on review|lets)/g) || []).length, vt = (txt.match(/Apex board votes/g) || []).length;
     console.log("health", v.health, "want", v.want, "reviews", rv, "board votes", vt);
     if (N >= 14 && rv < 3) fail.push("contract reviews never happened (" + rv + ")");
+    const sl = (v.rel || []).map((r) => r.league + ":" + r.label + "(" + r.rel + ")").join(" "); console.log("relations", sl);
+    if (N >= 12 && !(v.rel || []).some((r) => r.level >= 2)) fail.push("no sanctions after " + N + " seasons");
+    for (const r of v.rel || []) { const L = w.leagues.get(r.league), n = L.get("clubs").length; if (n < 12 && r.clubs > 0) fail.push(r.league + " down to " + n + " clubs"); if (R.ap.lostFrom(w, r.league) > Math.max(1, Math.floor(0.25 * (n + R.ap.lostFrom(w, r.league))))) fail.push(r.league + " lost too many"); }
+    // a blocked pair never trades: check this season's transfers
+    const bl = w.transfers.filter((t) => t.get("season") === w.season - 1 && t.get("frm") && R.ap.blocked(w, t.get("frm"), t.get("to"))).length; console.log("transfers last season across a block:", bl);
     const dup = mem.filter((m, i) => mem.indexOf(m) !== i); if (dup.length) fail.push("duplicate members " + dup.join());
     const prem = w.leagues.get("Premier League").get("clubs").length; console.log("Apex", mem.length, "clubs; Premier League now", prem, "clubs; champions", champs.join(", "));
   }

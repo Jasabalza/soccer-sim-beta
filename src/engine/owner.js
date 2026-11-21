@@ -209,6 +209,7 @@ $mods["owner"] = (function () {
     });
     return { n: sq.length, max: 25, free: Math.max(0, 25 - sq.length), under25: sq.filter((p) => p.age < 25).length, avg_xi: r1(avg), pos };
   }
+  const sanctioned = (w, x, y) => !!((w.apex && $mods.apex.blocked(w, x, y)) || (w.omega && $mods.omega && $mods.omega.blocked(w, x, y)));
   function market(w, q) {
     const o = w.ow, W = o.win; w.ensure_uids();
     let rows = w.players.filter((p) => (q.free ? !p.club && p.age >= 17 : p.club && p.club !== o.club));
@@ -221,7 +222,7 @@ $mods["owner"] = (function () {
     if (q.q) { const s = String(q.q).toLowerCase(); rows = rows.filter((p) => p.name.toLowerCase().includes(s)); }
     const by = q.sort || "ovr", bpm = byPos(w);
     rows.sort((a, b) => (by === "age" ? a.age - b.age : by === "value" ? fair(w, a) - fair(w, b) : b.ovr - a.ovr || (a.name < b.name ? -1 : 1)));
-    return rows.slice(0, 60).map((p) => { const r = publicRow(w, p); r.locked = !!(W && (W.pat[p.club + "|" + p.uid] || PATIENCE) <= 0); r.war = !!(W && W.wars[p.uid]); r.rel = relName(rel(w, p.club)); r.fit = fitOf(bpm, p); return r; });
+    return rows.slice(0, 60).map((p) => { const r = publicRow(w, p); r.locked = !!(W && (W.pat[p.club + "|" + p.uid] || PATIENCE) <= 0); r.war = !!(W && W.wars[p.uid]); r.rel = relName(rel(w, p.club)); r.fit = fitOf(bpm, p); r.blocked = sanctioned(w, o.club, p.club); return r; });
   }
   function bid(w, body) {
     const W = needWin(w), o = w.ow, me = o.club; const p = find(w, +body.uid); if (!p || p.club === me) fail("Player not available.", 404);
@@ -234,6 +235,7 @@ $mods["owner"] = (function () {
     }
     const fee = Number(body.fee), wage = Number(body.wage), years = clamp(Math.round(Number(body.years) || 3), 1, 5);
     if (!(fee > 0)) fail("Enter a fee."); const seller = p.club, pk = seller + "|" + p.uid;
+    if (sanctioned(w, me, seller)) return { status: "blocked", msg: seller + " will not deal with you: breakaway league sanctions. Free agents are still open." };
     const pat = W.pat[pk] === undefined ? PATIENCE : W.pat[pk];
     if (pat <= 0) return { status: "locked", msg: seller + " will not talk about " + p.name + " again this window." };
     W.att[p.uid] = (W.att[p.uid] || 0) + 1; const att = W.att[p.uid];
@@ -289,7 +291,7 @@ $mods["owner"] = (function () {
   function sellOffers(w, p, W, tries) {
     const o = w.ow, V = fair(w, p), out = [];
     for (const n of w.clubs.keysArr()) {
-      if (n === o.club || n === p.club) continue; const c = w.clubs.get(n);
+      if (n === o.club || n === p.club || sanctioned(w, o.club, n)) continue; const c = w.clubs.get(n);
       if (c.get("funds") * X(w) < V * 0.7 || squadOf(w, n).length >= 25) continue;
       const sq = squadOf(w, n).map((x) => x.ovr).sort((a, b) => b - a), floor = sq.length >= 11 ? sq[10] : 0;
       if (p.ovr < floor + 1) continue;

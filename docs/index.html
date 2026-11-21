@@ -2522,7 +2522,8 @@ $mods["market"] = (function () {
     if (globalThis.__NO_RULES) return true;           // test switch: the old behaviour
     why = null;
     const seller = p.club;
-    if (w.ow && $mods.owner.blocked(w, seller, buyer)) return false;      // owner mode: the owner trades for himself
+    if (w.ow && $mods.owner.blocked(w, seller, buyer)) return false;
+    if ((w.apex && $mods.apex.blocked(w, seller, buyer)) || (w.omega && $mods.omega && $mods.omega.blocked(w, seller, buyer))) return false;   // breakaway sanctions      // owner mode: the owner trades for himself
     const R = $mods.rivals.intensity(w, seller, buyer);
     const E = eliteSet(w, kind), top = E.has(seller) && E.has(buyer);
     const up = underperforming(w, p);
@@ -2571,6 +2572,7 @@ $mods["bids"] = (function () {
       const cand = [];
       for (const b of w.clubs.keysArr()) {
         if (b === seller || b === own) continue;
+        if ((w.apex && $mods.apex.blocked(w, seller, b)) || (w.omega && $mods.omega && $mods.omega.blocked(w, seller, b))) continue;   // breakaway sanctions
         const B = w.clubs.get_(b), funds = B.get_("funds");
         if (attr[b] < attr[seller] - 6 || p.ovr < floor[b] + 1 || funds < ask0 || by[b].length >= 27) continue;
         if (pay[b] + wageAsk > cfg.wage_cap * B.get_("budget")) continue;
@@ -6186,6 +6188,7 @@ $mods["owner"] = (function () {
     });
     return { n: sq.length, max: 25, free: Math.max(0, 25 - sq.length), under25: sq.filter((p) => p.age < 25).length, avg_xi: r1(avg), pos };
   }
+  const sanctioned = (w, x, y) => !!((w.apex && $mods.apex.blocked(w, x, y)) || (w.omega && $mods.omega && $mods.omega.blocked(w, x, y)));
   function market(w, q) {
     const o = w.ow, W = o.win; w.ensure_uids();
     let rows = w.players.filter((p) => (q.free ? !p.club && p.age >= 17 : p.club && p.club !== o.club));
@@ -6198,7 +6201,7 @@ $mods["owner"] = (function () {
     if (q.q) { const s = String(q.q).toLowerCase(); rows = rows.filter((p) => p.name.toLowerCase().includes(s)); }
     const by = q.sort || "ovr", bpm = byPos(w);
     rows.sort((a, b) => (by === "age" ? a.age - b.age : by === "value" ? fair(w, a) - fair(w, b) : b.ovr - a.ovr || (a.name < b.name ? -1 : 1)));
-    return rows.slice(0, 60).map((p) => { const r = publicRow(w, p); r.locked = !!(W && (W.pat[p.club + "|" + p.uid] || PATIENCE) <= 0); r.war = !!(W && W.wars[p.uid]); r.rel = relName(rel(w, p.club)); r.fit = fitOf(bpm, p); return r; });
+    return rows.slice(0, 60).map((p) => { const r = publicRow(w, p); r.locked = !!(W && (W.pat[p.club + "|" + p.uid] || PATIENCE) <= 0); r.war = !!(W && W.wars[p.uid]); r.rel = relName(rel(w, p.club)); r.fit = fitOf(bpm, p); r.blocked = sanctioned(w, o.club, p.club); return r; });
   }
   function bid(w, body) {
     const W = needWin(w), o = w.ow, me = o.club; const p = find(w, +body.uid); if (!p || p.club === me) fail("Player not available.", 404);
@@ -6211,6 +6214,7 @@ $mods["owner"] = (function () {
     }
     const fee = Number(body.fee), wage = Number(body.wage), years = clamp(Math.round(Number(body.years) || 3), 1, 5);
     if (!(fee > 0)) fail("Enter a fee."); const seller = p.club, pk = seller + "|" + p.uid;
+    if (sanctioned(w, me, seller)) return { status: "blocked", msg: seller + " will not deal with you: breakaway league sanctions. Free agents are still open." };
     const pat = W.pat[pk] === undefined ? PATIENCE : W.pat[pk];
     if (pat <= 0) return { status: "locked", msg: seller + " will not talk about " + p.name + " again this window." };
     W.att[p.uid] = (W.att[p.uid] || 0) + 1; const att = W.att[p.uid];
@@ -6266,7 +6270,7 @@ $mods["owner"] = (function () {
   function sellOffers(w, p, W, tries) {
     const o = w.ow, V = fair(w, p), out = [];
     for (const n of w.clubs.keysArr()) {
-      if (n === o.club || n === p.club) continue; const c = w.clubs.get(n);
+      if (n === o.club || n === p.club || sanctioned(w, o.club, n)) continue; const c = w.clubs.get(n);
       if (c.get("funds") * X(w) < V * 0.7 || squadOf(w, n).length >= 25) continue;
       const sq = squadOf(w, n).map((x) => x.ovr).sort((a, b) => b - a), floor = sq.length >= 11 ? sq[10] : 0;
       if (p.ovr < floor + 1) continue;
@@ -6783,11 +6787,16 @@ $mods["breakaway"] = function (CF) {
   const NAME = CF.name, KEEP = CF.keep;                       // a domestic league never drops under 10 clubs
   const fullLen = (n) => (n % 2 === 0 ? 2 * (n - 1) : 2 * n);     // matchweeks of a home-and-away season (an odd field has byes)
   // clubs may only leave while their league keeps enough clubs to play a season
+  // how many clubs a domestic league has already lost to every breakaway (Apex and Omega share one cap)
+  function lostFrom(w, ln) { let n = 0; for (const k of ["apex", "omega"]) { const b = w[k]; if (b && b.members) for (const m of b.members) if (m.home === ln) n++; } return n; }
+  // a league lets a club go only while it keeps at least KEEP clubs and has lost no more than about a quarter of its field
+  function canLeave(w, ln, extra) { const size = w.leagues.get(ln).get("clubs").length - (extra || 0), lost = lostFrom(w, ln) + (extra || 0); return size - 1 >= KEEP && lost + 1 <= Math.max(1, Math.floor(0.25 * (size + lost))); }
   function eligible(w, list) {
-    const out = [], gone = {};
+    const out = [], gone = {}, me = w.ow && w.ow.club;
     for (const n of list) {
-      const ln = C(w, n).get("league"), size = w.leagues.get(ln).get("clubs").length;
-      if (size - (gone[ln] || 0) > KEEP) { gone[ln] = (gone[ln] || 0) + 1; out.push(n); } else say(w, ln + " refuses to let " + n + " go: it would not have enough clubs left to play a season.");
+      const ln = C(w, n).get("league");
+      if (canLeave(w, ln, gone[ln] || 0)) { gone[ln] = (gone[ln] || 0) + 1; out.push(n); }
+      else { say(w, ln + " refuses to let " + n + " go: it has already lost as many clubs as it can."); if (n === me) w.ow[K + "_note"] = { season: w.season, t: ln + " refused to let your club leave for the " + NAME + ". It has lost as many clubs as it can. You stay." }; }
     }
     return out;
   }
@@ -6822,7 +6831,8 @@ $mods["breakaway"] = function (CF) {
   function healthNow(w) {
     const a = w[K], l = a.members.map((m) => m.club), st = strength(w, l);
     const strengthPart = clamp((st.mean - 60) * 2.5, 0, 100), sizePart = l.length / MAXN * 100;
-    return clamp(0.65 * strengthPart + 0.35 * sizePart, 0, 100);
+    const hostile = a.sanc ? Object.values(a.sanc).filter((v) => v >= 3).length : 0;
+    return clamp(0.65 * strengthPart + 0.35 * sizePart - 3 * hostile, 0, 100);
   }
   const wantSize = (h) => clamp(Math.round(8 + h / 100 * 8), MINN, MAXN);          // a dying league runs smaller
   // a club's file: league finish, stature and squad rating. The owner sees this number before the review.
@@ -6841,6 +6851,7 @@ $mods["breakaway"] = function (CF) {
     c.set("last_finish", Math.ceil(A.get("clubs").length / 2));
     const add = offer.apex_pay / X(w); c.set("income", c.get("income") + add); c.set("budget", Math.max(c.get("budget"), c.get("income")));
     a.members.push({ club: m, years: offer.years, from: w.season + 1, pay: offer.apex_pay, home: ln });
+    a.rel = a.rel || {}; a.sanc = a.sanc || {}; if (a.rel[ln] === undefined) { a.rel[ln] = 60; a.sanc[ln] = 0; } a.rel[ln] = r1(Math.max(0, a.rel[ln] - 8));
   }
   function fromApex(w, m) {
     const a = w[K], A = apexL(w), c = C(w, m), rec = a.members.find((x) => x.club === m.club || x.club === m); const n = rec.club;
@@ -6857,7 +6868,7 @@ $mods["breakaway"] = function (CF) {
   function boardVote(w) {
     const a = w[K], A = apexL(w), mem = new Set(a.members.map((m) => m.club)), me = w.ow && w.ow.club, rel = leagueRel(w), tried = new Set();
     for (let round = 0; round < 3; round++) {
-      const pool = ranking(w).filter((r) => !mem.has(r.club) && r.club !== me && !tried.has(r.club) && w.leagues.get(C(w, r.club).get("league")).get("clubs").length > KEEP).slice(0, 5);
+      const pool = ranking(w).filter((r) => !mem.has(r.club) && r.club !== me && !tried.has(r.club) && canLeave(w, C(w, r.club).get("league"))).slice(0, 5);
       if (pool.length < 2) return false;
       const tally = {}; pool.forEach((p) => (tally[p.club] = 0));
       for (const m of a.members) {
@@ -6872,6 +6883,39 @@ $mods["breakaway"] = function (CF) {
     }
     return false;
   }
+  // ---- sanctions: each domestic league's relations with the breakaway, and the ladder they climb --------------------------------------------
+  // 0 none, 1 warning, 2 fines, 3 transfer block with that league, 4 boycott across its whole confederation. One step a season at most.
+  const SANC = ["None", "Warning", "Fines", "Transfer block", "Boycott"], LINE = [101, 45, 35, 25, 15];
+  function relInit(w) {
+    const a = w[K]; a.rel = a.rel || {}; a.sanc = a.sanc || {};
+    for (const m of a.members) if (m.home && a.rel[m.home] === undefined) { a.rel[m.home] = r1(Math.max(0, (CF.rel0 || 60) - 8 * a.members.filter((x) => x.home === m.home).length)); a.sanc[m.home] = 0; }
+  }
+  function sanctions(w) {
+    const a = w[K]; relInit(w);
+    for (const ln of Object.keys(a.rel)) {
+      const still = a.members.filter((m) => m.home === ln).length;
+      const age = w.season - (a.founded || w.season);           // anger builds for the first seasons, then slowly fades as everyone gets used to it
+      a.rel[ln] = r1(clamp(a.rel[ln] + (!still ? 4 : age < 4 ? -2 - 0.5 * (still - 1) : 1), 0, 100));
+      const lv = a.sanc[ln] || 0;
+      if (lv < 4 && a.rel[ln] < LINE[lv + 1]) { a.sanc[ln] = lv + 1; say(w, ln + " " + ["", "warns the " + NAME + " clubs", "fines its former clubs in the " + NAME, "blocks all transfers with " + NAME + " clubs", "leads a boycott: every league in " + w.leagues.get(ln).get("confed") + " stops dealing with the " + NAME][lv + 1] + "."); }
+      else if (lv > 0 && a.rel[ln] >= LINE[lv] + 10) { a.sanc[ln] = lv - 1; say(w, ln + " eases its sanctions on the " + NAME + " (now: " + SANC[lv - 1].toLowerCase() + ")."); }
+    }
+    // fines: members whose old league is at level 2 or more pay a share of their income each season
+    for (const m of a.members) { const lv = a.sanc[m.home] || 0; if (lv >= 2) { const c = C(w, m.club), f = c.get("income") * (lv === 2 ? 0.03 : lv === 3 ? 0.045 : 0.06); c.set("funds", c.get("funds") - f); m.fined = r1((m.fined || 0) + f * X(w)); } }
+  }
+  // will club x deal with club y? (both ways). Free agents are never blocked.
+  function blocked(w, x, y) {
+    const a = w[K]; if (!a || a.state !== "live" || !a.sanc || !x || !y) return false;
+    const mem = new Set(a.members.map((m) => m.club)), mx = mem.has(x), my = mem.has(y); if (mx === my) return false;
+    const other = mx ? y : x, ol = C(w, other).get("league"), oc = w.leagues.get(ol) ? w.leagues.get(ol).get("confed") : null;
+    for (const ln of Object.keys(a.sanc)) {
+      const lv = a.sanc[ln]; if (lv >= 3 && ln === ol) return true;
+      if (lv >= 4 && w.leagues.get(ln).get("confed") === oc) return true;
+      if (lv >= 2 && ln === ol && H(key(w, "refuse", other)) < 0.3) return true;       // some clubs simply refuse
+    }
+    return false;
+  }
+
   // each rollover while the league lives
   function afterSeason(w) {
     const a = w[K]; if (!a || !a.on || a.state !== "live") return;
@@ -6880,11 +6924,12 @@ $mods["breakaway"] = function (CF) {
     if (o && o[K + "_fans"] > 0) { const back = Math.min(4, o[K + "_fans"]); o[K + "_fans"] -= back; o.fans = clamp(o.fans + back, 0, 100); }
     // health
     const h0 = healthNow(w); a.health = a.health === undefined ? r1(h0) : r1(0.6 * a.health + 0.4 * h0); a.hh = (a.hh || []).concat([{ season: w.season, h: a.health }]).slice(-20);
+    sanctions(w);
     // contract reviews
     for (const m of a.members.slice()) {
       if (m.years > 0) continue;
       const f = fileScore(w, m.club), v = verdictOf(f, a.members.length), rel = leagueRel(w);
-      if (v === "release") { const ln = fromApex(w, m.club); say(w, "The " + NAME + " lets " + m.club + " go: their contract is up and the file is weak. They return to the " + ln + "."); if (m.club === me) o[K + "_note"] = { season: w.season, t: "The " + NAME + " did not renew your contract. You are back in the " + ln + "." }; continue; }
+      if (v === "release") { const ln = fromApex(w, m.club); say(w, "The " + NAME + " lets " + m.club + " go: their contract is up and the file is weak. They return to " + ln + "."); if (m.club === me) o[K + "_note"] = { season: w.season, t: "The " + NAME + " did not renew your contract. You are back in " + ln + "." }; continue; }
       const off = makeOffer(w, m.club, rel), mult = (v === "renew" ? 1 + (f - 66) / 100 : 0.85) * (0.8 + 0.4 * a.health / 100);
       m.pay = r1(off.apex_pay * mult); m.years = v === "renew" ? off.years : 1 + Math.floor(H(key(w, "ry", m.club, w.season)) * 2);
       say(w, "The " + NAME + " " + (v === "renew" ? "renews" : "keeps on review") + " " + m.club + " for " + m.years + " season" + (m.years === 1 ? "" : "s") + ".");
@@ -6917,7 +6962,7 @@ $mods["breakaway"] = function (CF) {
     list = eligible(w, list);
     const st = strength(w, list);
     if (st.go) {
-      a.state = "live"; a.members = list.map((n) => ({ club: n, years: a.offers[n].years, from: a.inaugural, pay: a.offers[n].apex_pay, home: C(w, n).get("league") })); a.founded = a.inaugural; a.health = r1(healthNow(w));
+      a.state = "live"; a.members = list.map((n) => ({ club: n, years: a.offers[n].years, from: a.inaugural, pay: a.offers[n].apex_pay, home: C(w, n).get("league") })); a.founded = a.inaugural; relInit(w); a.health = r1(healthNow(w));
       say(w, "The " + NAME + " is a go: " + list.length + " clubs will play in season " + a.inaugural + ".");
       formLeague(w, list);
       if (me && list.includes(me)) { const o = w.ow; o.fans = clamp(o.fans - CF.fan_hit, 0, 100); o[K + "_fans"] = CF.fan_hit; }
@@ -6945,12 +6990,13 @@ $mods["breakaway"] = function (CF) {
       out.members = a.members.map((m) => ({ club: m.club, years: m.years, pay: m.pay, file: fileScore(w, m.club), mine: m.club === me }));
       const mm = a.members.find((m) => m.club === me); if (mm) { const f = fileScore(w, me); out.mine = { years: mm.years, pay: mm.pay, file: f, verdict: verdictOf(f, a.members.length) }; }
       out.note = w.ow && w.ow[K + "_note"] || null;
+      out.rel = Object.keys(a.rel || {}).map((ln) => ({ league: ln, rel: a.rel[ln], level: a.sanc[ln] || 0, label: SANC[a.sanc[ln] || 0], clubs: a.members.filter((m) => m.home === ln).length, mine: !!(mm && mm.home === ln) })).sort((x, y) => y.level - x.level || x.rel - y.rel);
     }
     return out;
   }
-  return { NAME, fullLen, init, startSeason, resolve, choose, mustDecide, view, ranking, strength, need, leagueRel };
+  return { NAME, SANC, blocked, lostFrom, canLeave, fullLen, init, startSeason, resolve, choose, mustDecide, view, ranking, strength, need, leagueRel };
 };
-$mods["apex"] = $mods.breakaway({ key: "apex", name: "Apex League", countdown: 4, maxn: 16, minn: 4, extra: 4, max_delays: 2, keep: 10,
+$mods["apex"] = $mods.breakaway({ key: "apex", name: "Apex League", countdown: 4, maxn: 16, minn: 4, extra: 4, max_delays: 2, keep: 12,
   pay: 0.45, prestige: 100, tvmult: 1.1, short: "Apex", bloc: "UEFA", bloc_bias: 4, fan_hit: 14 });
 
 $mods["sim_core"] = (function() {
@@ -15093,9 +15139,11 @@ async function owApex(st) {
     const hcol = A.health >= 60 ? "#4fbf7a" : A.health >= 40 ? "#e0b44f" : "#e06a5a", mi = A.mine, vtxt = { renew: "On track to be renewed", review: "Likely to be put on review", release: "At risk of being let go" };
     const mine = mi ? `<div class="card"><h3>Your contract</h3><div class="row"><span>Years left</span><b>${mi.years}</b></div><div class="row"><span>Pay a year</span><b>${money(mi.pay)}</b></div><div class="row"><span>Apex file score</span><b>${mi.file}</b></div><div class="dim small" style="margin-top:6px">${mi.years <= 1 ? vtxt[mi.verdict] + " when the contract ends." : "The review comes when the contract ends. League finish, stature and squad rating all count."}</div></div>` : "";
     const note = A.note ? `<div class="card"><div class="small"><b>${esc(A.note.t)}</b></div></div>` : "";
-    main = note + `<div class="card"><h3>League health <small>${A.health}</small></h3><div style="height:8px;border-radius:4px;background:#1b2a24;overflow:hidden"><div style="height:8px;width:${A.health}%;background:${hcol}"></div></div><div class="dim small" style="margin-top:6px">Strong fields keep it healthy. A weak field or empty seats pull it down, and a sick league runs with fewer clubs (about ${A.want} now).</div></div>` + mine + `<div class="card"><h3>Apex League <small>founded season ${A.inaugural}</small></h3>${tbl}<div class="dim small" style="margin-top:6px">${A.members.length} clubs. Every match is a heavyweight.</div></div><div class="card"><h3>Contracts</h3>${A.members.map((m) => `<div class="row"><span class="owt">${crest(m.club, 18)}<span ${m.mine ? 'style="font-weight:800"' : ""}>${esc(m.club)}</span></span><span class="dim small">${m.years} yr left &middot; file ${m.file}</span></div>`).join("")}</div>`;
+    const scol = ["#9aa3a8", "#e0b44f", "#e0954f", "#e06a5a", "#c43d3d"];
+    const relc = A.rel && A.rel.length ? `<div class="card"><h3>Domestic leagues</h3><div class="dim small" style="margin-bottom:4px">How the leagues that lost clubs feel about the Apex. Anger builds for a few seasons, then slowly fades. Fines, then blocked transfers, then a boycott across the confederation. Free agents are always open.</div>${A.rel.map((r) => `<div class="row"><span class="small"${r.mine ? ' style="font-weight:800"' : ""}>${esc(r.league)} <span class="dim">(${r.clubs} gone)</span></span><b class="small" style="color:${scol[r.level]}">${r.label} &middot; ${Math.round(r.rel)}</b></div>`).join("")}</div>` : "";
+    main = note + `<div class="card"><h3>League health <small>${A.health}</small></h3><div style="height:8px;border-radius:4px;background:#1b2a24;overflow:hidden"><div style="height:8px;width:${A.health}%;background:${hcol}"></div></div><div class="dim small" style="margin-top:6px">Strong fields keep it healthy. A weak field or empty seats pull it down, and a sick league runs with fewer clubs (about ${A.want} now).</div></div>` + mine + relc + `<div class="card"><h3>Apex League <small>founded season ${A.inaugural}</small></h3>${tbl}<div class="dim small" style="margin-top:6px">${A.members.length} clubs. Every match is a heavyweight.</div></div><div class="card"><h3>Contracts</h3>${A.members.map((m) => `<div class="row"><span class="owt">${crest(m.club, 18)}<span ${m.mine ? 'style="font-weight:800"' : ""}>${esc(m.club)}</span></span><span class="dim small">${m.years} yr left &middot; file ${m.file}</span></div>`).join("")}</div>`;
   } else main = `<div class="card"><h3>Apex League</h3><div class="dim small">The league collapsed before it started: too few big clubs signed.</div></div>`;
-  const art = `<div style="text-align:center;padding:4px 0 10px"><img src="${APEX_ART.badge}" height="84" alt="Apex League"></div>`;
+  const art = `<div style="text-align:center;padding:4px 0 10px"><img src="${A.mine ? APEX_ART.badge : APEX_ART.mark}" height="${A.mine ? 84 : 56}" alt="Apex League"></div>`;
   return art + main + (A.state === "contracts" || A.state === "live" ? "" : rum) + (A.state === "contracts" ? rum : "") + log;
 }
 // ---- window ----
@@ -15125,8 +15173,8 @@ async function owWindow(st) {
       <div class="owf"><input id="mq-q" placeholder="Search name" value="${esc(q.q)}"><select id="mq-pos"><option value="">Any</option>${["GK", "DEF", "MID", "FWD"].map((x) => `<option ${q.pos === x ? "selected" : ""}>${x}</option>`).join("")}</select>
       <select id="mq-sort">${[["ovr", "Best"], ["value", "Cheapest"], ["age", "Youngest"]].map(([k, t]) => `<option value="${k}" ${q.sort === k ? "selected" : ""}>${t}</option>`).join("")}</select></div>
       <div class="owf">${[["grads", "Graduates"], ["expiring", "Expiring"], ["free", "Free agents"]].map(([k, t]) => `<label class="check"><input type="checkbox" data-mqf="${k}" ${q[k] ? "checked" : ""}> ${t}</label>`).join("")}</div>
-      ${m.rows.map((p) => `<div class="row"><span class="rt">${playerLink(p)} ${ovr(p.ovr)} <span class="dim small">${p.pos} &middot; ${p.age}${p.coach_pot ? " &middot; coach: pot " + p.coach_pot : ""}${p.grad ? " &middot; <b>graduate</b>" : ""}</span><div class="meta">${owFit(p.fit)} &middot; ${p.club ? esc(p.club) + " (" + p.rel + ")" : "free agent"} &middot; value ${owM(p.value)} &middot; wage ${owM(p.wage)} &middot; ${p.contract}y${p.last ? " &middot; " + p.last.g + "g " + p.last.a + "a" : ""}</div></span>
-      <button class="mini ${p.locked ? "" : "pri"}" data-bid="${p.uid}" data-name="${esc(p.name)}" data-val="${p.value}" data-wage="${p.wage}" data-pos="${p.pos}" data-role="${p.fit ? p.fit.role : ""}" data-repl="${p.fit && p.fit.repl ? esc(p.fit.repl.name) + " (" + p.fit.repl.ovr + ")" : ""}" data-age="${p.age}" data-ovr="${p.ovr}" data-yrs="${p.contract}" data-free="${p.club ? "" : "1"}" ${p.locked ? "disabled" : ""}>${p.locked ? "Locked" : p.war ? "War!" : p.club ? "Bid" : "Sign"}</button></div>`).join("") || '<div class="dim small">No players match.</div>'}</div>`;
+      ${m.rows.map((p) => `<div class="row"><span class="rt">${playerLink(p)} ${ovr(p.ovr)} <span class="dim small">${p.pos} &middot; ${p.age}${p.coach_pot ? " &middot; coach: pot " + p.coach_pot : ""}${p.grad ? " &middot; <b>graduate</b>" : ""}</span><div class="meta">${owFit(p.fit)} &middot; ${p.club ? esc(p.club) + " (" + p.rel + ")" : "free agent"}${p.blocked ? ' &middot; <b style="color:#e06a5a">sanctions: will not deal</b>' : ""} &middot; value ${owM(p.value)} &middot; wage ${owM(p.wage)} &middot; ${p.contract}y${p.last ? " &middot; " + p.last.g + "g " + p.last.a + "a" : ""}</div></span>
+      <button class="mini ${p.locked || p.blocked ? "" : "pri"}" ${p.blocked ? "disabled" : ""} data-bid="${p.uid}" data-name="${esc(p.name)}" data-val="${p.value}" data-wage="${p.wage}" data-pos="${p.pos}" data-role="${p.fit ? p.fit.role : ""}" data-repl="${p.fit && p.fit.repl ? esc(p.fit.repl.name) + " (" + p.fit.repl.ovr + ")" : ""}" data-age="${p.age}" data-ovr="${p.ovr}" data-yrs="${p.contract}" data-free="${p.club ? "" : "1"}" ${p.locked ? "disabled" : ""}>${p.locked ? "Locked" : p.war ? "War!" : p.club ? "Bid" : "Sign"}</button></div>`).join("") || '<div class="dim small">No players match.</div>'}</div>`;
 }
 // ---- squad (own players: sell, release; graduates) ----
 async function owSquad(st) {
