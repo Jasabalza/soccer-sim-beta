@@ -6791,6 +6791,8 @@ $mods["breakaway"] = function (CF) {
       }
       if (action === "accept" || action === "decline") { if (!a.invite || a.invite.club !== me) fail("There is no invitation.", 409); a.invite.answer = action === "accept" ? "apex" : "stay"; return { ok: true, msg: action === "accept" ? "Accepted. You join at the end of this season." : "Declined." }; }
       if (["ask", "std", "safe"].includes(action)) { o[K + "_stance"] = action; return { ok: true, msg: "Review stance set." }; }
+      if (action === "leave" || action === "unleave") { if (!mem) fail("You are not in the " + NAME + ".", 409); o[K + "_leave"] = action === "leave" ? w.season : null; return { ok: true, msg: action === "leave" ? "You will leave at the end of this season and pay the fine." : "You stay." }; }
+      if (action === "home" || action === "unhome") { if (!mem) fail("You are not in the " + NAME + ".", 409); o[K + "_home"] = action === "home" ? w.season : null; return { ok: true, msg: action === "home" ? "You will go home when the contract ends this season." : "Offer turned down." }; }
       if (action === "friendly_on" || action === "friendly_off") { o[K + "_friendly"] = action === "friendly_on" ? "on" : "off"; return { ok: true, msg: "Saved." }; }
     }
     if (!a || a.state !== "contracts" || !a.pending || a.pending.club !== me) fail("There is no " + NAME + " contract waiting for you.", 409);
@@ -7078,16 +7080,33 @@ $mods["breakaway"] = function (CF) {
     return false;
   }
   // the money is gone: every club goes home (with a small fine for having left) and the league is wound up
-  function fold(w) {
+  function fold(w, why) {
     const a = w[K], o = w.ow, me = o && o.club, list = a.members.map((m) => m.club);
-    for (const n of list) { const ln = fromApex(w, n), c = C(w, n); c.set("funds", c.get("funds") - 0.05 * c.get("income")); if (n === me) o[K + "_note"] = { season: w.season, t: "The " + NAME + " has folded. Your club is back in " + ln + " (with a fine for leaving)." }; }
+    for (const n of list) { const ln = fromApex(w, n), c = C(w, n); if (CF.fund) c.set("funds", c.get("funds") - 0.05 * c.get("income")); if (n === me) o[K + "_note"] = { season: w.season, t: "The " + NAME + " has folded. Your club is back in " + ln + (CF.fund ? " (with a fine for leaving)." : ".") }; }
     w.leagues.del(NAME); w.league_clubs.del(NAME);
     for (const p of w.players) if (p.league === NAME) { if (p.club) p.league = C(w, p.club).get("league"); else { const px = w.prox.get(p.nat); p.league = (px && px.find((x) => x[0] !== NAME && w.leagues.get(x[0])) || [w.leagues.keysArr()[0]])[0]; } }      // free agents who last played there
     for (const nm of w.nations.keysArr()) { const lst = w.prox.get(nm); if (lst) { const i = lst.findIndex((x) => x[0] === NAME); if (i >= 0) lst.splice(i, 1); } }
     a.state = "dead"; a.members = []; a.folded = w.season; recomputeCups(w);
-    say(w, "The " + NAME + " folds: the backer's money has run out. " + list.length + " clubs return to their old leagues.");
+    say(w, "The " + NAME + " folds: " + (why || "the backer's money has run out") + ". " + list.length + " clubs return to their old leagues.");
   }
 
+  // how much a club in this league is worth to a player, on top of its own pull (attr): the league's prestige, health and solvency
+  function pull(w) {
+    const a = w[K]; if (!a || a.state !== "live") return 0; const h = a.health === undefined ? 70 : a.health;
+    let v = (h - 60) / 15 + ((CF.fund ? a.prestige : CF.prestige) - 70) / 10;
+    if (CF.fund && a.flow && a.flow.burn > a.flow.income && a.fund / (a.flow.burn - a.flow.income) < 2) v -= 2;    // players hear the money is running out
+    return r1(v);
+  }
+  // the old league's counter-offer at the end of a contract: richer when relations are good
+  function homeOffer(w, m) { const c = C(w, m.club), rel = (w[K].rel && w[K].rel[m.home]) || 50; return r1(0.25 * c.get("income") * X(w) * (0.5 + rel / 100)); }
+  // a club the other breakaway just let go: take it if there is a seat (the owner gets an invitation instead)
+  function adopt(w, n, from) {
+    const a = w[K], o = w.ow, me = o && o.club; if (!a || a.state !== "live" || a.members.length + (a.invite ? 1 : 0) >= MAXN || !canLeave(w, C(w, n).get("league")) || C(w, n).get("stature") < (CF.adopt_min || 74)) return false;
+    const off = makeOffer(w, n, leagueRel(w));
+    if (n === me) { a.invite = { club: me, offer: off, season: w.season, answer: null }; o[K + "_note"] = { season: w.season, t: "The " + from + " let you go, but the " + NAME + " wants you: answer its invitation on the " + CF.short + " tab." }; say(w, "The " + NAME + " invites " + n + " after the " + from + " let them go."); return true; }
+    if (!aiChoice(w, off) && H(key(w, "adopt", n, w.season)) > 0.5) return false;
+    a.offers[n] = off; toApex(w, n, off); say(w, n + " switches from the " + from + " to the " + NAME + "."); return true;
+  }
   // each rollover while the league lives
   function afterSeason(w) {
     const a = w[K]; if (!a || !a.on || a.state !== "live") return;
@@ -7101,20 +7120,40 @@ $mods["breakaway"] = function (CF) {
     judge(w);
     sanctions(w);
     summer(w);
+    // the owner leaves early (a fine of half the pay still owed) or takes the home league's counter-offer at the end of the contract
+    const mm0 = me && a.members.find((m) => m.club === me);
+    if (mm0 && o[K + "_leave"] === w.season) {
+      const fine = r1(Math.max(0, mm0.years) * mm0.pay * 0.5), c = C(w, me); c.set("funds", c.get("funds") - fine / X(w)); const ln = fromApex(w, me);
+      say(w, me + " walks out of the " + NAME + " early and pays a " + Math.round(fine) + "M fine."); o[K + "_note"] = { season: w.season, t: "You left the " + NAME + " early (fine " + Math.round(fine) + "M). You are back in " + ln + "." };
+    }
+    const other = CF.key === "apex" ? "omega" : "apex", ot = $mods[other] && w[other] && w[other].state === "live" ? $mods[other] : null;
     // contract reviews
     for (const m of a.members.slice()) {
       if (m.years > 0) continue;
+      const homeRel = (a.rel && a.rel[m.home]) || 50;
+      if (m.club === me ? o[K + "_home"] === w.season : H(key(w, "home", m.club, w.season)) < 0.12 * homeRel / 50 && fileScore(w, m.club) < 66) {     // the old league's counter-offer
+        const hp = homeOffer(w, m), ln = fromApex(w, m.club), c = C(w, m.club); c.set("funds", c.get("funds") + 0.5 * hp / X(w));
+        say(w, m.club + " takes " + ln + "'s offer and goes home from the " + NAME + "."); if (m.club === me) o[K + "_note"] = { season: w.season, t: "You took " + ln + "'s offer and went home (a " + Math.round(0.5 * hp) + "M welcome-back payment)." };
+        continue;
+      }
       const f = fileScore(w, m.club), rel = leagueRel(w), st = m.club === me ? (o[K + "_stance"] || "std") : "std";
       let v = verdictOf(f, a.members.length);
       if (st === "ask") v = a.members.length <= 8 ? "renew" : f >= 72 ? "renew" : f >= 58 ? "review" : "release";        // pushing hard raises the bar
       if (st === "safe" && v === "release" && f >= 44) v = "review";                                                          // taking any deal keeps a weak club on review
       m.mark = 0;
+      // the other breakaway may snap up a club this one is letting go (or one it only keeps on review)
+      if (ot && (v === "release" || (v === "review" && H(key(w, "bolt", m.club, w.season)) < 0.4))) {
+        const ln = fromApex(w, m.club); if (ot.adopt(w, m.club, NAME)) continue;
+        say(w, "The " + NAME + " lets " + m.club + " go. They return to " + ln + "."); if (m.club === me) o[K + "_note"] = { season: w.season, t: "The " + NAME + " did not keep you. You are back in " + ln + "." }; continue;
+      }
       if (v === "release") { const ln = fromApex(w, m.club); say(w, "The " + NAME + " lets " + m.club + " go: their contract is up and the file is weak. They return to " + ln + "."); if (m.club === me) o[K + "_note"] = { season: w.season, t: "The " + NAME + " did not renew your contract. You are back in " + ln + "." }; continue; }
       const off = makeOffer(w, m.club, rel), mult = (v === "renew" ? 1 + (f - 66) / 100 : 0.85) * (0.8 + 0.4 * a.health / 100) * (st === "ask" && v === "renew" ? 1.15 : st === "safe" ? 0.85 : 1);
       m.pay = r1(off.apex_pay * mult); m.years = v === "renew" ? off.years : 1 + Math.floor(H(key(w, "ry", m.club, w.season)) * 2);
       say(w, "The " + NAME + " " + (v === "renew" ? "renews" : "keeps on review") + " " + m.club + " for " + m.years + " season" + (m.years === 1 ? "" : "s") + ".");
       if (m.club === me) o[K + "_note"] = { season: w.season, t: v === "renew" ? "Your " + CF.short + " contract was renewed for " + m.years + " seasons." : "The " + NAME + " kept you on review: one or two more seasons, lower pay." };
     }
+    // a league that stays very sick for two seasons is wound up (the Omega folds through its money instead)
+    if (!CF.fund) { a.low = a.health < 25 || a.members.length < MINN ? (a.low || 0) + 1 : 0; if (a.low >= 2) { fold(w, "the league has been too weak for too long"); return; } }
     // fill open seats up to the size a league of this health can run
     let guard = 0; while (a.members.length + (a.invite ? 1 : 0) < wantSize(a.health) && guard++ < 4) { if (!boardVote(w)) break; }
     negotiate(w);
@@ -7176,10 +7215,11 @@ $mods["breakaway"] = function (CF) {
     if (a.state === "live") {
       out.health = a.health === undefined ? r1(healthNow(w)) : a.health; out.hh = a.hh || []; out.want = wantSize(out.health);
       out.members = a.members.map((m) => ({ club: m.club, years: m.years, pay: m.pay, file: fileScore(w, m.club), mine: m.club === me }));
-      const mm = a.members.find((m) => m.club === me); if (mm) { const f = fileScore(w, me); out.mine = { years: mm.years, pay: mm.pay, file: f, verdict: verdictOf(f, a.members.length) }; }
+      const mm = a.members.find((m) => m.club === me); if (mm) { const f = fileScore(w, me); out.mine = { years: mm.years, pay: mm.pay, file: f, verdict: verdictOf(f, a.members.length), fine: r1(Math.max(0, mm.years - 1) * mm.pay * 0.5), leaving: w.ow[K + "_leave"] === w.season, home: mm.years <= 1 ? { league: mm.home, pay: homeOffer(w, mm), chosen: w.ow[K + "_home"] === w.season } : null }; }
       out.note = w.ow && w.ow[K + "_note"] || null;
       if (CF.fund) { out.fund = a.fund; out.fund0 = a.fund0; out.prestige = a.prestige; out.flow = a.flow || null; out.po = a.po || null; out.runway = a.flow && a.flow.burn > a.flow.income ? r1(a.fund / (a.flow.burn - a.flow.income)) : null; }
       out.chal = a.chal || null;
+      out.champs = w.hist.filter((r) => r.get("champs").get(NAME, null)).map((r) => ({ season: r.get("season"), club: r.get("champs").get(NAME) })).reverse().slice(0, 12);
       out.summer = a.summer || null; out.cands = Object.keys(a.cands || {}).map((c) => ({ club: c, bonus: a.cands[c].bonus, how: a.cands[c].how, mine: c === me }));
       if (w.ow && me) { const o = w.ow; out.stance = o[K + "_stance"] || "std"; out.friendly = o[K + "_friendly"] || "on"; out.invite = a.invite && a.invite.club === me ? { pay: a.invite.offer.apex_pay, years: a.invite.offer.years, answer: a.invite.answer } : null;
         if (!mm) { const ln = C(w, me).get("league"); out.apply = { fee: applyFee(w, me), applied: o[K + "_apply"] === w.season, open: canLeave(w, ln), league: ln }; } }
@@ -7188,13 +7228,13 @@ $mods["breakaway"] = function (CF) {
     }
     return out;
   }
-  return { NAME, SANC, blocked, cupExtra, cwcAuto, fifaBids, lostFrom, canLeave, fullLen, init, startSeason, resolve, choose, mustDecide, view, ranking, strength, need, leagueRel };
+  return { NAME, pull, adopt, SANC, blocked, cupExtra, cwcAuto, fifaBids, lostFrom, canLeave, fullLen, init, startSeason, resolve, choose, mustDecide, view, ranking, strength, need, leagueRel };
 };
 $mods["apex"] = $mods.breakaway({ key: "apex", name: "Apex League", countdown: 4, maxn: 16, minn: 4, extra: 4, max_delays: 2, keep: 12,
   pay: 0.45, prestige: 100, tvmult: 1.1, short: "Apex", spawn: "omega", bloc: "UEFA", bloc_bias: 4, fan_hit: 14 });
 $mods["omega"] = $mods.breakaway({ key: "omega", name: "Omega League", short: "Omega", countdown: 3, maxn: 14, minn: 6, extra: 6, max_delays: 1, keep: 12,
   pay: 0.63, prestige: 55, tvmult: 0.9, bloc: null, bloc_bias: 0, fan_hit: 8, rel0: 80, need0: 80, needMin: 58, pivot: 66, spite: 0.8, ymin: 2, yspan: 2,
-  fifa: "prestige", fund: true, fund_seasons: 5, premium: 0.35, prefilter: true });
+  fifa: "prestige", adopt_min: 62, fund: true, fund_seasons: 5, premium: 0.35, prefilter: true });
 
 $mods["sim_core"] = (function() {
 const gzip = $py.gzip;
@@ -7750,7 +7790,11 @@ class World {
     const self = this;
     let c;
     c = $idx(self.clubs, n);
-    return $add($add(($idx(c, "cp") / 10), ($idx(c, "budget") / 20)), ($idx(c, "lprestige") / 10));
+    const base = $add($add(($idx(c, "cp") / 10), ($idx(c, "budget") / 20)), ($idx(c, "lprestige") / 10));
+    // breakaway leagues pull players by their own standing: prestige, health and (Omega) how long the money lasts
+    const L = $M.get(self.leagues, $idx(c, "league"), null);
+    if (L && $idx(L, "confed") === "WORLD") for (const k of ["apex", "omega"]) if (self[k] && $mods[k] && $idx(L, "name") === $mods[k].NAME) return base + $mods[k].pull(self);
+    return base;
   }
   news(kind, text, week = 99) {
     const self = this;
@@ -13277,7 +13321,8 @@ function showReview(rv, r) {
   showReview.fromCeremony = false;
   const row = (l, c) => `<div class="rv-l">${l}</div><div class="rv-c">${c}</div>`;
   const cups = Object.values(rv.cups).map((c) => row(esc(c.name), clubLink(c.winner))).join("") + (rv.cwc ? row("Club World Cup", clubLink(rv.cwc[0])) : "") + (rv.wc ? row("World Cup", natLink(rv.wc[0])) : "");
-  const champs = Object.entries(rv.champs).map(([l, c]) => row(leagueLink(l), clubLink(c))).join("");
+  const tro = (l) => l === "Apex League" && typeof APEX_ART !== "undefined" ? ` <img src="${APEX_ART.trophy}" height="18" alt="">` : l === "Omega League" && typeof OMEGA_ART !== "undefined" ? ` <img src="${OMEGA_ART.trophy}" height="18" alt="">` : "";
+  const champs = Object.entries(rv.champs).map(([l, c]) => row(leagueLink(l) + tro(l), clubLink(c))).join("");
   openModal(`
     <h2>Season ${rv.season} review</h2>
     ${r && r.stopped ? `<div class="sub">Stopped after ${r.ran} season(s): ${esc(rv.reasons.slice(0, 5).join(" \u00b7 "))}</div>` : ""}
@@ -15342,7 +15387,7 @@ async function owApex(st, K) {
       tbl = `<div class="ow-tbl"><div class="ow-tr ow-th"><span>#</span><span class="cl">Club</span><span>P</span><span>W</span><span>D</span><span>L</span><span>GD</span><span>Pts</span></div>${d.rows.map((r) => `<div class="ow-tr${r.club === me ? " me" : ""}"><span>${r.pos}</span><span class="cl">${esc(r.club)}</span><span>${r.p}</span><span>${r.w}</span><span>${r.d}</span><span>${r.l}</span><span>${r.gd > 0 ? "+" : ""}${r.gd}</span><b>${r.pts}</b></div>`).join("")}</div>`;
     } catch (e) { tbl = ""; }
     const hcol = A.health >= 60 ? "#4fbf7a" : A.health >= 40 ? "#e0b44f" : "#e06a5a", mi = A.mine, vtxt = { renew: "On track to be renewed", review: "Likely to be put on review", release: "At risk of being let go" };
-    const mine = mi ? `<div class="card"><h3>Your contract</h3><div class="row"><span>Years left</span><b>${mi.years}</b></div><div class="row"><span>Pay a year</span><b>${money(mi.pay)}</b></div><div class="row"><span>${SH} file score</span><b>${mi.file}</b></div><div class="dim small" style="margin-top:6px">${mi.years <= 1 ? vtxt[mi.verdict] + " when the contract ends." : "The review comes when the contract ends. League finish, stature, squad rating, cup runs and summer games all count."}</div>${mi.years <= 1 ? `<div class="small" style="margin-top:8px">Your stance at the review:</div><div class="owbtns">${btn("ask", "Ask for more", A.stance === "ask")}${btn("std", "Standard", A.stance === "std")}${btn("safe", "Take any deal", A.stance === "safe")}</div><div class="dim small">Asking for more pays 15% extra if they renew, but raises the bar. Taking any deal keeps a weaker club on review at lower pay.</div>` : ""}<div class="small" style="margin-top:8px">Summer benchmark games:</div><div class="owbtns">${btn("friendly_on", "Play", A.friendly !== "off")}${btn("friendly_off", "Decline", A.friendly === "off")}</div></div>` : "";
+    const mine = mi ? `<div class="card"><h3>Your contract</h3><div class="row"><span>Years left</span><b>${mi.years}</b></div><div class="row"><span>Pay a year</span><b>${money(mi.pay)}</b></div><div class="row"><span>${SH} file score</span><b>${mi.file}</b></div><div class="dim small" style="margin-top:6px">${mi.years <= 1 ? vtxt[mi.verdict] + " when the contract ends." : "The review comes when the contract ends. League finish, stature, squad rating, cup runs and summer games all count."}</div>${mi.years <= 1 ? `<div class="small" style="margin-top:8px">Your stance at the review:</div><div class="owbtns">${btn("ask", "Ask for more", A.stance === "ask")}${btn("std", "Standard", A.stance === "std")}${btn("safe", "Take any deal", A.stance === "safe")}</div><div class="dim small">Asking for more pays 15% extra if they renew, but raises the bar. Taking any deal keeps a weaker club on review at lower pay.</div>` : ""}${mi.home ? `<div class="small" style="margin-top:8px">${esc(mi.home.league)} wants you back: <b>${money(mi.home.pay)}</b> a year (half paid up front as a welcome back).</div><div class="owbtns">${btn(mi.home.chosen ? "unhome" : "home", mi.home.chosen ? "Going home (undo)" : "Go home at season end", mi.home.chosen)}</div>` : ""}${mi.years > 1 ? `<div class="small" style="margin-top:8px">Leave early: fine <b>${money(mi.fine)}</b> (half the pay still owed).</div><div class="owbtns">${btn(mi.leaving ? "unleave" : "leave", mi.leaving ? "Leaving at season end (undo)" : "Leave at season end", mi.leaving)}</div>` : ""}<div class="small" style="margin-top:8px">Summer benchmark games:</div><div class="owbtns">${btn("friendly_on", "Play", A.friendly !== "off")}${btn("friendly_off", "Decline", A.friendly === "off")}</div></div>` : "";
     const note = A.note ? `<div class="card"><div class="small"><b>${esc(A.note.t)}</b></div></div>` : "";
     const scol = ["#9aa3a8", "#e0b44f", "#e0954f", "#e06a5a", "#c43d3d"];
     const relc = A.rel && A.rel.length ? `<div class="card"><h3>Domestic leagues</h3><div class="dim small" style="margin-bottom:4px">How the leagues that lost clubs feel about the ${SH}. Anger builds for a few seasons, then slowly fades. Fines, then blocked transfers, then a boycott across the confederation. Free agents are always open.</div>${A.rel.map((r) => `<div class="row"><span class="small"${r.mine ? ' style="font-weight:800"' : ""}>${esc(r.league)} <span class="dim">(${r.clubs} gone)</span></span><b class="small" style="color:${scol[r.level]}">${r.label} &middot; ${Math.round(r.rel)}</b></div>`).join("")}</div>` : "";
@@ -15351,9 +15396,10 @@ const cups = A.deals ? `<div class="card"><h3>Cups and FIFA</h3>${A.deals.map((d
     const ap = A.apply && !A.invite ? `<div class="card"><h3>Tryout</h3><div class="small">${A.apply.open ? (A.apply.applied ? "Applied. Your tryout against an " + SH + " club is played in the summer." : `Apply for a tryout (fee <b>${money(A.apply.fee)}</b>). Win or come close and you become a candidate when a seat opens. A hostile league may fine you for applying.`) : esc(A.apply.league) + " has lost as many clubs as it can. You cannot apply."}</div>${A.apply.open && !A.apply.applied ? `<div class="owbtns" style="margin-top:8px">${btn("apply", "Apply", true)}</div>` : ""}${(A.cands || []).some((c) => c.mine) ? `<div class="small" style="margin-top:6px"><b>You are a candidate for the next open seat.</b></div>` : ""}</div>` : "";
     const sum = A.summer && A.summer.games.length ? `<div class="card"><h3>Summer games <small>after S${A.summer.season}</small></h3>${A.summer.games.map((g) => `<div class="row"><span class="small">${g.k === "tryout" ? "Tryout" : "Benchmark"}: ${esc(g.h)} v ${esc(g.a)}</span><b class="small">${g.note ? esc(g.note) : g.hg + "-" + g.ag}</b></div>`).join("")}${A.cands && A.cands.length ? `<div class="dim small" style="margin-top:6px">Candidates: ${A.cands.map((c) => esc(c.club)).join(", ")}</div>` : ""}</div>` : "";
 const omc = A.fund !== undefined ? `<div class="card"><h3>Backer fund <small>${money(A.fund)}</small></h3><div style="height:8px;border-radius:4px;background:#1b2a24;overflow:hidden"><div style="height:8px;width:${Math.max(0, Math.min(100, A.fund / Math.max(1, A.fund0) * 100))}%;background:${A.runway !== null && A.runway < 2 ? "#e06a5a" : "#d4a53c"}"></div></div><div class="row"><span class="small">Prestige</span><b class="small">${A.prestige}</b></div>${A.flow ? `<div class="row"><span class="small">Last season</span><b class="small">spent ${money(A.flow.burn)}, earned ${money(A.flow.income)}</b></div>` : ""}<div class="dim small" style="margin-top:4px">${A.runway !== null ? "At this rate the money lasts about " + A.runway + " more season" + (A.runway === 1 ? "" : "s") + ". " : "The league is paying its own way. "}Prestige brings sponsors and TV money; beating the Apex champion in the summer is the fastest way up. If the fund runs dry the league folds.</div></div>` : "";
+    const hon = A.champs && A.champs.length ? `<div class="card"><h3>Champions</h3><div style="display:flex;gap:12px;align-items:flex-start"><img src="${ART.trophy}" width="64" alt="${NM} trophy"><div style="flex:1">${A.champs.map((c) => `<div class="row"><span class="small"${c.club === me ? ' style="font-weight:800"' : ""}>${esc(c.club)}</span><span class="dim small">S${c.season}</span></div>`).join("")}</div></div></div>` : "";
     const po = A.po ? `<div class="card"><h3>Playoffs <small>S${A.po.season}</small></h3>${A.po.games.map((g, i) => `<div class="row"><span class="small">${i < 2 ? "Semi-final" : "<b>Final</b>"}: ${esc(g.h)} v ${esc(g.a)}</span><b class="small">${g.hg}-${g.ag}${g.pens ? " (pens: " + esc(g.win) + ")" : ""}</b></div>`).join("")}</div>` : "";
     const chal = A.chal ? `<div class="card"><h3>Summer challenge <small>S${A.chal.season}</small></h3><div class="row"><span class="small">${esc(A.chal.h)} <span class="dim">(Omega)</span> v ${esc(A.chal.a)} <span class="dim">(Apex)</span></span><b class="small">${A.chal.hg}-${A.chal.ag}</b></div><div class="dim small">The Omega champion against the Apex champion, on neutral ground.</div></div>` : "";
-            main = note + inv + ap + omc + `<div class="card"><h3>League health <small>${A.health}</small></h3><div style="height:8px;border-radius:4px;background:#1b2a24;overflow:hidden"><div style="height:8px;width:${A.health}%;background:${hcol}"></div></div><div class="dim small" style="margin-top:6px">Strong fields keep it healthy. A weak field or empty seats pull it down, and a sick league runs with fewer clubs (about ${A.want} now).</div></div>` + mine + po + chal + sum + cups + relc + `<div class="card"><h3>${NM} <small>founded season ${A.inaugural}</small></h3>${tbl}<div class="dim small" style="margin-top:6px">${A.members.length} clubs. Every match is a heavyweight.</div></div><div class="card"><h3>Contracts</h3>${A.members.map((m) => `<div class="row"><span class="owt">${crest(m.club, 18)}<span ${m.mine ? 'style="font-weight:800"' : ""}>${esc(m.club)}</span></span><span class="dim small">${m.years} yr left &middot; file ${m.file}</span></div>`).join("")}</div>`;
+            main = note + inv + ap + omc + `<div class="card"><h3>League health <small>${A.health}</small></h3><div style="height:8px;border-radius:4px;background:#1b2a24;overflow:hidden"><div style="height:8px;width:${A.health}%;background:${hcol}"></div></div><div class="dim small" style="margin-top:6px">Strong fields keep it healthy. A weak field or empty seats pull it down, and a sick league runs with fewer clubs (about ${A.want} now).</div></div>` + mine + hon + po + chal + sum + cups + relc + `<div class="card"><h3>${NM} <small>founded season ${A.inaugural}</small></h3>${tbl}<div class="dim small" style="margin-top:6px">${A.members.length} clubs. Every match is a heavyweight.</div></div><div class="card"><h3>Contracts</h3>${A.members.map((m) => `<div class="row"><span class="owt">${crest(m.club, 18)}<span ${m.mine ? 'style="font-weight:800"' : ""}>${esc(m.club)}</span></span><span class="dim small">${m.years} yr left &middot; file ${m.file}</span></div>`).join("")}</div>`;
   } else main = `<div class="card"><h3>${NM}</h3><div class="dim small">${A.folded ? "The league folded in season " + A.folded + ": the backer's money ran out. Its clubs went back to their old leagues." : "The league collapsed before it started: too few big clubs signed."}</div></div>`;
   const art = `<div style="text-align:center;padding:4px 0 10px"><img src="${A.mine ? ART.badge : ART.mark}" height="${A.mine ? 84 : 56}" alt="${NM}"></div>`;
   return art + main + (A.state === "contracts" || A.state === "live" ? "" : rum) + (A.state === "contracts" ? rum : "") + log;

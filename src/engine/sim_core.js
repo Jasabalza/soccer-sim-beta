@@ -552,7 +552,11 @@ class World {
     const self = this;
     let c;
     c = $idx(self.clubs, n);
-    return $add($add(($idx(c, "cp") / 10), ($idx(c, "budget") / 20)), ($idx(c, "lprestige") / 10));
+    const base = $add($add(($idx(c, "cp") / 10), ($idx(c, "budget") / 20)), ($idx(c, "lprestige") / 10));
+    // breakaway leagues pull players by their own standing: prestige, health and (Omega) how long the money lasts
+    const L = $M.get(self.leagues, $idx(c, "league"), null);
+    if (L && $idx(L, "confed") === "WORLD") for (const k of ["apex", "omega"]) if (self[k] && $mods[k] && $idx(L, "name") === $mods[k].NAME) return base + $mods[k].pull(self);
+    return base;
   }
   news(kind, text, week = 99) {
     const self = this;

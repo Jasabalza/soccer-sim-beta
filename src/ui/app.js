@@ -269,7 +269,8 @@ function showReview(rv, r) {
   showReview.fromCeremony = false;
   const row = (l, c) => `<div class="rv-l">${l}</div><div class="rv-c">${c}</div>`;
   const cups = Object.values(rv.cups).map((c) => row(esc(c.name), clubLink(c.winner))).join("") + (rv.cwc ? row("Club World Cup", clubLink(rv.cwc[0])) : "") + (rv.wc ? row("World Cup", natLink(rv.wc[0])) : "");
-  const champs = Object.entries(rv.champs).map(([l, c]) => row(leagueLink(l), clubLink(c))).join("");
+  const tro = (l) => l === "Apex League" && typeof APEX_ART !== "undefined" ? ` <img src="${APEX_ART.trophy}" height="18" alt="">` : l === "Omega League" && typeof OMEGA_ART !== "undefined" ? ` <img src="${OMEGA_ART.trophy}" height="18" alt="">` : "";
+  const champs = Object.entries(rv.champs).map(([l, c]) => row(leagueLink(l) + tro(l), clubLink(c))).join("");
   openModal(`
     <h2>Season ${rv.season} review</h2>
     ${r && r.stopped ? `<div class="sub">Stopped after ${r.ran} season(s): ${esc(rv.reasons.slice(0, 5).join(" \u00b7 "))}</div>` : ""}
