@@ -614,7 +614,7 @@ function cupGames(w, c, me, dateOf) {
       games.push(e);
     }
   }
-  const iso = (g) => (g.date && g.date.iso) || "9";
+  const iso = (g) => { const d = g.date; return (d && (typeof d.get === "function" ? d.get("iso") : d.iso)) || "9"; };
   games.sort((x, y) => (iso(x) < iso(y) ? -1 : iso(x) > iso(y) ? 1 : 0));
   return { games, out };
 }

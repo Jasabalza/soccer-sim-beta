@@ -1020,7 +1020,7 @@ POST = $lit_dict([["/api/favs", a_favs], ["/api/favnations", a_favnations], ["/a
     stance = { season: nextYear, this_season: nextYear === w.season, confed, cup: comp ? comp.title : "", score: Math.round((sc.get(me) || 0) * 10) / 10, rank, slots, gap, champion: !!champ, field_set: !!prepared, in_field: !!inField,
       status: prepared ? (inField ? "qualified" : "not qualified") : (champ || rank <= slots ? "in a qualifying place" : rank <= slots + 3 ? "just outside" : "outside"),
       top: pool.slice(0, slots + 3).map((n) => ({ club: n, score: Math.round(sc.get(n) * 10) / 10, in: pool.indexOf(n) < slots })) };
-    const iso = (g) => (g.date && g.date.iso) || "9";
+    const iso = (g) => { const d = g.date; return (d && (typeof d.get === "function" ? d.get("iso") : d.iso)) || "9"; };
     all.sort((a, b) => (iso(a) < iso(b) ? -1 : iso(a) > iso(b) ? 1 : 0));
     const up = all.filter((g) => !g.played), pd = all.filter((g) => g.played);
     return $dict($kw({ comps, all, next: up[0] || null, last: pd[pd.length - 1] || null, cwc: stance, season: w.season }));
