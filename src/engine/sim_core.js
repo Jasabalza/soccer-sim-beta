@@ -785,7 +785,7 @@ class World {
     let L, ln, rel;
     for (const $f25 of $iter($M.items(self.leagues))) {
       [ln, L] = $iter($f25);
-      if (ln === "Apex League") { $setidx(L, "tvmult", 1.1); continue; }          // the Apex League is paid by its own deal, not by continental results
+      if ($idx(L, "confed") === "WORLD") continue;          // a breakaway league (Apex, Omega) is paid by its own deal, not by continental results
       rel = $div(self.coef(ln), $idx(L, "coef0"));
       $setidx(L, "tvmult", fclamp((1 + (0.35 * (rel - 1))), 0.8, 1.4));
     }
@@ -839,7 +839,7 @@ class World {
         $setidx(self.comps, c.id, c);
       }
     }
-    if (self.apex) $mods.apex.startSeason(self);
+    for (const k of ["apex", "omega"]) if (self[k] && $mods[k]) $mods[k].startSeason(self);
   }
   date_of(season, week, kind = "league") {
     const self = this;
@@ -1119,7 +1119,7 @@ class World {
     $setidx(rec, "nateff", (() => { const $r = new $Dict(); let n, nm; for (const $c0 of $iter($M.items(self.nations))) { [nm, n] = $iter($c0); $r.set(nm, $idx(n, "eff")); } return $r; })());
     $setidx(rec, "budget", (() => { const $r = new $Dict(); let ln, names; for (const $c0 of $iter($M.items(self.league_clubs))) { [ln, names] = $iter($c0); $r.set(ln, statistics.mean((() => { const $r = []; let n; for (const $c0 of $iter(names)) { n = $c0; $r.push($idx($idx(self.clubs, n), "budget")); } return $r; })())); } return $r; })());
     $M.append(self.hist, rec);
-    if (self.apex) $mods.apex.resolve(self);       // Apex League (inert unless the world was made with it)
+    for (const k of ["apex", "omega"]) if (self[k] && $mods[k]) $mods[k].resolve(self);       // breakaway leagues (inert unless the world was made with them)
     self.start_season();
     if (((self.cycle_year === 1) && (self.season > 1))) {
       self.national_coach_cycle();
