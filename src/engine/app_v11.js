@@ -979,20 +979,35 @@ POST = $lit_dict([["/api/favs", a_favs], ["/api/favnations", a_favnations], ["/a
   GET.set("/api/ow_sponsors", (q) => { const w = own(); return $dict($kw({ rows: O.sponsorOffers(w) })); });
   // the owner's schedule: his league, plus every club competition he is in (continental cup, Club World Cup ...)
   GET.set("/api/ow_schedule", (q) => {
-    const w = own(), me = w.ow.club; if (!me) return $dict($kw({ comps: [] }));
-    const out = [], lg = w.clubs.get(me).get("league"), lc = w.comps.get("L:" + lg);
-    const mine = (h, a) => h === me || a === me;
-    const past = [], next = [];
+    const w = own(), me = w.ow.club; if (!me) return $dict($kw({ comps: [], all: [] }));
+    const MC = w.clubs.get(me), lg = MC.get("league"), confed = MC.get("confed"), lc = w.comps.get("L:" + lg), mine = (h, a) => h === me || a === me;
+    const dateOf = (c, ev) => { try { return ev_date(w, c, ev); } catch (e) { return null; } };
+    const past = [], next = [], all = [], comps = [];
     const res = lc.results || [];
-    for (let i = 0; i < res.length; i++) for (const g of res[i]) if (mine(g[0], g[1])) { let d = null; try { d = ev_date(w, lc, lc.events[i]); } catch (e) { /* no date */ } past.push({ h: g[0], a: g[1], hg: g[2], ag: g[3], date: d, md: i + 1 }); }
-    for (let i = lc.ptr; i < lc.rounds.length; i++) for (const g of lc.rounds[i]) if (mine(g[0], g[1])) { let d = null; try { d = ev_date(w, lc, lc.events[i]); } catch (e) { /* no date */ } next.push({ h: g[0], a: g[1], date: d, md: i + 1 }); }
-    out.push({ id: "L:" + lg, title: lg, kind: "league", progress: comp_progress(w, lc), past: past.slice(-8).reverse(), next: next.slice(0, 10) });
+    for (let i = 0; i < res.length; i++) for (const g of res[i]) if (mine(g[0], g[1])) past.push({ h: g[0], a: g[1], hg: g[2], ag: g[3], date: dateOf(lc, lc.events[i]), md: i + 1 });
+    for (let i = lc.ptr; i < lc.rounds.length; i++) for (const g of lc.rounds[i]) if (mine(g[0], g[1])) { const it = { h: g[0], a: g[1], date: dateOf(lc, lc.events[i]), md: i + 1 }; next.push(it); all.push({ comp: lg, kind: "league", h: g[0], a: g[1], date: it.date, label: "Matchday " + (i + 1) }); }
+    comps.push({ id: "L:" + lg, title: lg, kind: "league", progress: comp_progress(w, lc), past: past.slice(-8).reverse(), next: next.slice(0, 10) });
     for (const [cid, c] of w.comps.itemsArr()) {
       if (!(c.kind === "cup" || c.kind === "cwc" || c.kind === "ic") || !c.field || !Array.from(c.field).includes(me)) continue;
       const ties = (c.ties || []).filter((t) => t[1] === me || t[2] === me).map((t) => ({ round: t[0], a: t[1], b: t[2], text: t[3], winner: t[4] }));
-      out.push({ id: cid, title: c.title, kind: c.kind, progress: comp_progress(w, c), ties, winner: c.winner || null, runner_up: c.runner_up || null, out: c.reached && c.reached.has ? undefined : undefined });
+      const out = ties.some((t) => t.winner && t.winner !== me);
+      const upcoming = [];
+      if (!out && c.events) for (let k = c.ptr; k < c.events.length; k++) { const d = dateOf(c, c.events[k]); upcoming.push({ label: c.events[k].label, date: d }); all.push({ comp: c.title, kind: c.kind, label: c.events[k].label, date: d, tentative: c.kind === "cup" || (c.events[k].phase === "ko") }); }
+      comps.push({ id: cid, title: c.title, kind: c.kind, progress: comp_progress(w, c), ties, winner: c.winner || null, runner_up: c.runner_up || null, out, upcoming });
     }
-    return $dict($kw({ comps: out, season: w.season }));
+    // Club World Cup: your qualification stance (it is played in the second season of each four-year cycle)
+    let cwc = w.comps.itemsArr().map((x) => x[1]).find((c) => c.kind === "cwc"), stance = null, nextYear = w.season;
+    while (((nextYear - 1) % 4) + 1 !== 2) nextYear++;
+    const sc = C.ClubWorldCup.prototype.club_scores.call({ w }), cup = w.cups.get(confed), slots = cup ? cup.get("cwc_slots", 0) : 0;
+    const pool = w.clubs.itemsArr().filter((x) => x[1].get("confed") === confed).map((x) => x[0]).sort((x, y) => (sc.get(y) - sc.get(x)) || (x < y ? -1 : 1));
+    const rank = pool.indexOf(me) + 1, comp = w.comps.get("C:" + confed), champ = comp && comp.winner === me;
+    const lastIn = pool[Math.max(0, slots - 1)], gap = Math.round(((sc.get(lastIn) || 0) - (sc.get(me) || 0)) * 10) / 10;
+    const prepared = cwc && cwc.field && cwc.field.length > 0, inField = prepared && Array.from(cwc.field).includes(me);
+    stance = { season: nextYear, this_season: nextYear === w.season, confed, cup: comp ? comp.title : "", score: Math.round((sc.get(me) || 0) * 10) / 10, rank, slots, gap, champion: !!champ, field_set: !!prepared, in_field: !!inField,
+      status: prepared ? (inField ? "qualified" : "not qualified") : (champ || rank <= slots ? "in a qualifying place" : rank <= slots + 3 ? "just outside" : "outside"),
+      top: pool.slice(0, slots + 3).map((n) => ({ club: n, score: Math.round(sc.get(n) * 10) / 10, in: pool.indexOf(n) < slots })) };
+    all.sort((a, b) => ((a.date && a.date.iso) || "9") < ((b.date && b.date.iso) || "9") ? -1 : 1);
+    return $dict($kw({ comps, all: all.slice(0, 30), cwc: stance, season: w.season }));
   });
   POST.set("/api/ow_new", (body) => { a_new(body); const w = need_world(); O.create(w, pl(body)); return $dict($kw({ ok: true })); });
   POST.set("/api/ow_buy", R((w, b) => O.buy(w, b.club)));

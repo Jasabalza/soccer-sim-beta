@@ -61,15 +61,32 @@ function owEnded(st) {
 // ---- schedule: your games in the league and in every other competition your club is in ----
 OWT.sc = "";
 async function owSched(st) {
-  const d = await api("/api/ow_schedule"), me = st.club.name; if (!OWT.sc || !d.comps.some((c) => c.id === OWT.sc)) OWT.sc = d.comps[0].id;
-  const c = d.comps.find((x) => x.id === OWT.sc), dt = (x) => (x ? x.text : "");
+  const d = await api("/api/ow_schedule"), me = st.club.name, W = d.cwc;
+  const chips = [["ALL", "All"], ...d.comps.map((c) => [c.id, c.title]), ["CWC", "Club World Cup"]];
+  if (!OWT.sc || !chips.some((c) => c[0] === OWT.sc)) OWT.sc = "ALL";
+  const dt = (x) => (x ? x.text : "");
   const game = (g, past) => { const home = g.h === me; return `<div class="row"><span class="small">${dt(g.date) || "md " + g.md}</span><span class="rt">${home ? "<b>" + esc(g.h) + "</b> v " + esc(g.a) : esc(g.h) + " v <b>" + esc(g.a) + "</b>"}</span>${past ? `<b>${g.hg}-${g.ag}</b>` : `<span class="dim small">${home ? "home" : "away"}</span>`}</div>`; };
   let body;
-  if (c.kind === "league") body = `${await owTable(st, true)}<h3 style="margin-top:12px">Next games</h3>${c.next.map((g) => game(g, false)).join("") || '<div class="dim small">No games left this season.</div>'}<h3 style="margin-top:12px">Results</h3>${c.past.map((g) => game(g, true)).join("") || '<div class="dim small">No games played yet.</div>'}`;
-  else body = `<div class="dim small">${c.progress.next ? "Next: " + esc(c.progress.next) + (c.progress.next_date ? " &middot; " + c.progress.next_date.text : "") : (c.progress.done >= c.progress.total && c.progress.total ? "Finished" : "Not started")}</div>
-    ${c.winner ? `<div class="row"><span>Winner</span><b>${esc(c.winner)}</b></div>` : ""}${c.ties.map((t) => `<div class="row"><span class="small">${esc(String(t.round))}</span><span class="rt">${esc(t.text || t.a + " v " + t.b)}</span><span class="dim small">${t.winner ? (t.winner === me ? "won" : "lost") : ""}</span></div>`).join("") || '<div class="dim small">Your club has no games here yet.</div>'}
-    <div class="owbtns"><a class="btn mini" href="#/comp/${enc(c.id)}">Full competition page</a></div>`;
-  return `<div class="card"><nav class="chips">${d.comps.map((x) => `<button class="${x.id === OWT.sc ? "on" : ""}" data-sc="${esc(x.id)}">${esc(x.title)}</button>`).join("")}</nav><div style="margin-top:10px">${body}</div></div>`;
+  if (OWT.sc === "ALL") body = `<div class="dim small" style="margin-bottom:6px">Every competition in date order. Cup rounds marked <i>if still in</i> only happen if your club keeps winning.</div>` +
+    (d.all.map((g) => `<div class="row"><span class="small" style="min-width:92px">${dt(g.date)}</span><span class="rt"><span class="dim small">${esc(g.comp)}</span><br>${g.h ? (g.h === me ? "<b>" + esc(g.h) + "</b> v " + esc(g.a) : esc(g.h) + " v <b>" + esc(g.a) + "</b>") : esc(g.label)}${g.tentative ? ' <span class="dim small">if still in</span>' : ""}</span><span class="dim small">${g.kind === "league" ? (g.h === me ? "home" : "away") : ""}</span></div>`).join("") || '<div class="dim small">Nothing left this season.</div>');
+  else if (OWT.sc === "CWC") {
+    const f = W, tag = f.status === "qualified" || f.status === "in a qualifying place" ? "#4fbf7a" : f.status === "just outside" ? "#e0b44f" : "#e05a4f";
+    body = `<div class="row"><span>Next Club World Cup</span><b>Season ${f.season}${f.this_season ? " (this season)" : ""}</b></div>
+      <div class="row"><span>Your status</span><b style="color:${tag}">${esc(f.status)}</b></div>
+      <div class="row"><span>${esc(f.confed)} places</span><span>${f.slots}${f.champion ? " &middot; you hold the continental cup" : ""}</span></div>
+      <div class="row"><span>Your ranking</span><span>#${f.rank} in ${esc(f.confed)} (score ${f.score})${f.gap > 0 ? ", " + f.gap + " behind the last place" : ""}</span></div>
+      <div class="dim small" style="margin:6px 0">${esc(f.cup)} winners go in. The other places go to the best four-season records (league finishes and continental cup runs) in ${esc(f.confed)}.${f.field_set ? "" : " The field is set after the continental cups end."}</div>
+      <h3>Who is in the places</h3>${f.top.map((t) => `<div class="row"><span ${t.club === me ? 'style="font-weight:800"' : ""}>${esc(t.club)}</span><span class="dim small">${t.score}${t.in ? " &middot; in" : ""}</span></div>`).join("")}`;
+    const cc = d.comps.find((x) => x.kind === "cwc"); if (cc) body += `<div class="owbtns"><a class="btn mini" href="#/comp/${enc(cc.id)}">Club World Cup page</a></div>`;
+  } else {
+    const c = d.comps.find((x) => x.id === OWT.sc);
+    if (c.kind === "league") body = `${await owTable(st, true)}<h3 style="margin-top:12px">Next games</h3>${c.next.map((g) => game(g, false)).join("") || '<div class="dim small">No games left this season.</div>'}<h3 style="margin-top:12px">Results</h3>${c.past.map((g) => game(g, true)).join("") || '<div class="dim small">No games played yet.</div>'}`;
+    else body = `<div class="dim small">${c.out ? "Your club is out." : c.progress.next ? "Next: " + esc(c.progress.next) + (c.progress.next_date ? " &middot; " + c.progress.next_date.text : "") : (c.progress.done >= c.progress.total && c.progress.total ? "Finished" : "Not started")}</div>
+      ${c.winner ? `<div class="row"><span>Winner</span><b>${esc(c.winner)}</b></div>` : ""}${c.ties.map((t) => `<div class="row"><span class="small">${esc(String(t.round))}</span><span class="rt">${esc(t.text || t.a + " v " + t.b)}</span><span class="dim small">${t.winner ? (t.winner === me ? "won" : "lost") : ""}</span></div>`).join("") || '<div class="dim small">Your club has no games here yet.</div>'}
+      ${!c.out && c.upcoming.length ? `<h3 style="margin-top:10px">Still to come</h3>${c.upcoming.map((u) => `<div class="row"><span class="small">${dt(u.date)}</span><span class="rt">${esc(u.label)}</span><span class="dim small">if still in</span></div>`).join("")}` : ""}
+      <div class="owbtns"><a class="btn mini" href="#/comp/${enc(c.id)}">Full competition page</a></div>`;
+  }
+  return `<div class="card"><nav class="chips">${chips.map(([id, t]) => `<button class="${id === OWT.sc ? "on" : ""}" data-sc="${esc(id)}">${esc(t)}</button>`).join("")}</nav><div style="margin-top:10px">${body}</div></div>`;
 }
 // ---- league: table, next games, and the way into every competition page ----
 async function owTable(st, inner) {
