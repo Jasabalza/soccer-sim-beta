@@ -36,7 +36,7 @@ const BAD = !!process.env.BAD, RECK = !!process.env.RECKLESS, ACC = !!process.en
         if (r === 1 && win.requests) for (const q of win.requests) { stat.req = (stat.req || 0) + 1; const x = await call("/api/ow_persuade", { uid: q.uid, confirm: true }); stat["pers_" + x.status] = (stat["pers_" + x.status] || 0) + 1; }
         if (r === 1) { const sq0 = (await call("/api/ow_squad")).rows; for (const p of sq0.slice(-3)) await call("/api/ow_release", { uid: p.uid }); }
         if (BAD && r === 1) { const top = (await call("/api/ow_squad")).rows.slice(0, 4); for (const p of top) { const o = await call("/api/ow_sell", { uid: p.uid }); if (o.offers && o.offers[0]) await call("/api/ow_sellreply", { uid: p.uid, club: o.offers[0].club, action: "accept" }); } }
-        for (const d of (BAD ? [] : win.deals)) {
+        stat.maxDeals = Math.max(stat.maxDeals || 0, win.deals.length); if (win.deals.some((d) => !d.fit)) fail.push("deal without fit"); for (const d of (BAD ? [] : win.deals)) {
           const x = await call("/api/ow_deal", { id: d.id, action: "approve" }); if (x.status === "done") stat.deals++;
         }
         if (r === 2 && !BAD) { const m = (await call("/api/ow_market?sort=value&minOvr=70&maxAge=29")).rows;
@@ -56,6 +56,13 @@ const BAD = !!process.env.BAD, RECK = !!process.env.RECKLESS, ACC = !!process.en
     if (st.club) console.log("S" + (w.season - 1), st.club.name, "age", st.age, "wealth", st.wealth, "cash", st.club.cash, "debt", st.club.debt, "board", st.pressure.board, "fans", st.pressure.fans, "pl", st.pressure.players, st.pressure.ladder_name, "squad", sq);
     else console.log("S" + (w.season - 1), "no club", st.state, "wealth", st.wealth);
   }
+  // new in this build: money log, honours history, squad needs, roster fit, several coach offers
+  { const st2 = await call("/api/ow_state");
+    if (!st2.money || st2.money.length < 3) fail.push("money log empty");
+    else { const bad = st2.money.find((m) => !Number.isFinite(m.w) || !Number.isFinite(m.dw)); if (bad) fail.push("money log has a non-number"); }
+    if (!st2.hist || !st2.hist.length) fail.push("no season history");
+    if (st2.club) { const n = st2.needs; if (!n || n.pos.length !== 4 || n.n !== st2.club.squad) fail.push("needs wrong"); }
+    stat.maxDeals = stat.maxDeals || 0; }
   // save round trip keeps the owner run
   const w1 = $deser($ser(w)); if (!w1.ow || w1.ow.age !== w.ow.age || w1.ow.wealth !== w.ow.wealth) fail.push("save round trip lost the owner state");
   { const A = w.league_avgs(), o = {}; for (const [k, v] of (A.itemsArr ? A.itemsArr() : Object.entries(A))) o[k] = Math.round(v * 100) / 100; const ch = new Set(); for (const r of w.hist) for (const [l, n] of r.get("champs").itemsArr()) ch.add(l + "|" + n); console.log("LAVG " + JSON.stringify(o) + " champs " + ch.size); }

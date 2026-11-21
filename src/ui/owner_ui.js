@@ -149,6 +149,41 @@ async function owTable(st, inner) {
     ${d.rows.map((r) => `<div class="ow-tr${r.club === me ? " me" : ""}"><span>${r.pos}</span><span class="cl">${esc(r.club)}</span><span>${r.p}</span><span>${r.w}</span><span>${r.d}</span><span>${r.l}</span><span>${r.gd > 0 ? "+" : ""}${r.gd}</span><b>${r.pts}</b></div>`).join("")}</div>
     <div class="dim small" style="margin-top:6px">Playing games happens on the Hub. Competitions your club is in (cups, continental) are under All competitions.</div></div>`;
 }
+// ---- roster fit, squad needs, money chart, history ----
+const owFit = (f) => f ? `<span class="owfit ${f.role.toLowerCase()}">${f.role}</span>${f.role === "Starter" && f.repl ? ` <span class="dim small">pushes out ${esc(f.repl.name)} (${f.repl.ovr})</span>` : ""}` : "";
+function owNeeds(st) {
+  const n = st.needs; if (!n) return "";
+  const lv = { short: "Short", weak: "Weak", light: "Light", ok: "OK" };
+  return `<div class="card"><h3>Squad needs <small>${n.n}/${n.max} &middot; ${n.free} free</small></h3>
+    <div class="dim small">${n.under25} players under 25 &middot; first XI averages ${n.avg_xi}. Tap a position to filter the market.</div>
+    ${n.pos.map((x) => `<div class="row owneed" data-needpos="${x.pos}"><span><b>${x.pos}</b> <span class="dim small">${x.label}</span></span><span class="owm-b" style="width:70px;display:inline-block"><i style="width:${Math.min(100, Math.round(100 * x.have / x.want))}%;background:${x.level === "ok" ? "#4fbf7a" : x.level === "light" ? "#7dc7a0" : x.level === "weak" ? "#e0b44f" : "#e06a5a"}"></i></span><span class="small">${x.have}/${x.want} &middot; best ${x.best || "-"}</span><span class="owlv ${x.level}">${lv[x.level]}</span></div>`).join("")}
+    <div class="dim small" style="margin-top:4px">Short: too few bodies for the XI and bench. Weak: your weakest starter is well below the team. Light: fewer than the ideal 25-man mix.</div></div>`;
+}
+function owLine(pts, k, col, label) {
+  const W = 340, H = 96, P = 6, v = pts.map((x) => x[k]), ok = v.filter((x) => x !== null && x !== undefined);
+  if (ok.length < 2) return "";
+  const lo = Math.min(...ok), hi = Math.max(...ok), rng = hi - lo || Math.max(1, Math.abs(hi) * 0.1), pad = rng * 0.1;
+  const X = (i) => P + (W - 2 * P) * i / (pts.length - 1), Y = (x) => H - P - (H - 2 * P) * (x - (lo - pad)) / (rng + 2 * pad);
+  let d = "", on = false; v.forEach((x, i) => { if (x === null || x === undefined) { on = false; return; } d += (on ? "L" : "M") + X(i).toFixed(1) + " " + Y(x).toFixed(1); on = true; });
+  const ticks = pts.map((x, i) => (i === 0 || x.s !== pts[i - 1].s ? `<line x1="${X(i).toFixed(1)}" x2="${X(i).toFixed(1)}" y1="${P}" y2="${H - P}" stroke="currentColor" opacity=".12"/><text x="${(X(i) + 2).toFixed(1)}" y="${H - 8}" font-size="9" fill="currentColor" opacity=".55">S${x.s}</text>` : "")).join("");
+  const last = ok[ok.length - 1], first = ok[0], dl = last - first;
+  return `<div class="row" style="border:0;padding-bottom:0"><span><i class="owdot" style="background:${col}"></i><b>${label}</b></span><span class="small">${owM(last)} <b class="${dl >= 0 ? "owup" : "owdn"}">${dl >= 0 ? "+" : "-"}${owM(Math.abs(dl))}</b></span></div>
+    <svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block">${ticks}<path d="${d}" fill="none" stroke="${col}" stroke-width="2" stroke-linejoin="round"/></svg><div class="dim small" style="display:flex;justify-content:space-between"><span>low ${owM(lo)}</span><span>high ${owM(hi)}</span></div>`;
+}
+function owChart(pts) {
+  if (!pts || pts.length < 2) return '<div class="dim small">Nothing to chart yet. It fills in as money moves.</div>';
+  return owLine(pts, "w", "#4fbf7a", "Your money") + '<div style="height:10px"></div>' + (owLine(pts, "c", "#5aa9ff", "Club cash") || "");
+}
+const owDelta = (v) => (v ? `<b class="${v > 0 ? "owup" : "owdn"}">${v > 0 ? "+" : "-"}${Math.abs(v).toFixed(1)}</b>` : '<span class="dim">0</span>');
+function owHistory(st) {
+  const h = st.hist || [], lg = h.filter((x) => x.champ).length, cups = h.reduce((a, x) => a + x.cups.filter((c) => c.res === "Winners").length, 0), fin = h.filter((x) => x.cups.some((c) => c.res === "Runners-up")).length;
+  const best = h.filter((x) => x.finish).sort((a, b) => a.finish - b.finish)[0];
+  const ord = (n) => n + (["th", "st", "nd", "rd"][(n % 100 > 10 && n % 100 < 14) ? 0 : Math.min(n % 10, 4) % 4] || "th");
+  return `<div class="card"><h3>Honours <small>${st.name ? esc(st.name) : ""}</small></h3>
+    <div class="owhon"><div><b>${lg}</b><span>League titles</span></div><div><b>${cups}</b><span>Cups won</span></div><div><b>${fin}</b><span>Cup finals lost</span></div><div><b>${best ? ord(best.finish) : "-"}</b><span>Best finish</span></div></div>
+    ${h.length ? h.slice().reverse().map((x) => `<div class="row"><span><b>S${x.season}</b> <span class="small">${esc(x.club)}</span></span><span class="small">${x.finish ? ord(x.finish) : "-"}${x.champ ? ' <b style="color:#e0b44f">&#9733; Champions</b>' : ""}${x.cups.map((c) => `<br>${c.res === "Winners" ? '<b style="color:#e0b44f">&#9733;</b> ' : ""}${esc(c.name)}: ${c.res}`).join("")}</span></div>`).join("") : '<div class="dim small" style="margin-top:6px">Your first season is not finished yet. Honours and finishes appear here after each season.</div>'}</div>
+    ${st.clubs && st.clubs.length ? `<div class="card"><h3>Clubs you have owned</h3>${st.clubs.map((c) => `<div class="row"><span>${esc(c.name || c.club || "")}</span><span class="dim small">S${c.from || ""}${c.to ? " to S" + c.to : " to now"}${c.how2 ? " &middot; " + esc(c.how2) : ""}</span></div>`).join("")}</div>` : ""}`;
+}
 // ---- hub ----
 function owHub(st, sc) {
   const h = STATUS.header, off = !!h.flow, p = st.pressure;
@@ -182,7 +217,7 @@ async function owWindow(st) {
       <button class="btn wide" id="ow-round">${R.round < R.rounds ? "Next week" : "End talks and open the window"}</button></div>`;
   }
   const W = st.window; if (!W || !W.open) return `<div class="card"><h3>Transfer window</h3><div class="dim small">The window opens after the season ends. ${STATUS.header.flow ? "It is closed now." : "Play the season first."}</div></div>`;
-  const deals = W.deals.map((d) => `<div class="row ow-deal"><span class="rt"><b>${esc(d.name)}</b> ${ovr(d.ovr)} <span class="dim small">${d.pos} &middot; ${d.age} &middot; coach sees potential ${d.pot}</span><div class="meta">${esc(d.tag)} &middot; from ${clubLink(d.club)}<br>${owM(d.fee)} fee &middot; ${owM(d.wage)}/yr &middot; ${d.years} yr</div></span>
+  const deals = W.deals.map((d) => `<div class="row ow-deal"><span class="rt"><b>${esc(d.name)}</b> ${ovr(d.ovr)} <span class="dim small">${d.pos} &middot; ${d.age} &middot; coach sees potential ${d.pot}</span><div class="meta">${esc(d.tag)} &middot; ${owFit(d.fit)} &middot; from ${clubLink(d.club)}<br>${owM(d.fee)} fee &middot; ${owM(d.wage)}/yr &middot; ${d.years} yr</div></span>
     <span class="owbtns"><button class="pri mini" data-deal="approve" data-id="${d.id}">Approve</button><button class="mini" data-deal="counter" data-id="${d.id}" data-fee="${d.fee}">Counter</button><button class="mini" data-deal="veto" data-id="${d.id}">Veto</button></span></div>`).join("");
   const inbox = W.inbox.map((x) => `<div class="row ow-deal"><span class="rt"><b>${esc(x.name)}</b><div class="meta">${esc(x.club)} offer ${owM(x.fee)}</div></span><span class="owbtns"><button class="pri mini" data-ib="accept" data-uid="${x.uid}">Accept</button><button class="mini" data-ib="counter" data-uid="${x.uid}" ${x.once ? "disabled" : ""}>Ask more</button><button class="mini" data-ib="decline" data-uid="${x.uid}">Decline</button></span></div>`).join("");
   const wars = W.wars.map((x) => `<div class="row"><span><b>${esc(x.name)}</b> <span class="dim small">${esc(x.rival)} bid ${owM(x.bid)}</span></span><span class="dim small">beat it this round</span></div>`).join("");
@@ -192,19 +227,20 @@ async function owWindow(st) {
       <div class="owbtns"><button class="pri" id="ow-round">${W.deadline ? "Deadline passes: close window" : "Next round"}</button><button id="ow-endw">End window now</button></div></div>
     ${W.requests && W.requests.length ? `<div class="card ow-alert"><h3>Asked to leave</h3><div class="dim small">These players are unhappy and want out. Sell them (buyers pay a little less), or talk them round on the Squad tab. Keeping them hurts the players' mood.</div>${W.requests.map((x) => `<div class="row"><span><b>${esc(x.name)}</b> ${ovr(x.ovr)}</span><button class="mini" data-tab="squad">Open squad</button></div>`).join("")}</div>` : ""}
     ${wars ? `<div class="card ow-alert"><h3>Bidding wars</h3>${wars}</div>` : ""}
+    ${owNeeds(st)}
     <div class="card"><h3>Your coach's deals</h3>${deals || '<div class="dim small">No deals right now. The coach may find something next round.</div>'}</div>
     ${inbox ? `<div class="card"><h3>Offers for your players</h3>${inbox}</div>` : ""}
     <div class="card"><h3>Market</h3>
       <div class="owf"><input id="mq-q" placeholder="Search name" value="${esc(q.q)}"><select id="mq-pos"><option value="">Any</option>${["GK", "DEF", "MID", "FWD"].map((x) => `<option ${q.pos === x ? "selected" : ""}>${x}</option>`).join("")}</select>
       <select id="mq-sort">${[["ovr", "Best"], ["value", "Cheapest"], ["age", "Youngest"]].map(([k, t]) => `<option value="${k}" ${q.sort === k ? "selected" : ""}>${t}</option>`).join("")}</select></div>
       <div class="owf">${[["grads", "Graduates"], ["expiring", "Expiring"], ["free", "Free agents"]].map(([k, t]) => `<label class="check"><input type="checkbox" data-mqf="${k}" ${q[k] ? "checked" : ""}> ${t}</label>`).join("")}</div>
-      ${m.rows.map((p) => `<div class="row"><span class="rt">${playerLink(p)} ${ovr(p.ovr)} <span class="dim small">${p.pos} &middot; ${p.age}${p.coach_pot ? " &middot; coach: pot " + p.coach_pot : ""}${p.grad ? " &middot; <b>graduate</b>" : ""}</span><div class="meta">${p.club ? esc(p.club) + " (" + p.rel + ")" : "free agent"} &middot; value ${owM(p.value)} &middot; wage ${owM(p.wage)} &middot; ${p.contract}y${p.last ? " &middot; " + p.last.g + "g " + p.last.a + "a" : ""}</div></span>
-      <button class="mini ${p.locked ? "" : "pri"}" data-bid="${p.uid}" data-name="${esc(p.name)}" data-val="${p.value}" data-wage="${p.wage}" ${p.locked ? "disabled" : ""}>${p.locked ? "Locked" : p.war ? "War!" : p.club ? "Bid" : "Sign"}</button></div>`).join("") || '<div class="dim small">No players match.</div>'}</div>`;
+      ${m.rows.map((p) => `<div class="row"><span class="rt">${playerLink(p)} ${ovr(p.ovr)} <span class="dim small">${p.pos} &middot; ${p.age}${p.coach_pot ? " &middot; coach: pot " + p.coach_pot : ""}${p.grad ? " &middot; <b>graduate</b>" : ""}</span><div class="meta">${owFit(p.fit)} &middot; ${p.club ? esc(p.club) + " (" + p.rel + ")" : "free agent"} &middot; value ${owM(p.value)} &middot; wage ${owM(p.wage)} &middot; ${p.contract}y${p.last ? " &middot; " + p.last.g + "g " + p.last.a + "a" : ""}</div></span>
+      <button class="mini ${p.locked ? "" : "pri"}" data-bid="${p.uid}" data-name="${esc(p.name)}" data-val="${p.value}" data-wage="${p.wage}" data-pos="${p.pos}" data-role="${p.fit ? p.fit.role : ""}" data-repl="${p.fit && p.fit.repl ? esc(p.fit.repl.name) + " (" + p.fit.repl.ovr + ")" : ""}" data-age="${p.age}" data-ovr="${p.ovr}" data-yrs="${p.contract}" data-free="${p.club ? "" : "1"}" ${p.locked ? "disabled" : ""}>${p.locked ? "Locked" : p.war ? "War!" : p.club ? "Bid" : "Sign"}</button></div>`).join("") || '<div class="dim small">No players match.</div>'}</div>`;
 }
 // ---- squad (own players: sell, release; graduates) ----
 async function owSquad(st) {
   const d = await api("/api/ow_squad"), rows = d.rows.filter((p) => OWT.sq !== "grads" || p.grad), W = st.window && st.window.open;
-  return `<div class="card"><h3>Squad <small>${d.rows.length}/25</small></h3><nav class="chips"><button class="${OWT.sq === "all" ? "on" : ""}" data-sq="all">All</button><button class="${OWT.sq === "grads" ? "on" : ""}" data-sq="grads">Graduates</button></nav>
+  return `${owNeeds(st)}<div class="card"><h3>Squad <small>${d.rows.length}/25</small></h3><nav class="chips"><button class="${OWT.sq === "all" ? "on" : ""}" data-sq="all">All</button><button class="${OWT.sq === "grads" ? "on" : ""}" data-sq="grads">Graduates</button></nav>
     <div class="dim small" style="margin:6px 0">${W ? "Sell to another club, or release (you pay half the wages left). Graduates stay with you unless you sell or release them." : "Selling and releasing happen in the transfer window."}</div>
     ${rows.map((p) => `<div class="row"><span class="rt">${playerLink(p)} ${ovr(p.ovr)} <span class="dim small">${p.pos} &middot; ${p.age}${p.coach_pot ? " &middot; pot " + p.coach_pot : ""}${p.grad ? " &middot; <b>graduate</b>" : ""}${p.req ? " &middot; <b style=\"color:#e0b44f\">asked to leave</b>" : ""}</span><div class="meta">value ${owM(p.value)} &middot; wage ${owM(p.wage)} &middot; ${p.contract}y${p.req && W ? ` <button class="mini" data-pers="${p.uid}">Talk him round</button>` : ""}${p.offers ? "<br>" + p.offers.map((o) => `<button class="mini pri" data-sell="${p.uid}" data-club="${esc(o.club)}">${esc(o.club)} ${owM(o.fee)}</button>`).join(" ") + ` <button class="mini" data-ask="${p.uid}">Ask more</button>` : ""}</div></span>
       ${W && !p.offers ? `<span class="owbtns"><button class="mini" data-selll="${p.uid}">Sell</button><button class="mini" data-rel="${p.uid}" data-name="${esc(p.name)}">Release</button></span>` : ""}</div>`).join("")}</div>`;
@@ -222,19 +258,21 @@ async function owStaff(st) {
 // ---- money ----
 async function owMoney(st) {
   const sp = await api("/api/ow_sponsors"), c = st.club;
-  return `<div class="card"><h3>Two wallets</h3><div class="row"><span>Your money</span><b>${owM(st.wealth)}</b></div><div class="row"><span>Club cash</span><b>${owM(c.cash)}</b></div>
+  const mlog = (st.money || []).slice().reverse();
+  return `<div class="card"><h3>Money over time</h3>${owChart(st.money)}</div><div class="card"><h3>Two wallets</h3><div class="row"><span>Your money</span><b>${owM(st.wealth)}</b></div><div class="row"><span>Club cash</span><b>${owM(c.cash)}</b></div>
     <div class="row"><span>Put into the club (all time)</span><span>${owM(st.injected)}</span></div><div class="row"><span>Taken out (all time)</span><span>${owM(st.dividends)}</span></div>
     <div class="owf"><input type="number" id="ow-amt" placeholder="Amount (M)" style="width:120px"><button id="ow-inj">Put in</button><button id="ow-div">Take out</button></div>${c.inj_left !== null ? `<div class="dim small">Classic: ${owM(c.inj_left)} left to put in this year. The club must keep 15% of its income as cash.</div>` : '<div class="dim small">Sandbox: no limits.</div>'}</div>
     <div class="card"><h3>Sponsors</h3>${st.sponsors.map((s) => `<div class="row"><span>${esc(s.name)}</span><span>${owM(s.per_year)}/yr &middot; ${s.left}y left</span></div>`).join("") || '<div class="dim small">None signed.</div>'}
       ${sp.rows.map((s) => `<div class="row"><span class="rt"><b>${esc(s.name)}</b><div class="meta">${esc(s.note)}</div></span><span>${owM(s.per_year)}/yr &middot; ${s.years}y <button class="mini pri" data-sp="${s.id}">Sign</button></span></div>`).join("")}</div>
     <div class="card"><h3>Lifestyle <small>status ${st.status}</small></h3><div class="dim small">Money you spend on yourself. Fans notice, and so does your reputation.</div>${st.lifestyle.map((l) => `<div class="row"><span>${esc(l.label)}</span><span>${owM(l.cost)} <button class="mini" data-life="${l.id}" ${l.owned ? "disabled" : ""}>${l.owned ? "Owned" : "Buy"}</button></span></div>`).join("")}</div>
+    <div class="card"><h3>Money log <small>newest first</small></h3><div class="dim small">Every change to your wealth and the club's cash.</div>${mlog.slice(0, 40).map((m) => `<div class="row owml"><span class="small">${esc(m.t)}<div class="dim small">S${m.s}</div></span><span class="owd"><span class="dim small">You</span> ${owDelta(m.dw)}<br><span class="dim small">Club</span> ${owDelta(m.dc)}</span></div>`).join("") || '<div class="dim small">Nothing yet.</div>'}</div>
     <div class="card"><h3>Your ledger</h3><div class="dim small">Your income swings from year to year.</div>${st.ledger.slice().reverse().map((l) => `<div class="row"><span>S${l.season}${l.club ? " &middot; " + esc(l.club) : ""}</span><span class="small">income ${owM(l.income)} &middot; divs ${owM(l.dividends)} &middot; in ${owM(l.injections)} &middot; worth ${owM(l.wealth)}</span></div>`).join("")}</div>`;
 }
 function owBoard(st) {
   const p = st.pressure, steps = ["Calm", "Concern", "Pressure", "Buyout offers"];
   return `<div class="card"><h3>Who is watching</h3>${owBar(p.board, "Board", "The most powerful group. The board decides whether you stay.")}${owBar(p.fans, "Fans", "They have the least power but hit tickets and sponsors.")}${owBar(p.players, "Players", "Unhappy players make the board uneasy, unless it is only about money and the team is winning.")}</div>
     <div class="card"><h3>The ladder</h3>${steps.map((s, i) => `<div class="row"><span style="${i === p.ladder ? "font-weight:800" : "opacity:.6"}">${i === p.ladder ? "&#9658; " : ""}${s}</span></div>`).join("")}<div class="dim small" style="margin-top:6px">Nobody can force you out. At the top of the ladder the board offers to buy you out, and each offer you refuse is lower than the last. A club that keeps losing money ends in administration.</div></div>
-    <div class="card"><h3>Reputation <small>${st.rep}</small></h3><div class="dim small">Titles raise it. Administration costs a lot. Bigger clubs need a higher reputation to buy.</div></div>`;
+    <div class="card"><h3>Reputation <small>${st.rep}</small></h3><div class="dim small">Titles raise it. Administration costs a lot. Bigger clubs need a higher reputation to buy.</div></div>${owHistory(st)}`;
 }
 // ---- wiring ----
 function owWire(st) {
@@ -270,6 +308,7 @@ function owWire(st) {
   const mq = (k, el, ev) => { const e = $(el); if (e) e[ev] = () => { OWT.mq[k] = e.type === "checkbox" ? e.checked : e.value; route(); }; };
   mq("q", "#mq-q", "onchange"); mq("pos", "#mq-pos", "onchange"); mq("sort", "#mq-sort", "onchange");
   document.querySelectorAll("[data-mqf]").forEach((c) => (c.onchange = () => { OWT.mq[c.dataset.mqf] = c.checked; route(); }));
+  document.querySelectorAll("[data-needpos]").forEach((r) => (r.onclick = () => { OWT.mq.pos = r.dataset.needpos; if (OWT.tab !== "window") location.hash = "#/owner/window"; else route(); }));
   document.querySelectorAll("[data-pers]").forEach((b) => (b.onclick = async () => { const pv = await owPost("/api/ow_persuade", { uid: +b.dataset.pers }); if (!pv) return; if (!confirm(pv.msg + "\nTry it?")) return; const r = await owPost("/api/ow_persuade", { uid: +b.dataset.pers, confirm: true }); if (r) { toast(r.msg, r.status === "stays"); await route(); } }));
   document.querySelectorAll("[data-cc]").forEach((b) => (b.onclick = async () => {
     const a = b.dataset.cc; let body = { action: a === "renewc" ? "renew" : a };
@@ -294,17 +333,25 @@ function owWire(st) {
   document.querySelectorAll("[data-life]").forEach((b) => (b.onclick = () => go("/api/ow_life", { item: b.dataset.life })));
 }
 function owBidDialog(d) {
-  const val = +d.val, wage = +d.wage;
-  openModal(`<div class="ow-dlg"><h3>${esc(d.name)}</h3><div class="dim small">Fair value ${owM(val)}. Expect to pay more. Rival clubs may jump in.</div>
-    <div class="field"><label>Fee (M)</label><input type="number" id="bd-fee" value="${(val * 1.25).toFixed(1)}" step="0.5"></div>
-    <div class="field"><label>Wage per year (M)</label><input type="number" id="bd-wage" value="${(wage * 1.1).toFixed(1)}" step="0.5"></div>
-    <div class="field"><label>Years</label><input type="number" id="bd-yrs" value="3" min="1" max="5"></div><div id="bd-msg" class="small" style="margin:8px 0"></div>
+  const val = +d.val, wage = +d.wage, free = d.free === "1", st = OWT.ST, n = st && st.needs ? st.needs.n : null;
+  const sl = (id, label, v, min, max, step, fmt) => `<div class="field owsl"><label>${label} <b id="${id}-v">${fmt(v)}</b></label><input type="range" id="${id}" min="${min}" max="${max}" step="${step}" value="${v}"></div>`;
+  const fee0 = Math.max(0.1, +(val * 1.25).toFixed(1)), wage0 = Math.max(0.1, +(wage * 1.1).toFixed(1)), feeMax = Math.max(5, Math.ceil(val * 3)), wMax = Math.max(1, Math.ceil(wage * 2.5));
+  openModal(`<div class="ow-dlg"><h3>${esc(d.name)} <span class="dim small">${esc(d.pos || "")} &middot; ${esc(d.age || "")} &middot; ${esc(d.ovr || "")}</span></h3>
+    <div class="owfitbox">${d.role ? `<span class="owfit ${d.role.toLowerCase()}">${esc(d.role)}</span> ${d.role === "Starter" ? "He would start" + (d.repl ? ", pushing out " + esc(d.repl) : "") : d.role === "Reserve" ? "He would be on the bench" : "He would sit outside the matchday squad"}.` : ""}${n !== null ? `<div class="dim small">Squad ${n} &rarr; ${n + 1} of 25${n >= 25 ? " (full: sell or release someone first)" : ""}</div>` : ""}</div>
+    <div class="dim small">Fair value ${owM(val)}. Expect to pay more. Rival clubs may jump in.</div>
+    ${free ? '<div class="dim small">Free agent: no fee, just wages.</div><input type="hidden" id="bd-fee" value="0">' : sl("bd-fee", "Fee", fee0, 0, feeMax, feeMax > 60 ? 0.5 : 0.1, (v) => owM(+v))}
+    ${sl("bd-wage", "Wage per year", wage0, 0, wMax, 0.1, (v) => owM(+v))}
+    ${sl("bd-yrs", "Years", 3, 1, 5, 1, (v) => v + " yr")}
+    <div id="bd-msg" class="small" style="margin:8px 0"></div>
     <div class="owbtns"><button class="pri" id="bd-go">Send offer</button><button id="bd-x">Close</button></div></div>`);
+  const bind = (id, fmt) => { const el = $("#" + id); el.oninput = () => ($("#" + id + "-v").textContent = fmt(+el.value)); };
+  if (!free) bind("bd-fee", (v) => owM(v)); bind("bd-wage", (v) => owM(v)); bind("bd-yrs", (v) => v + " yr");
+  const setv = (id, v, fmt) => { const el = $("#" + id); if (!$("#" + id + "-v")) return; if (+v > +el.max) el.max = Math.ceil(+v * 1.5); el.value = v; $("#" + id + "-v").textContent = fmt(+v); };
   $("#bd-x").onclick = closeModal;
   $("#bd-go").onclick = async () => {
     const r = await owPost("/api/ow_bid", { uid: +d.bid, fee: +$("#bd-fee").value, wage: +$("#bd-wage").value, years: +$("#bd-yrs").value }); if (!r) return;
     $("#bd-msg").innerHTML = `<b>${esc(r.msg || r.status)}</b>${r.ask ? " (they ask " + owM(r.ask) + ")" : ""}${r.need ? " (needs " + owM(r.need) + ")" : ""}${r.need_wage ? " (wage " + owM(r.need_wage) + ")" : ""}${r.patience !== undefined ? " &middot; patience left " + Math.max(0, r.patience) : ""}`;
-    if (r.ask) $("#bd-fee").value = r.ask; if (r.need) $("#bd-fee").value = r.need; if (r.need_wage) $("#bd-wage").value = r.need_wage;
+    if (r.ask) setv("bd-fee", r.ask, (v) => owM(v)); if (r.need) setv("bd-fee", r.need, (v) => owM(v)); if (r.need_wage) setv("bd-wage", r.need_wage, (v) => owM(v));
     if (r.status === "done") { setTimeout(async () => { closeModal(); await route(); }, 900); } else if (r.status === "locked") { await route(); }
   };
 }

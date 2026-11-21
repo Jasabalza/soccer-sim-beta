@@ -24,7 +24,12 @@ $mods["owner"] = (function () {
   const find = (w, uid) => { w.ensure_uids(); for (const p of w.players) if (p.uid === uid) return p; return null; };
   const fail = (m, c) => { throw $new($mods.app_v11.ApiError, [m, c === undefined ? 400 : c]); };
   const wageFor = (p) => $mods.sim_core.wage_for(p.ovr, p.age);
-  const log = (w, t) => { w.ow.feed.unshift({ season: w.season, t }); if (w.ow.feed.length > 60) w.ow.feed.length = 60; };
+  const log = (w, t) => {
+    const o = w.ow; o.feed.unshift({ season: w.season, t }); if (o.feed.length > 60) o.feed.length = 60;
+    const c = o.club ? w.clubs.get(o.club) : null;                      // every money event is logged, so each log line also marks the two balances
+    (o.mh = o.mh || []).push({ s: w.season, t, w: Math.round(o.wealth * 10) / 10, c: c ? Math.round(c.get("funds") * w.cfg.money_x * 10) / 10 : null, cl: o.club || null });
+    if (o.mh.length > 160) o.mh.shift();
+  };
 
   // ---- values --------------------------------------------------------------------------------------------------------------------------
   const fair = (w, p) => w.fee_for(p) * X(w) * (p.contract <= 1 ? 0.6 : 1);           // expiring contracts are cheaper
@@ -179,6 +184,31 @@ $mods["owner"] = (function () {
   }
   function relShift(w, n, d) { w.ow.rel[n] = clamp((w.ow.rel[n] || 0) + d, -2, 2); }
 
+  // ---- squad needs and roster fit ------------------------------------------------------------------------------------------------------
+  const WANT = { GK: 3, DEF: 8, MID: 7, FWD: 7 }, SLOTS = { GK: 1, DEF: 4, MID: 3, FWD: 3 }, BENCH = { GK: 1, DEF: 2, MID: 2, FWD: 2 }, POSN = { GK: "Goalkeepers", DEF: "Defenders", MID: "Midfielders", FWD: "Forwards" };
+  function byPos(w) {
+    const out = { GK: [], DEF: [], MID: [], FWD: [] }; if (!w.ow.club) return out;
+    for (const p of squadOf(w, w.ow.club)) if (out[p.pos]) out[p.pos].push(p);
+    for (const k of Object.keys(out)) out[k].sort((a, b) => b.ovr - a.ovr); return out;
+  }
+  // where a signing would sit: Starter (in the XI), Reserve (on the bench), Backup (outside the matchday squad)
+  function fitOf(bp, p) {
+    const L = bp[p.pos] || [], rank = L.filter((x) => x.ovr >= p.ovr && x.uid !== p.uid).length, S = SLOTS[p.pos] || 1, B = BENCH[p.pos] || 1;
+    const role = rank < S ? "Starter" : rank < S + B ? "Reserve" : "Backup";
+    const repl = role === "Starter" ? L[S - 1] || null : null;      // the weakest starter he would push out
+    return { role, rank: rank + 1, repl: repl ? { name: repl.name, ovr: repl.ovr } : null };
+  }
+  function needs(w) {
+    const o = w.ow; if (!o.club) return null; const bp = byPos(w), sq = squadOf(w, o.club), xi = []; let n = 0;
+    for (const k of Object.keys(bp)) for (const p of bp[k].slice(0, SLOTS[k])) xi.push(p.ovr);
+    const avg = xi.length ? xi.reduce((a, b) => a + b, 0) / xi.length : 60;
+    const pos = Object.keys(WANT).map((k) => {
+      const have = bp[k].length, st = bp[k].slice(0, SLOTS[k]), weakest = st.length ? st[st.length - 1].ovr : 0, miss = Math.max(0, WANT[k] - have), thin = have < SLOTS[k] + BENCH[k];
+      const weak = st.length < SLOTS[k] || weakest < avg - 5;
+      return { pos: k, label: POSN[k], have, want: WANT[k], start: SLOTS[k], miss, best: bp[k][0] ? bp[k][0].ovr : 0, weakest, weak, thin, level: thin ? "short" : weak ? "weak" : miss > 0 ? "light" : "ok", score: (thin ? 100 : 0) + (weak ? 40 : 0) + miss * 8 + (st.length < SLOTS[k] ? 60 : 0) };
+    });
+    return { n: sq.length, max: 25, free: Math.max(0, 25 - sq.length), under25: sq.filter((p) => p.age < 25).length, avg_xi: r1(avg), pos };
+  }
   function market(w, q) {
     const o = w.ow, W = o.win; w.ensure_uids();
     let rows = w.players.filter((p) => (q.free ? !p.club && p.age >= 17 : p.club && p.club !== o.club));
@@ -189,9 +219,9 @@ $mods["owner"] = (function () {
     if (q.minOvr) rows = rows.filter((p) => p.ovr >= +q.minOvr);
     if (q.maxAge) rows = rows.filter((p) => p.age <= +q.maxAge);
     if (q.q) { const s = String(q.q).toLowerCase(); rows = rows.filter((p) => p.name.toLowerCase().includes(s)); }
-    const by = q.sort || "ovr";
+    const by = q.sort || "ovr", bpm = byPos(w);
     rows.sort((a, b) => (by === "age" ? a.age - b.age : by === "value" ? fair(w, a) - fair(w, b) : b.ovr - a.ovr || (a.name < b.name ? -1 : 1)));
-    return rows.slice(0, 60).map((p) => { const r = publicRow(w, p); r.locked = !!(W && (W.pat[p.club + "|" + p.uid] || PATIENCE) <= 0); r.war = !!(W && W.wars[p.uid]); r.rel = relName(rel(w, p.club)); return r; });
+    return rows.slice(0, 60).map((p) => { const r = publicRow(w, p); r.locked = !!(W && (W.pat[p.club + "|" + p.uid] || PATIENCE) <= 0); r.war = !!(W && W.wars[p.uid]); r.rel = relName(rel(w, p.club)); r.fit = fitOf(bpm, p); return r; });
   }
   function bid(w, body) {
     const W = needWin(w), o = w.ow, me = o.club; const p = find(w, +body.uid); if (!p || p.club === me) fail("Player not available.", 404);
@@ -314,14 +344,20 @@ $mods["owner"] = (function () {
     }
     // coach deals (agreed in principle), unrequested bargains for the cheapest talent
     W.deals = W.deals.filter((d) => d.round >= W.round - 1 && d.live);
-    if (H(key(w, "cd", W.round)) < clamp(0.3 + 0.006 * co.scout, 0, 0.9)) {
-      const xi = squadOf(w, me).map((p) => p.ovr).sort((a, b) => b - a), floor = xi.length >= 11 ? xi[10] : 55;
-      const pool = w.players.filter((p) => p.club && p.club !== me && p.age <= 31 && p.ovr >= floor - 1 && p.ovr <= (xi[0] || 70) + 4 && !W.deals.some((d) => d.uid === p.uid) && !W.done.some((d) => d.uid === p.uid));
+    // several offers a round: the coach looks first at the positions you are thin or weak in, and the better the scout, the more he finds
+    const nd = needs(w), want = nd ? nd.pos.slice().sort((x, y) => y.score - x.score) : [], liveN = () => W.deals.filter((d) => d.live).length;
+    const maxN = clamp(2 + (W.round === 1 ? 1 : 0) + (co.scout >= 55 ? 1 : 0) + (co.scout >= 80 ? 1 : 0) + (nd && nd.pos.some((x) => x.score >= 100) ? 1 : 0), 2, 5);
+    const xi = squadOf(w, me).map((p) => p.ovr).sort((a, b) => b - a), floor = xi.length >= 11 ? xi[10] : 55;
+    for (let k = 0; k < maxN && liveN() < 5; k++) {
+      if (H(key(w, "cd", W.round, k)) >= clamp(0.62 + 0.004 * co.scout - 0.14 * k, 0.12, 0.95)) continue;
+      const tgt = want.length && want[k % want.length].score > 0 ? want[k % want.length].pos : null;
+      let pool = w.players.filter((p) => p.club && p.club !== me && p.age <= 31 && p.ovr >= floor - 1 && p.ovr <= (xi[0] || 70) + 4 && !W.deals.some((d) => d.uid === p.uid && d.live) && !W.done.some((d) => d.uid === p.uid));
+      if (tgt) { const sub = pool.filter((p) => p.pos === tgt); if (sub.length >= 3) pool = sub; }
       pool.sort((a, b) => ((scoutPot(w, b) - b.ovr) * 1.5 + b.ovr - fair(w, b) * 0.1) - ((scoutPot(w, a) - a.ovr) * 1.5 + a.ovr - fair(w, a) * 0.1) || (a.uid - b.uid));
-      const p = pool[Math.floor(H(key(w, "cdp", W.round)) * Math.min(12, pool.length))];
+      const p = pool[Math.floor(H(key(w, "cdp", W.round, k)) * Math.min(12, pool.length))];
       if (p) {
         const disc = 0.75 + 0.15 * (1 - co.scout / 100), bargain = p.contract <= 1;
-        W.deals.push({ id: ++W.dealId, uid: p.uid, name: p.name, age: p.age, pos: p.pos, ovr: p.ovr, pot: scoutPot(w, p), club: p.club, fee: r1(fair(w, p) * (bargain ? 1 : disc) * 1.1), wage: r2(playerWage(w, p) * 0.97), years: 3, round: W.round, live: true, tag: bargain ? "Bargain: contract running out" : "Agreed in principle" });
+        W.deals.push({ id: ++W.dealId, uid: p.uid, name: p.name, age: p.age, pos: p.pos, ovr: p.ovr, pot: scoutPot(w, p), club: p.club, fee: r1(fair(w, p) * (bargain ? 1 : disc) * 1.1), wage: r2(playerWage(w, p) * 0.97), years: 3, round: W.round, live: true, tag: bargain ? "Bargain: contract running out" : tgt === p.pos ? "Fills a need: " + tgt : "Agreed in principle" });
       }
     }
   }
@@ -500,6 +536,7 @@ $mods["owner"] = (function () {
       o.sponsors = o.sponsors.filter((s) => s.left > 0); row.sponsor = r1(sp);
       row.finish = c.get("last_finish", null); row.staff = r2(o.staff_paid || 0);
       pressure(w, rec, c, row);
+      histRecord(w, rec, c, row);
     }
     o.peak = Math.max(o.peak, o.wealth); row.wealth = r1(o.wealth); row.cash = c ? r1(c.get("funds") * X(w)) : 0; o.ledger.push(row); if (o.ledger.length > 40) o.ledger.shift();
     o.trust += (60 - o.trust) * 0.15;
@@ -508,6 +545,16 @@ $mods["owner"] = (function () {
     if (o.club) applyStaff(w);
     if (o.club) openReneg(w);
     sponsorOffers(w);
+  }
+  // season-by-season history of the owner's clubs: league finish, league and cup honours
+  function histRecord(w, rec, c, row) {
+    const o = w.ow, me = o.club, RS = rec.get("season"), lg = c.get("league"), h = { season: RS, club: me, league: lg, finish: c.get("last_finish", null), champ: rec.get("champs").get(lg) === me, cups: [] };
+    const cups = rec.get("cups"); if (cups && cups.keysArr) for (const k of cups.keysArr()) {
+      const v = cups.get(k), win = v[0], ru = v[1], nm = (() => { try { return $idx($idx(w.cups, k), "name") || k; } catch (e) { return k; } })();
+      if (win === me) h.cups.push({ name: nm, res: "Winners" }); else if (ru === me) h.cups.push({ name: nm, res: "Runners-up" });
+    }
+    if (rec.get("cwc") === me) h.cups.push({ name: "Club World Cup", res: "Winners" });
+    (o.hist = o.hist || []).push(h); if (o.hist.length > 60) o.hist.shift();
   }
   function pressure(w, rec, c, row) {
     const o = w.ow, me = o.club, L = w.leagues.get(c.get("league")), size = L.get("clubs").length;
@@ -556,21 +603,25 @@ $mods["owner"] = (function () {
   function retire(w) { const o = w.ow; if (o.ended) fail("Already over.", 409); return end(w, "retired"); }
 
   // ---- views ---------------------------------------------------------------------------------------------------------------------------
+  function moneyLog(w) {
+    const m = (w.ow.mh || []).slice(-80); let pw = null, pc = null, pcl = null;
+    return m.map((x) => { const r = { s: x.s, t: x.t, w: x.w, c: x.c, dw: pw === null ? 0 : Math.round((x.w - pw) * 10) / 10, dc: x.c === null || pc === null || pcl !== x.cl ? 0 : Math.round((x.c - pc) * 10) / 10 }; pw = x.w; pc = x.c; pcl = x.cl; return r; });
+  }
   function view(w) {
     const o = w.ow; if (!o) return { active: false };
     const c = club(w), W = o.win, co = coachInfo(w);
     const out = { active: true, state: o.state, name: o.name, back: BACK[o.back].label, mode: o.mode, age: o.age, wealth: r1(o.wealth), income: o.income, rep: Math.round(o.rep), season: w.season,
       injected: r1(o.injected), dividends: r1(o.dividends), speed: o.speed, limit: o.limit, coach_expired: !!(c && c.get("coach") && c.get("coach").contract <= 0), no_coach: !!(c && !c.get("coach")), trust: Math.round(o.trust), life: o.life, status: o.status, feed: o.feed.slice(0, 25), ledger: o.ledger.slice(-15), ended: o.ended,
-      titles: o.titles, clubs: o.clubs, coach: co, sponsors: o.sponsors, backstories: Object.entries(BACK).map(([k, v]) => ({ id: k, ...v })), lifestyle: Object.entries(LIFE).map(([k, v]) => ({ id: k, ...v, owned: o.life.includes(k) })) };
+      titles: o.titles, hist: (o.hist || []), money: moneyLog(w), clubs: o.clubs, coach: co, sponsors: o.sponsors, backstories: Object.entries(BACK).map(([k, v]) => ({ id: k, ...v })), lifestyle: Object.entries(LIFE).map(([k, v]) => ({ id: k, ...v, owned: o.life.includes(k) })) };
     if (c) {
       const inc = c.get("income") * X(w);
       out.club = { name: o.club, league: c.get("league"), cash: r1(c.get("funds") * X(w)), debt: r1(c.get("debt", 0) * X(w)), income: r1(inc), payroll: r1(payroll(w, o.club)), value: price(w, o.club), squad: squadOf(w, o.club).length,
         inj_left: o.mode === "classic" ? r1(Math.max(0, 0.25 * inc - (o.inj_year[w.season] || 0))) : null };
       out.pressure = { fans: Math.round(o.fans), players: Math.round(o.players), board: Math.round(o.board), ladder: o.ladder, ladder_name: ["Calm", "Concern", "Pressure", "Buyout offers"][o.ladder], money_only: o.pl_money < 0 && o.pl_perf > 0 };
-      out.buyout = o.buyout;
+      out.buyout = o.buyout; out.needs = needs(w);
     }
     if (o.reneg && !o.reneg.done) out.reneg = o.reneg;
-    if (W) out.window = { requests: (W.req || []).map((u) => { const p = find(w, u); return p && p.club === o.club ? { uid: u, name: p.name, ovr: p.ovr } : null; }).filter(Boolean), open: W.open, round: W.round, rounds: W.rounds, deadline: deadline(W), deals: W.deals.filter((d) => d.live), inbox: W.inbox, wars: Object.entries(W.wars).map(([u, x]) => ({ uid: +u, name: (find(w, +u) || {}).name, ...x })), done: W.done.slice(-12) };
+    if (W) out.window = { requests: (W.req || []).map((u) => { const p = find(w, u); return p && p.club === o.club ? { uid: u, name: p.name, ovr: p.ovr } : null; }).filter(Boolean), open: W.open, round: W.round, rounds: W.rounds, deadline: deadline(W), deals: W.deals.filter((d) => d.live).map((d) => { const p = find(w, d.uid); return { ...d, fit: p ? fitOf(byPos(w), p) : null }; }), inbox: W.inbox, wars: Object.entries(W.wars).map(([u, x]) => ({ uid: +u, name: (find(w, +u) || {}).name, ...x })), done: W.done.slice(-12) };
     return out;
   }
   function squadView(w) {
@@ -630,5 +681,5 @@ function gameCount(w) {
   }
   return n;
 }
-return { cupGames, gameCount, create, buy, priceList, dividend, inject, lifestyle, sponsorOffers, takeSponsor, market, bid, release, sell, sellReply, dealAct, inboxAct, nextRound, renegAct, persuade, staffView, coachAct, beforeRollover, closeWindow, afterRollover, buyoutAct, retire, view, squadView, setSpeed, afterFlowDone, blocked, BACK, ROUNDS, openWindow };
+return { needs, cupGames, gameCount, create, buy, priceList, dividend, inject, lifestyle, sponsorOffers, takeSponsor, market, bid, release, sell, sellReply, dealAct, inboxAct, nextRound, renegAct, persuade, staffView, coachAct, beforeRollover, closeWindow, afterRollover, buyoutAct, retire, view, squadView, setSpeed, afterFlowDone, blocked, BACK, ROUNDS, openWindow };
 })();

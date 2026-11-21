@@ -1230,6 +1230,19 @@ select { padding-right: 30px; }
 .scr { margin: 8px 0; } .scr-h { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 15px; } .scr-c { display: flex; justify-content: space-between; gap: 12px; margin-top: 6px; font-size: 13px; } .scr-c > div:last-child { text-align: right; }
 .ow .owsd { text-align: right; } .ow .owsd .owagg { margin-left: 0; white-space: normal; max-width: 130px; }
 .ow .owgame { display: flex; gap: 8px; margin: 6px 0 2px; }
+/* owner mode: roster fit, needs, money chart, history */
+.owfit{display:inline-block;padding:1px 7px;border-radius:9px;font-size:11px;font-weight:800;background:#444;color:#fff}
+.owfit.starter{background:#2f9e5a}.owfit.reserve{background:#c28f1f}.owfit.backup{background:#6b7280}
+.owfitbox{margin:2px 0 8px}
+.owneed{cursor:pointer;align-items:center;gap:8px}
+.owlv{font-size:11px;font-weight:800;padding:1px 7px;border-radius:9px;background:#2a2a2a}
+.owlv.short{background:#a8372a;color:#fff}.owlv.weak{background:#9a7418;color:#fff}.owlv.light{background:#3d6b52;color:#fff}.owlv.ok{background:#2f9e5a;color:#fff}
+.owsl{margin:10px 0}.owsl label{display:flex;justify-content:space-between}.owsl input[type=range]{width:100%;height:34px}
+.owleg{display:flex;gap:12px;flex-wrap:wrap;font-size:12px;margin-top:4px}.owleg i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px}
+.owup{color:#4fbf7a}.owdn{color:#e06a5a}.owml{align-items:flex-start}.owd{text-align:right;font-size:12px;white-space:nowrap}
+.owhon{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:6px 0 10px;text-align:center}.owhon b{display:block;font-size:20px}.owhon span{font-size:10px;opacity:.7}
+.owdot{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px}
+.ow-dlg .owsl{display:block}.ow-dlg .owsl label{display:flex!important;flex-direction:row;justify-content:space-between;align-items:baseline;width:100%;margin-bottom:2px}.ow-dlg .owsl label b{margin-left:auto;font-size:16px}.ow-dlg .owsl input[type=range]{display:block;width:100%;margin:4px 0}
 
 </style>
 
@@ -5986,7 +5999,12 @@ $mods["owner"] = (function () {
   const find = (w, uid) => { w.ensure_uids(); for (const p of w.players) if (p.uid === uid) return p; return null; };
   const fail = (m, c) => { throw $new($mods.app_v11.ApiError, [m, c === undefined ? 400 : c]); };
   const wageFor = (p) => $mods.sim_core.wage_for(p.ovr, p.age);
-  const log = (w, t) => { w.ow.feed.unshift({ season: w.season, t }); if (w.ow.feed.length > 60) w.ow.feed.length = 60; };
+  const log = (w, t) => {
+    const o = w.ow; o.feed.unshift({ season: w.season, t }); if (o.feed.length > 60) o.feed.length = 60;
+    const c = o.club ? w.clubs.get(o.club) : null;                      // every money event is logged, so each log line also marks the two balances
+    (o.mh = o.mh || []).push({ s: w.season, t, w: Math.round(o.wealth * 10) / 10, c: c ? Math.round(c.get("funds") * w.cfg.money_x * 10) / 10 : null, cl: o.club || null });
+    if (o.mh.length > 160) o.mh.shift();
+  };
 
   // ---- values --------------------------------------------------------------------------------------------------------------------------
   const fair = (w, p) => w.fee_for(p) * X(w) * (p.contract <= 1 ? 0.6 : 1);           // expiring contracts are cheaper
@@ -6141,6 +6159,31 @@ $mods["owner"] = (function () {
   }
   function relShift(w, n, d) { w.ow.rel[n] = clamp((w.ow.rel[n] || 0) + d, -2, 2); }
 
+  // ---- squad needs and roster fit ------------------------------------------------------------------------------------------------------
+  const WANT = { GK: 3, DEF: 8, MID: 7, FWD: 7 }, SLOTS = { GK: 1, DEF: 4, MID: 3, FWD: 3 }, BENCH = { GK: 1, DEF: 2, MID: 2, FWD: 2 }, POSN = { GK: "Goalkeepers", DEF: "Defenders", MID: "Midfielders", FWD: "Forwards" };
+  function byPos(w) {
+    const out = { GK: [], DEF: [], MID: [], FWD: [] }; if (!w.ow.club) return out;
+    for (const p of squadOf(w, w.ow.club)) if (out[p.pos]) out[p.pos].push(p);
+    for (const k of Object.keys(out)) out[k].sort((a, b) => b.ovr - a.ovr); return out;
+  }
+  // where a signing would sit: Starter (in the XI), Reserve (on the bench), Backup (outside the matchday squad)
+  function fitOf(bp, p) {
+    const L = bp[p.pos] || [], rank = L.filter((x) => x.ovr >= p.ovr && x.uid !== p.uid).length, S = SLOTS[p.pos] || 1, B = BENCH[p.pos] || 1;
+    const role = rank < S ? "Starter" : rank < S + B ? "Reserve" : "Backup";
+    const repl = role === "Starter" ? L[S - 1] || null : null;      // the weakest starter he would push out
+    return { role, rank: rank + 1, repl: repl ? { name: repl.name, ovr: repl.ovr } : null };
+  }
+  function needs(w) {
+    const o = w.ow; if (!o.club) return null; const bp = byPos(w), sq = squadOf(w, o.club), xi = []; let n = 0;
+    for (const k of Object.keys(bp)) for (const p of bp[k].slice(0, SLOTS[k])) xi.push(p.ovr);
+    const avg = xi.length ? xi.reduce((a, b) => a + b, 0) / xi.length : 60;
+    const pos = Object.keys(WANT).map((k) => {
+      const have = bp[k].length, st = bp[k].slice(0, SLOTS[k]), weakest = st.length ? st[st.length - 1].ovr : 0, miss = Math.max(0, WANT[k] - have), thin = have < SLOTS[k] + BENCH[k];
+      const weak = st.length < SLOTS[k] || weakest < avg - 5;
+      return { pos: k, label: POSN[k], have, want: WANT[k], start: SLOTS[k], miss, best: bp[k][0] ? bp[k][0].ovr : 0, weakest, weak, thin, level: thin ? "short" : weak ? "weak" : miss > 0 ? "light" : "ok", score: (thin ? 100 : 0) + (weak ? 40 : 0) + miss * 8 + (st.length < SLOTS[k] ? 60 : 0) };
+    });
+    return { n: sq.length, max: 25, free: Math.max(0, 25 - sq.length), under25: sq.filter((p) => p.age < 25).length, avg_xi: r1(avg), pos };
+  }
   function market(w, q) {
     const o = w.ow, W = o.win; w.ensure_uids();
     let rows = w.players.filter((p) => (q.free ? !p.club && p.age >= 17 : p.club && p.club !== o.club));
@@ -6151,9 +6194,9 @@ $mods["owner"] = (function () {
     if (q.minOvr) rows = rows.filter((p) => p.ovr >= +q.minOvr);
     if (q.maxAge) rows = rows.filter((p) => p.age <= +q.maxAge);
     if (q.q) { const s = String(q.q).toLowerCase(); rows = rows.filter((p) => p.name.toLowerCase().includes(s)); }
-    const by = q.sort || "ovr";
+    const by = q.sort || "ovr", bpm = byPos(w);
     rows.sort((a, b) => (by === "age" ? a.age - b.age : by === "value" ? fair(w, a) - fair(w, b) : b.ovr - a.ovr || (a.name < b.name ? -1 : 1)));
-    return rows.slice(0, 60).map((p) => { const r = publicRow(w, p); r.locked = !!(W && (W.pat[p.club + "|" + p.uid] || PATIENCE) <= 0); r.war = !!(W && W.wars[p.uid]); r.rel = relName(rel(w, p.club)); return r; });
+    return rows.slice(0, 60).map((p) => { const r = publicRow(w, p); r.locked = !!(W && (W.pat[p.club + "|" + p.uid] || PATIENCE) <= 0); r.war = !!(W && W.wars[p.uid]); r.rel = relName(rel(w, p.club)); r.fit = fitOf(bpm, p); return r; });
   }
   function bid(w, body) {
     const W = needWin(w), o = w.ow, me = o.club; const p = find(w, +body.uid); if (!p || p.club === me) fail("Player not available.", 404);
@@ -6276,14 +6319,20 @@ $mods["owner"] = (function () {
     }
     // coach deals (agreed in principle), unrequested bargains for the cheapest talent
     W.deals = W.deals.filter((d) => d.round >= W.round - 1 && d.live);
-    if (H(key(w, "cd", W.round)) < clamp(0.3 + 0.006 * co.scout, 0, 0.9)) {
-      const xi = squadOf(w, me).map((p) => p.ovr).sort((a, b) => b - a), floor = xi.length >= 11 ? xi[10] : 55;
-      const pool = w.players.filter((p) => p.club && p.club !== me && p.age <= 31 && p.ovr >= floor - 1 && p.ovr <= (xi[0] || 70) + 4 && !W.deals.some((d) => d.uid === p.uid) && !W.done.some((d) => d.uid === p.uid));
+    // several offers a round: the coach looks first at the positions you are thin or weak in, and the better the scout, the more he finds
+    const nd = needs(w), want = nd ? nd.pos.slice().sort((x, y) => y.score - x.score) : [], liveN = () => W.deals.filter((d) => d.live).length;
+    const maxN = clamp(2 + (W.round === 1 ? 1 : 0) + (co.scout >= 55 ? 1 : 0) + (co.scout >= 80 ? 1 : 0) + (nd && nd.pos.some((x) => x.score >= 100) ? 1 : 0), 2, 5);
+    const xi = squadOf(w, me).map((p) => p.ovr).sort((a, b) => b - a), floor = xi.length >= 11 ? xi[10] : 55;
+    for (let k = 0; k < maxN && liveN() < 5; k++) {
+      if (H(key(w, "cd", W.round, k)) >= clamp(0.62 + 0.004 * co.scout - 0.14 * k, 0.12, 0.95)) continue;
+      const tgt = want.length && want[k % want.length].score > 0 ? want[k % want.length].pos : null;
+      let pool = w.players.filter((p) => p.club && p.club !== me && p.age <= 31 && p.ovr >= floor - 1 && p.ovr <= (xi[0] || 70) + 4 && !W.deals.some((d) => d.uid === p.uid && d.live) && !W.done.some((d) => d.uid === p.uid));
+      if (tgt) { const sub = pool.filter((p) => p.pos === tgt); if (sub.length >= 3) pool = sub; }
       pool.sort((a, b) => ((scoutPot(w, b) - b.ovr) * 1.5 + b.ovr - fair(w, b) * 0.1) - ((scoutPot(w, a) - a.ovr) * 1.5 + a.ovr - fair(w, a) * 0.1) || (a.uid - b.uid));
-      const p = pool[Math.floor(H(key(w, "cdp", W.round)) * Math.min(12, pool.length))];
+      const p = pool[Math.floor(H(key(w, "cdp", W.round, k)) * Math.min(12, pool.length))];
       if (p) {
         const disc = 0.75 + 0.15 * (1 - co.scout / 100), bargain = p.contract <= 1;
-        W.deals.push({ id: ++W.dealId, uid: p.uid, name: p.name, age: p.age, pos: p.pos, ovr: p.ovr, pot: scoutPot(w, p), club: p.club, fee: r1(fair(w, p) * (bargain ? 1 : disc) * 1.1), wage: r2(playerWage(w, p) * 0.97), years: 3, round: W.round, live: true, tag: bargain ? "Bargain: contract running out" : "Agreed in principle" });
+        W.deals.push({ id: ++W.dealId, uid: p.uid, name: p.name, age: p.age, pos: p.pos, ovr: p.ovr, pot: scoutPot(w, p), club: p.club, fee: r1(fair(w, p) * (bargain ? 1 : disc) * 1.1), wage: r2(playerWage(w, p) * 0.97), years: 3, round: W.round, live: true, tag: bargain ? "Bargain: contract running out" : tgt === p.pos ? "Fills a need: " + tgt : "Agreed in principle" });
       }
     }
   }
@@ -6462,6 +6511,7 @@ $mods["owner"] = (function () {
       o.sponsors = o.sponsors.filter((s) => s.left > 0); row.sponsor = r1(sp);
       row.finish = c.get("last_finish", null); row.staff = r2(o.staff_paid || 0);
       pressure(w, rec, c, row);
+      histRecord(w, rec, c, row);
     }
     o.peak = Math.max(o.peak, o.wealth); row.wealth = r1(o.wealth); row.cash = c ? r1(c.get("funds") * X(w)) : 0; o.ledger.push(row); if (o.ledger.length > 40) o.ledger.shift();
     o.trust += (60 - o.trust) * 0.15;
@@ -6470,6 +6520,16 @@ $mods["owner"] = (function () {
     if (o.club) applyStaff(w);
     if (o.club) openReneg(w);
     sponsorOffers(w);
+  }
+  // season-by-season history of the owner's clubs: league finish, league and cup honours
+  function histRecord(w, rec, c, row) {
+    const o = w.ow, me = o.club, RS = rec.get("season"), lg = c.get("league"), h = { season: RS, club: me, league: lg, finish: c.get("last_finish", null), champ: rec.get("champs").get(lg) === me, cups: [] };
+    const cups = rec.get("cups"); if (cups && cups.keysArr) for (const k of cups.keysArr()) {
+      const v = cups.get(k), win = v[0], ru = v[1], nm = (() => { try { return $idx($idx(w.cups, k), "name") || k; } catch (e) { return k; } })();
+      if (win === me) h.cups.push({ name: nm, res: "Winners" }); else if (ru === me) h.cups.push({ name: nm, res: "Runners-up" });
+    }
+    if (rec.get("cwc") === me) h.cups.push({ name: "Club World Cup", res: "Winners" });
+    (o.hist = o.hist || []).push(h); if (o.hist.length > 60) o.hist.shift();
   }
   function pressure(w, rec, c, row) {
     const o = w.ow, me = o.club, L = w.leagues.get(c.get("league")), size = L.get("clubs").length;
@@ -6518,21 +6578,25 @@ $mods["owner"] = (function () {
   function retire(w) { const o = w.ow; if (o.ended) fail("Already over.", 409); return end(w, "retired"); }
 
   // ---- views ---------------------------------------------------------------------------------------------------------------------------
+  function moneyLog(w) {
+    const m = (w.ow.mh || []).slice(-80); let pw = null, pc = null, pcl = null;
+    return m.map((x) => { const r = { s: x.s, t: x.t, w: x.w, c: x.c, dw: pw === null ? 0 : Math.round((x.w - pw) * 10) / 10, dc: x.c === null || pc === null || pcl !== x.cl ? 0 : Math.round((x.c - pc) * 10) / 10 }; pw = x.w; pc = x.c; pcl = x.cl; return r; });
+  }
   function view(w) {
     const o = w.ow; if (!o) return { active: false };
     const c = club(w), W = o.win, co = coachInfo(w);
     const out = { active: true, state: o.state, name: o.name, back: BACK[o.back].label, mode: o.mode, age: o.age, wealth: r1(o.wealth), income: o.income, rep: Math.round(o.rep), season: w.season,
       injected: r1(o.injected), dividends: r1(o.dividends), speed: o.speed, limit: o.limit, coach_expired: !!(c && c.get("coach") && c.get("coach").contract <= 0), no_coach: !!(c && !c.get("coach")), trust: Math.round(o.trust), life: o.life, status: o.status, feed: o.feed.slice(0, 25), ledger: o.ledger.slice(-15), ended: o.ended,
-      titles: o.titles, clubs: o.clubs, coach: co, sponsors: o.sponsors, backstories: Object.entries(BACK).map(([k, v]) => ({ id: k, ...v })), lifestyle: Object.entries(LIFE).map(([k, v]) => ({ id: k, ...v, owned: o.life.includes(k) })) };
+      titles: o.titles, hist: (o.hist || []), money: moneyLog(w), clubs: o.clubs, coach: co, sponsors: o.sponsors, backstories: Object.entries(BACK).map(([k, v]) => ({ id: k, ...v })), lifestyle: Object.entries(LIFE).map(([k, v]) => ({ id: k, ...v, owned: o.life.includes(k) })) };
     if (c) {
       const inc = c.get("income") * X(w);
       out.club = { name: o.club, league: c.get("league"), cash: r1(c.get("funds") * X(w)), debt: r1(c.get("debt", 0) * X(w)), income: r1(inc), payroll: r1(payroll(w, o.club)), value: price(w, o.club), squad: squadOf(w, o.club).length,
         inj_left: o.mode === "classic" ? r1(Math.max(0, 0.25 * inc - (o.inj_year[w.season] || 0))) : null };
       out.pressure = { fans: Math.round(o.fans), players: Math.round(o.players), board: Math.round(o.board), ladder: o.ladder, ladder_name: ["Calm", "Concern", "Pressure", "Buyout offers"][o.ladder], money_only: o.pl_money < 0 && o.pl_perf > 0 };
-      out.buyout = o.buyout;
+      out.buyout = o.buyout; out.needs = needs(w);
     }
     if (o.reneg && !o.reneg.done) out.reneg = o.reneg;
-    if (W) out.window = { requests: (W.req || []).map((u) => { const p = find(w, u); return p && p.club === o.club ? { uid: u, name: p.name, ovr: p.ovr } : null; }).filter(Boolean), open: W.open, round: W.round, rounds: W.rounds, deadline: deadline(W), deals: W.deals.filter((d) => d.live), inbox: W.inbox, wars: Object.entries(W.wars).map(([u, x]) => ({ uid: +u, name: (find(w, +u) || {}).name, ...x })), done: W.done.slice(-12) };
+    if (W) out.window = { requests: (W.req || []).map((u) => { const p = find(w, u); return p && p.club === o.club ? { uid: u, name: p.name, ovr: p.ovr } : null; }).filter(Boolean), open: W.open, round: W.round, rounds: W.rounds, deadline: deadline(W), deals: W.deals.filter((d) => d.live).map((d) => { const p = find(w, d.uid); return { ...d, fit: p ? fitOf(byPos(w), p) : null }; }), inbox: W.inbox, wars: Object.entries(W.wars).map(([u, x]) => ({ uid: +u, name: (find(w, +u) || {}).name, ...x })), done: W.done.slice(-12) };
     return out;
   }
   function squadView(w) {
@@ -6592,7 +6656,7 @@ function gameCount(w) {
   }
   return n;
 }
-return { cupGames, gameCount, create, buy, priceList, dividend, inject, lifestyle, sponsorOffers, takeSponsor, market, bid, release, sell, sellReply, dealAct, inboxAct, nextRound, renegAct, persuade, staffView, coachAct, beforeRollover, closeWindow, afterRollover, buyoutAct, retire, view, squadView, setSpeed, afterFlowDone, blocked, BACK, ROUNDS, openWindow };
+return { needs, cupGames, gameCount, create, buy, priceList, dividend, inject, lifestyle, sponsorOffers, takeSponsor, market, bid, release, sell, sellReply, dealAct, inboxAct, nextRound, renegAct, persuade, staffView, coachAct, beforeRollover, closeWindow, afterRollover, buyoutAct, retire, view, squadView, setSpeed, afterFlowDone, blocked, BACK, ROUNDS, openWindow };
 })();
 
 $mods["sim_core"] = (function() {
@@ -14625,6 +14689,41 @@ async function owTable(st, inner) {
     ${d.rows.map((r) => `<div class="ow-tr${r.club === me ? " me" : ""}"><span>${r.pos}</span><span class="cl">${esc(r.club)}</span><span>${r.p}</span><span>${r.w}</span><span>${r.d}</span><span>${r.l}</span><span>${r.gd > 0 ? "+" : ""}${r.gd}</span><b>${r.pts}</b></div>`).join("")}</div>
     <div class="dim small" style="margin-top:6px">Playing games happens on the Hub. Competitions your club is in (cups, continental) are under All competitions.</div></div>`;
 }
+// ---- roster fit, squad needs, money chart, history ----
+const owFit = (f) => f ? `<span class="owfit ${f.role.toLowerCase()}">${f.role}</span>${f.role === "Starter" && f.repl ? ` <span class="dim small">pushes out ${esc(f.repl.name)} (${f.repl.ovr})</span>` : ""}` : "";
+function owNeeds(st) {
+  const n = st.needs; if (!n) return "";
+  const lv = { short: "Short", weak: "Weak", light: "Light", ok: "OK" };
+  return `<div class="card"><h3>Squad needs <small>${n.n}/${n.max} &middot; ${n.free} free</small></h3>
+    <div class="dim small">${n.under25} players under 25 &middot; first XI averages ${n.avg_xi}. Tap a position to filter the market.</div>
+    ${n.pos.map((x) => `<div class="row owneed" data-needpos="${x.pos}"><span><b>${x.pos}</b> <span class="dim small">${x.label}</span></span><span class="owm-b" style="width:70px;display:inline-block"><i style="width:${Math.min(100, Math.round(100 * x.have / x.want))}%;background:${x.level === "ok" ? "#4fbf7a" : x.level === "light" ? "#7dc7a0" : x.level === "weak" ? "#e0b44f" : "#e06a5a"}"></i></span><span class="small">${x.have}/${x.want} &middot; best ${x.best || "-"}</span><span class="owlv ${x.level}">${lv[x.level]}</span></div>`).join("")}
+    <div class="dim small" style="margin-top:4px">Short: too few bodies for the XI and bench. Weak: your weakest starter is well below the team. Light: fewer than the ideal 25-man mix.</div></div>`;
+}
+function owLine(pts, k, col, label) {
+  const W = 340, H = 96, P = 6, v = pts.map((x) => x[k]), ok = v.filter((x) => x !== null && x !== undefined);
+  if (ok.length < 2) return "";
+  const lo = Math.min(...ok), hi = Math.max(...ok), rng = hi - lo || Math.max(1, Math.abs(hi) * 0.1), pad = rng * 0.1;
+  const X = (i) => P + (W - 2 * P) * i / (pts.length - 1), Y = (x) => H - P - (H - 2 * P) * (x - (lo - pad)) / (rng + 2 * pad);
+  let d = "", on = false; v.forEach((x, i) => { if (x === null || x === undefined) { on = false; return; } d += (on ? "L" : "M") + X(i).toFixed(1) + " " + Y(x).toFixed(1); on = true; });
+  const ticks = pts.map((x, i) => (i === 0 || x.s !== pts[i - 1].s ? `<line x1="${X(i).toFixed(1)}" x2="${X(i).toFixed(1)}" y1="${P}" y2="${H - P}" stroke="currentColor" opacity=".12"/><text x="${(X(i) + 2).toFixed(1)}" y="${H - 8}" font-size="9" fill="currentColor" opacity=".55">S${x.s}</text>` : "")).join("");
+  const last = ok[ok.length - 1], first = ok[0], dl = last - first;
+  return `<div class="row" style="border:0;padding-bottom:0"><span><i class="owdot" style="background:${col}"></i><b>${label}</b></span><span class="small">${owM(last)} <b class="${dl >= 0 ? "owup" : "owdn"}">${dl >= 0 ? "+" : "-"}${owM(Math.abs(dl))}</b></span></div>
+    <svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block">${ticks}<path d="${d}" fill="none" stroke="${col}" stroke-width="2" stroke-linejoin="round"/></svg><div class="dim small" style="display:flex;justify-content:space-between"><span>low ${owM(lo)}</span><span>high ${owM(hi)}</span></div>`;
+}
+function owChart(pts) {
+  if (!pts || pts.length < 2) return '<div class="dim small">Nothing to chart yet. It fills in as money moves.</div>';
+  return owLine(pts, "w", "#4fbf7a", "Your money") + '<div style="height:10px"></div>' + (owLine(pts, "c", "#5aa9ff", "Club cash") || "");
+}
+const owDelta = (v) => (v ? `<b class="${v > 0 ? "owup" : "owdn"}">${v > 0 ? "+" : "-"}${Math.abs(v).toFixed(1)}</b>` : '<span class="dim">0</span>');
+function owHistory(st) {
+  const h = st.hist || [], lg = h.filter((x) => x.champ).length, cups = h.reduce((a, x) => a + x.cups.filter((c) => c.res === "Winners").length, 0), fin = h.filter((x) => x.cups.some((c) => c.res === "Runners-up")).length;
+  const best = h.filter((x) => x.finish).sort((a, b) => a.finish - b.finish)[0];
+  const ord = (n) => n + (["th", "st", "nd", "rd"][(n % 100 > 10 && n % 100 < 14) ? 0 : Math.min(n % 10, 4) % 4] || "th");
+  return `<div class="card"><h3>Honours <small>${st.name ? esc(st.name) : ""}</small></h3>
+    <div class="owhon"><div><b>${lg}</b><span>League titles</span></div><div><b>${cups}</b><span>Cups won</span></div><div><b>${fin}</b><span>Cup finals lost</span></div><div><b>${best ? ord(best.finish) : "-"}</b><span>Best finish</span></div></div>
+    ${h.length ? h.slice().reverse().map((x) => `<div class="row"><span><b>S${x.season}</b> <span class="small">${esc(x.club)}</span></span><span class="small">${x.finish ? ord(x.finish) : "-"}${x.champ ? ' <b style="color:#e0b44f">&#9733; Champions</b>' : ""}${x.cups.map((c) => `<br>${c.res === "Winners" ? '<b style="color:#e0b44f">&#9733;</b> ' : ""}${esc(c.name)}: ${c.res}`).join("")}</span></div>`).join("") : '<div class="dim small" style="margin-top:6px">Your first season is not finished yet. Honours and finishes appear here after each season.</div>'}</div>
+    ${st.clubs && st.clubs.length ? `<div class="card"><h3>Clubs you have owned</h3>${st.clubs.map((c) => `<div class="row"><span>${esc(c.name || c.club || "")}</span><span class="dim small">S${c.from || ""}${c.to ? " to S" + c.to : " to now"}${c.how2 ? " &middot; " + esc(c.how2) : ""}</span></div>`).join("")}</div>` : ""}`;
+}
 // ---- hub ----
 function owHub(st, sc) {
   const h = STATUS.header, off = !!h.flow, p = st.pressure;
@@ -14658,7 +14757,7 @@ async function owWindow(st) {
       <button class="btn wide" id="ow-round">${R.round < R.rounds ? "Next week" : "End talks and open the window"}</button></div>`;
   }
   const W = st.window; if (!W || !W.open) return `<div class="card"><h3>Transfer window</h3><div class="dim small">The window opens after the season ends. ${STATUS.header.flow ? "It is closed now." : "Play the season first."}</div></div>`;
-  const deals = W.deals.map((d) => `<div class="row ow-deal"><span class="rt"><b>${esc(d.name)}</b> ${ovr(d.ovr)} <span class="dim small">${d.pos} &middot; ${d.age} &middot; coach sees potential ${d.pot}</span><div class="meta">${esc(d.tag)} &middot; from ${clubLink(d.club)}<br>${owM(d.fee)} fee &middot; ${owM(d.wage)}/yr &middot; ${d.years} yr</div></span>
+  const deals = W.deals.map((d) => `<div class="row ow-deal"><span class="rt"><b>${esc(d.name)}</b> ${ovr(d.ovr)} <span class="dim small">${d.pos} &middot; ${d.age} &middot; coach sees potential ${d.pot}</span><div class="meta">${esc(d.tag)} &middot; ${owFit(d.fit)} &middot; from ${clubLink(d.club)}<br>${owM(d.fee)} fee &middot; ${owM(d.wage)}/yr &middot; ${d.years} yr</div></span>
     <span class="owbtns"><button class="pri mini" data-deal="approve" data-id="${d.id}">Approve</button><button class="mini" data-deal="counter" data-id="${d.id}" data-fee="${d.fee}">Counter</button><button class="mini" data-deal="veto" data-id="${d.id}">Veto</button></span></div>`).join("");
   const inbox = W.inbox.map((x) => `<div class="row ow-deal"><span class="rt"><b>${esc(x.name)}</b><div class="meta">${esc(x.club)} offer ${owM(x.fee)}</div></span><span class="owbtns"><button class="pri mini" data-ib="accept" data-uid="${x.uid}">Accept</button><button class="mini" data-ib="counter" data-uid="${x.uid}" ${x.once ? "disabled" : ""}>Ask more</button><button class="mini" data-ib="decline" data-uid="${x.uid}">Decline</button></span></div>`).join("");
   const wars = W.wars.map((x) => `<div class="row"><span><b>${esc(x.name)}</b> <span class="dim small">${esc(x.rival)} bid ${owM(x.bid)}</span></span><span class="dim small">beat it this round</span></div>`).join("");
@@ -14668,19 +14767,20 @@ async function owWindow(st) {
       <div class="owbtns"><button class="pri" id="ow-round">${W.deadline ? "Deadline passes: close window" : "Next round"}</button><button id="ow-endw">End window now</button></div></div>
     ${W.requests && W.requests.length ? `<div class="card ow-alert"><h3>Asked to leave</h3><div class="dim small">These players are unhappy and want out. Sell them (buyers pay a little less), or talk them round on the Squad tab. Keeping them hurts the players' mood.</div>${W.requests.map((x) => `<div class="row"><span><b>${esc(x.name)}</b> ${ovr(x.ovr)}</span><button class="mini" data-tab="squad">Open squad</button></div>`).join("")}</div>` : ""}
     ${wars ? `<div class="card ow-alert"><h3>Bidding wars</h3>${wars}</div>` : ""}
+    ${owNeeds(st)}
     <div class="card"><h3>Your coach's deals</h3>${deals || '<div class="dim small">No deals right now. The coach may find something next round.</div>'}</div>
     ${inbox ? `<div class="card"><h3>Offers for your players</h3>${inbox}</div>` : ""}
     <div class="card"><h3>Market</h3>
       <div class="owf"><input id="mq-q" placeholder="Search name" value="${esc(q.q)}"><select id="mq-pos"><option value="">Any</option>${["GK", "DEF", "MID", "FWD"].map((x) => `<option ${q.pos === x ? "selected" : ""}>${x}</option>`).join("")}</select>
       <select id="mq-sort">${[["ovr", "Best"], ["value", "Cheapest"], ["age", "Youngest"]].map(([k, t]) => `<option value="${k}" ${q.sort === k ? "selected" : ""}>${t}</option>`).join("")}</select></div>
       <div class="owf">${[["grads", "Graduates"], ["expiring", "Expiring"], ["free", "Free agents"]].map(([k, t]) => `<label class="check"><input type="checkbox" data-mqf="${k}" ${q[k] ? "checked" : ""}> ${t}</label>`).join("")}</div>
-      ${m.rows.map((p) => `<div class="row"><span class="rt">${playerLink(p)} ${ovr(p.ovr)} <span class="dim small">${p.pos} &middot; ${p.age}${p.coach_pot ? " &middot; coach: pot " + p.coach_pot : ""}${p.grad ? " &middot; <b>graduate</b>" : ""}</span><div class="meta">${p.club ? esc(p.club) + " (" + p.rel + ")" : "free agent"} &middot; value ${owM(p.value)} &middot; wage ${owM(p.wage)} &middot; ${p.contract}y${p.last ? " &middot; " + p.last.g + "g " + p.last.a + "a" : ""}</div></span>
-      <button class="mini ${p.locked ? "" : "pri"}" data-bid="${p.uid}" data-name="${esc(p.name)}" data-val="${p.value}" data-wage="${p.wage}" ${p.locked ? "disabled" : ""}>${p.locked ? "Locked" : p.war ? "War!" : p.club ? "Bid" : "Sign"}</button></div>`).join("") || '<div class="dim small">No players match.</div>'}</div>`;
+      ${m.rows.map((p) => `<div class="row"><span class="rt">${playerLink(p)} ${ovr(p.ovr)} <span class="dim small">${p.pos} &middot; ${p.age}${p.coach_pot ? " &middot; coach: pot " + p.coach_pot : ""}${p.grad ? " &middot; <b>graduate</b>" : ""}</span><div class="meta">${owFit(p.fit)} &middot; ${p.club ? esc(p.club) + " (" + p.rel + ")" : "free agent"} &middot; value ${owM(p.value)} &middot; wage ${owM(p.wage)} &middot; ${p.contract}y${p.last ? " &middot; " + p.last.g + "g " + p.last.a + "a" : ""}</div></span>
+      <button class="mini ${p.locked ? "" : "pri"}" data-bid="${p.uid}" data-name="${esc(p.name)}" data-val="${p.value}" data-wage="${p.wage}" data-pos="${p.pos}" data-role="${p.fit ? p.fit.role : ""}" data-repl="${p.fit && p.fit.repl ? esc(p.fit.repl.name) + " (" + p.fit.repl.ovr + ")" : ""}" data-age="${p.age}" data-ovr="${p.ovr}" data-yrs="${p.contract}" data-free="${p.club ? "" : "1"}" ${p.locked ? "disabled" : ""}>${p.locked ? "Locked" : p.war ? "War!" : p.club ? "Bid" : "Sign"}</button></div>`).join("") || '<div class="dim small">No players match.</div>'}</div>`;
 }
 // ---- squad (own players: sell, release; graduates) ----
 async function owSquad(st) {
   const d = await api("/api/ow_squad"), rows = d.rows.filter((p) => OWT.sq !== "grads" || p.grad), W = st.window && st.window.open;
-  return `<div class="card"><h3>Squad <small>${d.rows.length}/25</small></h3><nav class="chips"><button class="${OWT.sq === "all" ? "on" : ""}" data-sq="all">All</button><button class="${OWT.sq === "grads" ? "on" : ""}" data-sq="grads">Graduates</button></nav>
+  return `${owNeeds(st)}<div class="card"><h3>Squad <small>${d.rows.length}/25</small></h3><nav class="chips"><button class="${OWT.sq === "all" ? "on" : ""}" data-sq="all">All</button><button class="${OWT.sq === "grads" ? "on" : ""}" data-sq="grads">Graduates</button></nav>
     <div class="dim small" style="margin:6px 0">${W ? "Sell to another club, or release (you pay half the wages left). Graduates stay with you unless you sell or release them." : "Selling and releasing happen in the transfer window."}</div>
     ${rows.map((p) => `<div class="row"><span class="rt">${playerLink(p)} ${ovr(p.ovr)} <span class="dim small">${p.pos} &middot; ${p.age}${p.coach_pot ? " &middot; pot " + p.coach_pot : ""}${p.grad ? " &middot; <b>graduate</b>" : ""}${p.req ? " &middot; <b style=\"color:#e0b44f\">asked to leave</b>" : ""}</span><div class="meta">value ${owM(p.value)} &middot; wage ${owM(p.wage)} &middot; ${p.contract}y${p.req && W ? ` <button class="mini" data-pers="${p.uid}">Talk him round</button>` : ""}${p.offers ? "<br>" + p.offers.map((o) => `<button class="mini pri" data-sell="${p.uid}" data-club="${esc(o.club)}">${esc(o.club)} ${owM(o.fee)}</button>`).join(" ") + ` <button class="mini" data-ask="${p.uid}">Ask more</button>` : ""}</div></span>
       ${W && !p.offers ? `<span class="owbtns"><button class="mini" data-selll="${p.uid}">Sell</button><button class="mini" data-rel="${p.uid}" data-name="${esc(p.name)}">Release</button></span>` : ""}</div>`).join("")}</div>`;
@@ -14698,19 +14798,21 @@ async function owStaff(st) {
 // ---- money ----
 async function owMoney(st) {
   const sp = await api("/api/ow_sponsors"), c = st.club;
-  return `<div class="card"><h3>Two wallets</h3><div class="row"><span>Your money</span><b>${owM(st.wealth)}</b></div><div class="row"><span>Club cash</span><b>${owM(c.cash)}</b></div>
+  const mlog = (st.money || []).slice().reverse();
+  return `<div class="card"><h3>Money over time</h3>${owChart(st.money)}</div><div class="card"><h3>Two wallets</h3><div class="row"><span>Your money</span><b>${owM(st.wealth)}</b></div><div class="row"><span>Club cash</span><b>${owM(c.cash)}</b></div>
     <div class="row"><span>Put into the club (all time)</span><span>${owM(st.injected)}</span></div><div class="row"><span>Taken out (all time)</span><span>${owM(st.dividends)}</span></div>
     <div class="owf"><input type="number" id="ow-amt" placeholder="Amount (M)" style="width:120px"><button id="ow-inj">Put in</button><button id="ow-div">Take out</button></div>${c.inj_left !== null ? `<div class="dim small">Classic: ${owM(c.inj_left)} left to put in this year. The club must keep 15% of its income as cash.</div>` : '<div class="dim small">Sandbox: no limits.</div>'}</div>
     <div class="card"><h3>Sponsors</h3>${st.sponsors.map((s) => `<div class="row"><span>${esc(s.name)}</span><span>${owM(s.per_year)}/yr &middot; ${s.left}y left</span></div>`).join("") || '<div class="dim small">None signed.</div>'}
       ${sp.rows.map((s) => `<div class="row"><span class="rt"><b>${esc(s.name)}</b><div class="meta">${esc(s.note)}</div></span><span>${owM(s.per_year)}/yr &middot; ${s.years}y <button class="mini pri" data-sp="${s.id}">Sign</button></span></div>`).join("")}</div>
     <div class="card"><h3>Lifestyle <small>status ${st.status}</small></h3><div class="dim small">Money you spend on yourself. Fans notice, and so does your reputation.</div>${st.lifestyle.map((l) => `<div class="row"><span>${esc(l.label)}</span><span>${owM(l.cost)} <button class="mini" data-life="${l.id}" ${l.owned ? "disabled" : ""}>${l.owned ? "Owned" : "Buy"}</button></span></div>`).join("")}</div>
+    <div class="card"><h3>Money log <small>newest first</small></h3><div class="dim small">Every change to your wealth and the club's cash.</div>${mlog.slice(0, 40).map((m) => `<div class="row owml"><span class="small">${esc(m.t)}<div class="dim small">S${m.s}</div></span><span class="owd"><span class="dim small">You</span> ${owDelta(m.dw)}<br><span class="dim small">Club</span> ${owDelta(m.dc)}</span></div>`).join("") || '<div class="dim small">Nothing yet.</div>'}</div>
     <div class="card"><h3>Your ledger</h3><div class="dim small">Your income swings from year to year.</div>${st.ledger.slice().reverse().map((l) => `<div class="row"><span>S${l.season}${l.club ? " &middot; " + esc(l.club) : ""}</span><span class="small">income ${owM(l.income)} &middot; divs ${owM(l.dividends)} &middot; in ${owM(l.injections)} &middot; worth ${owM(l.wealth)}</span></div>`).join("")}</div>`;
 }
 function owBoard(st) {
   const p = st.pressure, steps = ["Calm", "Concern", "Pressure", "Buyout offers"];
   return `<div class="card"><h3>Who is watching</h3>${owBar(p.board, "Board", "The most powerful group. The board decides whether you stay.")}${owBar(p.fans, "Fans", "They have the least power but hit tickets and sponsors.")}${owBar(p.players, "Players", "Unhappy players make the board uneasy, unless it is only about money and the team is winning.")}</div>
     <div class="card"><h3>The ladder</h3>${steps.map((s, i) => `<div class="row"><span style="${i === p.ladder ? "font-weight:800" : "opacity:.6"}">${i === p.ladder ? "&#9658; " : ""}${s}</span></div>`).join("")}<div class="dim small" style="margin-top:6px">Nobody can force you out. At the top of the ladder the board offers to buy you out, and each offer you refuse is lower than the last. A club that keeps losing money ends in administration.</div></div>
-    <div class="card"><h3>Reputation <small>${st.rep}</small></h3><div class="dim small">Titles raise it. Administration costs a lot. Bigger clubs need a higher reputation to buy.</div></div>`;
+    <div class="card"><h3>Reputation <small>${st.rep}</small></h3><div class="dim small">Titles raise it. Administration costs a lot. Bigger clubs need a higher reputation to buy.</div></div>${owHistory(st)}`;
 }
 // ---- wiring ----
 function owWire(st) {
@@ -14746,6 +14848,7 @@ function owWire(st) {
   const mq = (k, el, ev) => { const e = $(el); if (e) e[ev] = () => { OWT.mq[k] = e.type === "checkbox" ? e.checked : e.value; route(); }; };
   mq("q", "#mq-q", "onchange"); mq("pos", "#mq-pos", "onchange"); mq("sort", "#mq-sort", "onchange");
   document.querySelectorAll("[data-mqf]").forEach((c) => (c.onchange = () => { OWT.mq[c.dataset.mqf] = c.checked; route(); }));
+  document.querySelectorAll("[data-needpos]").forEach((r) => (r.onclick = () => { OWT.mq.pos = r.dataset.needpos; if (OWT.tab !== "window") location.hash = "#/owner/window"; else route(); }));
   document.querySelectorAll("[data-pers]").forEach((b) => (b.onclick = async () => { const pv = await owPost("/api/ow_persuade", { uid: +b.dataset.pers }); if (!pv) return; if (!confirm(pv.msg + "\nTry it?")) return; const r = await owPost("/api/ow_persuade", { uid: +b.dataset.pers, confirm: true }); if (r) { toast(r.msg, r.status === "stays"); await route(); } }));
   document.querySelectorAll("[data-cc]").forEach((b) => (b.onclick = async () => {
     const a = b.dataset.cc; let body = { action: a === "renewc" ? "renew" : a };
@@ -14770,17 +14873,25 @@ function owWire(st) {
   document.querySelectorAll("[data-life]").forEach((b) => (b.onclick = () => go("/api/ow_life", { item: b.dataset.life })));
 }
 function owBidDialog(d) {
-  const val = +d.val, wage = +d.wage;
-  openModal(`<div class="ow-dlg"><h3>${esc(d.name)}</h3><div class="dim small">Fair value ${owM(val)}. Expect to pay more. Rival clubs may jump in.</div>
-    <div class="field"><label>Fee (M)</label><input type="number" id="bd-fee" value="${(val * 1.25).toFixed(1)}" step="0.5"></div>
-    <div class="field"><label>Wage per year (M)</label><input type="number" id="bd-wage" value="${(wage * 1.1).toFixed(1)}" step="0.5"></div>
-    <div class="field"><label>Years</label><input type="number" id="bd-yrs" value="3" min="1" max="5"></div><div id="bd-msg" class="small" style="margin:8px 0"></div>
+  const val = +d.val, wage = +d.wage, free = d.free === "1", st = OWT.ST, n = st && st.needs ? st.needs.n : null;
+  const sl = (id, label, v, min, max, step, fmt) => `<div class="field owsl"><label>${label} <b id="${id}-v">${fmt(v)}</b></label><input type="range" id="${id}" min="${min}" max="${max}" step="${step}" value="${v}"></div>`;
+  const fee0 = Math.max(0.1, +(val * 1.25).toFixed(1)), wage0 = Math.max(0.1, +(wage * 1.1).toFixed(1)), feeMax = Math.max(5, Math.ceil(val * 3)), wMax = Math.max(1, Math.ceil(wage * 2.5));
+  openModal(`<div class="ow-dlg"><h3>${esc(d.name)} <span class="dim small">${esc(d.pos || "")} &middot; ${esc(d.age || "")} &middot; ${esc(d.ovr || "")}</span></h3>
+    <div class="owfitbox">${d.role ? `<span class="owfit ${d.role.toLowerCase()}">${esc(d.role)}</span> ${d.role === "Starter" ? "He would start" + (d.repl ? ", pushing out " + esc(d.repl) : "") : d.role === "Reserve" ? "He would be on the bench" : "He would sit outside the matchday squad"}.` : ""}${n !== null ? `<div class="dim small">Squad ${n} &rarr; ${n + 1} of 25${n >= 25 ? " (full: sell or release someone first)" : ""}</div>` : ""}</div>
+    <div class="dim small">Fair value ${owM(val)}. Expect to pay more. Rival clubs may jump in.</div>
+    ${free ? '<div class="dim small">Free agent: no fee, just wages.</div><input type="hidden" id="bd-fee" value="0">' : sl("bd-fee", "Fee", fee0, 0, feeMax, feeMax > 60 ? 0.5 : 0.1, (v) => owM(+v))}
+    ${sl("bd-wage", "Wage per year", wage0, 0, wMax, 0.1, (v) => owM(+v))}
+    ${sl("bd-yrs", "Years", 3, 1, 5, 1, (v) => v + " yr")}
+    <div id="bd-msg" class="small" style="margin:8px 0"></div>
     <div class="owbtns"><button class="pri" id="bd-go">Send offer</button><button id="bd-x">Close</button></div></div>`);
+  const bind = (id, fmt) => { const el = $("#" + id); el.oninput = () => ($("#" + id + "-v").textContent = fmt(+el.value)); };
+  if (!free) bind("bd-fee", (v) => owM(v)); bind("bd-wage", (v) => owM(v)); bind("bd-yrs", (v) => v + " yr");
+  const setv = (id, v, fmt) => { const el = $("#" + id); if (!$("#" + id + "-v")) return; if (+v > +el.max) el.max = Math.ceil(+v * 1.5); el.value = v; $("#" + id + "-v").textContent = fmt(+v); };
   $("#bd-x").onclick = closeModal;
   $("#bd-go").onclick = async () => {
     const r = await owPost("/api/ow_bid", { uid: +d.bid, fee: +$("#bd-fee").value, wage: +$("#bd-wage").value, years: +$("#bd-yrs").value }); if (!r) return;
     $("#bd-msg").innerHTML = `<b>${esc(r.msg || r.status)}</b>${r.ask ? " (they ask " + owM(r.ask) + ")" : ""}${r.need ? " (needs " + owM(r.need) + ")" : ""}${r.need_wage ? " (wage " + owM(r.need_wage) + ")" : ""}${r.patience !== undefined ? " &middot; patience left " + Math.max(0, r.patience) : ""}`;
-    if (r.ask) $("#bd-fee").value = r.ask; if (r.need) $("#bd-fee").value = r.need; if (r.need_wage) $("#bd-wage").value = r.need_wage;
+    if (r.ask) setv("bd-fee", r.ask, (v) => owM(v)); if (r.need) setv("bd-fee", r.need, (v) => owM(v)); if (r.need_wage) setv("bd-wage", r.need_wage, (v) => owM(v));
     if (r.status === "done") { setTimeout(async () => { closeModal(); await route(); }, 900); } else if (r.status === "locked") { await route(); }
   };
 }
