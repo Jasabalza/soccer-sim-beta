@@ -1205,6 +1205,16 @@ select { padding-right: 30px; }
 .scmode button { flex: 1; border-radius: 99px; background: none; color: var(--dim); font-weight: 700; }
 .scmode button.on { background: var(--accent); color: #06210f; }
 
+/* ---- Owner Mode (beta) ---- */
+.ow .owtop { display: flex; gap: 8px; margin: 8px 0; } .ow .owtop > div { flex: 1; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; display: flex; flex-direction: column; } .ow .owtop b { font-size: 17px; }
+.ow .owm { margin: 8px 0; } .ow .owm-t { display: flex; justify-content: space-between; font-size: 13px; } .ow .owm-b { height: 8px; background: var(--panel2); border-radius: 6px; overflow: hidden; margin-top: 3px; } .ow .owm-b i { display: block; height: 100%; border-radius: 6px; }
+.ow .owbtns { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; } .ow button.mini { padding: 4px 9px; font-size: 12px; min-height: 30px; }
+.ow .ow-deal { align-items: flex-start; gap: 8px; flex-wrap: wrap; } .ow .ow-alert { border-color: #e0b44f; }
+.ow .ow-speed { display: flex; gap: 6px; margin-bottom: 8px; } .ow .ow-speed button { flex: 1; } .ow .ow-speed button.on { background: var(--accent); color: #06210f; font-weight: 700; }
+.ow .owf { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 8px 0; } .ow .owf input, .ow .owf select { max-width: 150px; }
+.ow-back { display: grid; gap: 6px; margin: 10px 0; } .owb { display: flex; gap: 8px; align-items: center; border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; background: var(--panel2); }
+.ow-dlg { min-width: 260px; } .ow-dlg .field { margin: 8px 0; display: flex; justify-content: space-between; gap: 8px; align-items: center; } .ow-dlg input { width: 110px; }
+
 </style>
 
 <div id="top">
@@ -2481,6 +2491,7 @@ $mods["market"] = (function () {
     if (globalThis.__NO_RULES) return true;           // test switch: the old behaviour
     why = null;
     const seller = p.club;
+    if (w.ow && $mods.owner.blocked(w, seller, buyer)) return false;      // owner mode: the owner trades for himself
     const R = $mods.rivals.intensity(w, seller, buyer);
     const E = eliteSet(w, kind), top = E.has(seller) && E.has(buyer);
     const up = underperforming(w, p);
@@ -2516,7 +2527,8 @@ $mods["bids"] = (function () {
     for (const n of w.clubs.keysArr()) { by[n] = []; pay[n] = 0; attr[n] = w.attr(n); }
     for (const p of w.players) if (p.club && by[p.club]) { by[p.club].push(p); pay[p.club] += p.wage; }
     for (const n of w.clubs.keysArr()) { const o = by[n].map((p) => p.ovr).sort((a, b) => b - a); floor[n] = o.length >= 11 ? o[10] : 0; }
-    const pool = w.players.filter((p) => p.club && by[p.club] && p.age <= 34 && p.ovr >= 64);
+    const own = w.ow && w.ow.club ? w.ow.club : null;      // owner mode: the owner club neither sells nor bids here
+    const pool = w.players.filter((p) => p.club && by[p.club] && p.club !== own && p.age <= 34 && p.ovr >= 64);
     if (!pool.length) return 0;
     const weight = (p) => Math.pow(Math.max(1, w.fee_for(p)), 0.8) * (p.contract <= 1 ? 2 : 1) * (w.clubs.get_(p.club).get("debt", 0) > 0 ? 2 : 1);
     const picks = rng.choices(pool, pool.map(weight), $kw({ "k": cfg.bid_lots }));
@@ -2527,7 +2539,7 @@ $mods["bids"] = (function () {
       const wageAsk = wageFor(p);
       const cand = [];
       for (const b of w.clubs.keysArr()) {
-        if (b === seller) continue;
+        if (b === seller || b === own) continue;
         const B = w.clubs.get_(b), funds = B.get_("funds");
         if (attr[b] < attr[seller] - 6 || p.ovr < floor[b] + 1 || funds < ask0 || by[b].length >= 27) continue;
         if (pay[b] + wageAsk > cfg.wage_cap * B.get_("budget")) continue;
@@ -5858,6 +5870,592 @@ function apply(w, body, mx) {
 return {EditError: EditError, POS: POS, _flt: _flt, _int: _int, _set_ovr: _set_ovr, _shift_players: _shift_players, apply: apply, refresh_eff: refresh_eff};
 })();
 
+// Owner Mode (beta). Plain JS. You are the club OWNER: two wallets (club cash vs your own wealth), a yearly transfer window with six rounds,
+// coaches who bring you deals, and pressure from fans, players and the board. All state lives on the world as `w.ow` (a plain object), so a
+// save keeps the run. Every hook into the sim is inert when `w.ow` is missing, so normal worlds are unchanged. Money here is in euros (millions).
+// Randomness is keyed (a hash of seed + season + player + round + attempt), never a running RNG: reloading a save gives the same answers.
+$mods["owner"] = (function () {
+  const H = (s) => $crc32($utf8(s)) / 4294967296;
+  const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
+  const r1 = (x) => Math.round(x * 10) / 10, r2 = (x) => Math.round(x * 100) / 100;
+  const ROUNDS = 6;                       // tunable: the last round is deadline day
+  const PATIENCE = 3, COUNTERS = 2;
+  const BACK = {
+    selfmade: { label: "Self-made", age: 32, wealth: 700, income: 35, rep: 20, blurb: "Built a company young. Little money, lots of time." },
+    trust:    { label: "Trust fund", age: 35, wealth: 1200, income: 50, rep: 45, blurb: "The club has been in your family for generations.", inherit: true },
+    founder:  { label: "Founder", age: 42, wealth: 2000, income: 70, rep: 40, blurb: "A tech founder with a big exit." },
+    fan:      { label: "Local fan", age: 48, wealth: 500, income: 25, rep: 15, blurb: "Made money locally and wants to save the club you grew up with." },
+    veteran:  { label: "Veteran", age: 62, wealth: 4000, income: 120, rep: 60, blurb: "A lot of money, not much time." },
+  };
+  const LIFE = { mansion: { label: "Mansion", cost: 25, status: 2 }, jet: { label: "Private jet", cost: 40, status: 3 }, yacht: { label: "Superyacht", cost: 80, status: 5 } };
+  const MEMBER = new Set(["Real Madrid", "Barcelona", "Athletic Club", "Osasuna"]);
+  const X = (w) => w.cfg.money_x;
+  const club = (w) => (w.ow && w.ow.club ? w.clubs.get(w.ow.club) : null);
+  const key = (w, ...a) => w.seed + "|" + w.season + "|" + a.join("|");
+  const uidMap = (w) => { w.ensure_uids(); const m = new Map(); for (const p of w.players) m.set(p.uid, p); return m; };
+  const find = (w, uid) => { w.ensure_uids(); for (const p of w.players) if (p.uid === uid) return p; return null; };
+  const fail = (m, c) => { throw $new($mods.app_v11.ApiError, [m, c === undefined ? 400 : c]); };
+  const wageFor = (p) => $mods.sim_core.wage_for(p.ovr, p.age);
+  const log = (w, t) => { w.ow.feed.unshift({ season: w.season, t }); if (w.ow.feed.length > 60) w.ow.feed.length = 60; };
+
+  // ---- values --------------------------------------------------------------------------------------------------------------------------
+  const fair = (w, p) => w.fee_for(p) * X(w) * (p.contract <= 1 ? 0.6 : 1);           // expiring contracts are cheaper
+  const squadOf = (w, n) => w.players.filter((p) => p.club === n);
+  const payroll = (w, n) => squadOf(w, n).reduce((a, p) => a + p.wage, 0) * X(w);
+  const clubValue = (w, n) => { const c = w.clubs.get(n); return Math.max(0, 2.0 * c.get("income") * X(w) - c.get("debt", 0) * X(w)); };
+  const price = (w, n) => Math.round(clubValue(w, n) / 5) * 5;
+  const repNeed = (w, n) => clamp(Math.round(w.clubs.get(n).get("stature") - 30), 0, 70);
+  const memberOwned = (w, n) => MEMBER.has(n) || w.leagues.get(w.clubs.get(n).get("league")).get("country") === "Germany";
+  const rel = (w, n) => (w.ow.rel[n] || 0);
+  const relName = (v) => (v > 0.5 ? "Warm" : v < -0.5 ? "Cold" : "Neutral");
+  const stature = (w, n) => w.clubs.get(n).get("stature");
+
+  // a coach has three abilities besides prestige (which lifts the team on the pitch): finding players, developing the young, keeping veterans from fading
+  function ratings(w, co) {
+    const base = 25 + 0.65 * co.prestige, f = (k) => clamp(Math.round(base + 36 * (H(w.seed + "|cr|" + co.name + "|" + co.age + "|" + k) - 0.5)), 5, 99);
+    return { scout: f("s"), dev: f("d"), keep: f("k") };
+  }
+  const coachAsk = (w, co) => { const rt = ratings(w, co); return r2((0.4 + 0.1 * co.prestige + 0.03 * (rt.scout + rt.dev + rt.keep) / 3) * (co.personality === "money" ? 1.15 : 1) * (0.95 + 0.2 * H(w.seed + "|ca|" + co.name + "|" + co.age))); };
+  function coachInfo(w) {
+    const c = club(w); const co = c ? c.get("coach") : null;
+    if (!co) return { name: "No coach", prestige: 0, personality: "", scout: 0, dev: 0, keep: 0 };
+    const rt = ratings(w, co); return { name: co.name, prestige: Math.round(co.prestige), personality: co.personality, scout: rt.scout, dev: rt.dev, keep: rt.keep };
+  }
+  // what the coach says about a player's hidden potential: the better the coach, the smaller the error
+  function scoutPot(w, p) {
+    const co = coachInfo(w), amp = Math.max(0, (75 - co.scout) / 10);
+    return clamp(Math.round(p.pot + (H(w.seed + "|scout|" + p.uid + "|" + co.name) * 2 - 1) * amp), p.ovr, 99);
+  }
+  function publicRow(w, p) {
+    const c = w.clubs.get(p.club); const st = (p.stats && p.stats.length) ? p.stats[p.stats.length - 1] : null;
+    const isGrad = !!(c && (c.get("grads", []) || []).includes(p));
+    const row = { uid: p.uid, name: p.name, age: p.age, pos: p.pos, ovr: p.ovr, nat: p.nat, club: p.club || "", league: p.league || "", wage: r2(p.wage * X(w)), contract: p.contract,
+      value: r1(fair(w, p)), grad: isGrad, last: st ? { g: st[2], a: st[3] } : null, mine: !!(w.ow && p.club === w.ow.club) };
+    if (p.age <= 28) row.coach_pot = scoutPot(w, p);                 // only the coach sees potential
+    return row;
+  }
+
+  // ---- creating a run ------------------------------------------------------------------------------------------------------------------
+  function create(w, o) {
+    const b = BACK[o.backstory] || BACK.selfmade;
+    w.ow = { v: 1, name: String(o.name || "The Owner").slice(0, 30), back: o.backstory in BACK ? o.backstory : "selfmade", mode: o.mode === "sandbox" ? "sandbox" : "classic",
+      start_season: w.season, age: b.age, start_age: b.age, wealth: b.wealth, income: b.income, rep: b.rep, club: null, club_since: null, clubs: [], state: "start",
+      speed: "month", limit: 0, trust: 60, dec: 0, bankrupt: 0, buyout: null, ladder: 0, board: 60, fans: 55, players: 55, pl_money: 0, pl_perf: 0,
+      ledger: [], feed: [], rel: {}, sponsors: [], offers_s: [], life: [], status: 0, injected: 0, dividends: 0, inj_year: {}, div_year: {}, peak: b.wealth, start_wealth: b.wealth,
+      win: null, ended: null, titles: [], last_expect: null, debt_years: 0 };
+    log(w, "You become an owner: " + b.label + ", age " + b.age + ", " + r1(b.wealth) + "M of your own money.");
+    return w.ow;
+  }
+  function priceList(w) {
+    const o = w.ow, rows = [];
+    for (const n of w.clubs.keysArr()) {
+      const c = w.clubs.get(n), pr = price(w, n), need = repNeed(w, n), mem = memberOwned(w, n);
+      const afford = o.wealth * 0.85 >= pr, ok = o.rep >= need;
+      rows.push({ club: n, league: c.get("league"), stature: r1(c.get("stature")), income: r1(c.get("income") * X(w)), price: pr, need_rep: need, member: mem,
+        status: mem ? "member" : !ok ? "rep" : !afford ? "money" : "open", debt: r1(c.get("debt", 0) * X(w)) });
+    }
+    rows.sort((a, b) => b.stature - a.stature);
+    return rows;
+  }
+  function buy(w, name) {
+    const o = w.ow; if (o.ended) fail("This run is over.", 409); if (o.club) fail("You already own a club.", 409);
+    if (!w.clubs.has(name)) fail("unknown club", 404);
+    const row = priceList(w).find((r) => r.club === name), inh = BACK[o.back].inherit && o.clubs.length === 0;
+    if (row.member && !inh) fail(name + " is member-owned and not for sale.", 403);
+    if (inh) { if (!(row.stature >= 40 && row.stature <= 80)) fail("Pick a family club (mid-sized, not a giant).", 403); }
+    else {
+      if (row.status === "rep") fail("Your reputation (" + Math.round(o.rep) + ") is too low for " + name + " (needs " + row.need_rep + ").", 403);
+      if (row.status === "money") fail("You cannot afford " + name + " (price " + row.price + "M, you keep a 15% reserve).", 403);
+      o.wealth -= row.price;
+    }
+    const c = w.clubs.get(name); o.club = name; o.club_since = w.season; o.clubs.push({ club: name, from: w.season, to: null, how: inh ? "inherited" : "bought", paid: inh ? 0 : row.price });
+    o.state = "club"; o.board = 60; o.fans = 55; o.players = 55; o.ladder = 0; o.buyout = null; o.declines = 0; o.debt_years = 0; o.trust = 60;
+    log(w, (inh ? "You inherit " : "You buy ") + name + (inh ? "." : " for " + row.price + "M."));
+    if (o.state === "club" && !o.win) o.win = null;
+    return { ok: true };
+  }
+
+  // ---- owner money ---------------------------------------------------------------------------------------------------------------------
+  function dividend(w, amt) {
+    const o = w.ow, c = club(w); amt = Number(amt); if (!c) fail("No club.", 409); if (!(amt > 0)) fail("Enter an amount.");
+    const funds = c.get("funds") * X(w), floor = 0.15 * c.get("income") * X(w);
+    if (c.get("debt", 0) > 0) fail("The club has debt. It cannot pay dividends.", 409);
+    if (funds - amt < floor && o.mode === "classic") fail("Classic mode: the club must keep " + r1(floor) + "M in cash.", 409);
+    if (amt > funds) fail("The club does not have that much cash.", 409);
+    c.set("funds", c.get("funds") - amt / X(w)); o.wealth += amt; o.dividends += amt; o.div_year[w.season] = (o.div_year[w.season] || 0) + amt;
+    log(w, "Dividend: you take " + r1(amt) + "M out of the club."); return { ok: true };
+  }
+  function inject(w, amt) {
+    const o = w.ow, c = club(w); amt = Number(amt); if (!c) fail("No club.", 409); if (!(amt > 0)) fail("Enter an amount.");
+    if (amt > o.wealth) fail("You do not have that much.", 409);
+    if (o.mode === "classic") {
+      const cap = 0.25 * c.get("income") * X(w), used = o.inj_year[w.season] || 0;
+      if (used + amt > cap + 1e-9) fail("Classic mode: you can put in at most " + r1(cap) + "M a year (" + r1(cap - used) + "M left).", 409);
+    }
+    o.wealth -= amt; o.injected += amt; o.inj_year[w.season] = (o.inj_year[w.season] || 0) + amt;
+    let cash = c.get("funds") * X(w) + amt, debt = c.get("debt", 0) * X(w);
+    if (debt > 0) { const rep = Math.min(debt, cash); debt -= rep; cash -= rep; c.set("debt", debt / X(w)); }
+    c.set("funds", cash / X(w)); log(w, "You inject " + r1(amt) + "M into the club."); return { ok: true };
+  }
+  function lifestyle(w, item) {
+    const o = w.ow, L = LIFE[item]; if (!L) fail("unknown item"); if (o.life.includes(item)) fail("You already have that.", 409);
+    if (L.cost > o.wealth) fail("You cannot afford it.", 409);
+    o.wealth -= L.cost; o.life.push(item); o.status += L.status; log(w, "You buy a " + L.label.toLowerCase() + " (" + L.cost + "M). Fans notice."); return { ok: true };
+  }
+  function sponsorOffers(w) {
+    const o = w.ow, c = club(w); if (!c) return [];
+    if (o.offers_s && o.offers_s.season === w.season) return o.offers_s.list;
+    const base = c.get("income") * X(w), list = [];
+    const names = ["Nova Telecom", "Meridian Air", "Crestline Bank", "Atlas Motors", "Helio Energy", "Tidewater Beer", "Pinecone Games", "Orbit Pay"];
+    for (let i = 0; i < 3; i++) {
+      const h = H(key(w, "spons", i)), mult = (0.03 + 0.07 * h) * (0.8 + 0.004 * o.fans + 0.004 * o.status * 4), years = 1 + Math.floor(H(key(w, "sy", i)) * 4);
+      const nm = names[Math.floor(H(key(w, "sn", i)) * names.length)];
+      list.push({ id: i, name: nm, per_year: r1(base * mult), years, kind: i === 2 ? "player" : "cash", note: i === 2 ? "Wants a star: it will help you attract a player (lowers wage demands 8% this window)" : "Cash only" });
+    }
+    o.offers_s = { season: w.season, list }; return list;
+  }
+  function takeSponsor(w, id) {
+    const o = w.ow; const list = sponsorOffers(w), s = list.find((x) => x.id === Number(id)); if (!s) fail("No such offer.", 404);
+    if (o.sponsors.length >= 3) fail("You already have three sponsors.", 409);
+    if (o.sponsors.some((x) => x.name === s.name)) fail("Already signed.", 409);
+    o.sponsors.push({ name: s.name, per_year: s.per_year, left: s.years, kind: s.kind }); o.offers_s.list = list.filter((x) => x.id !== s.id);
+    log(w, "Sponsor signed: " + s.name + ", " + s.per_year + "M a year for " + s.years + " years."); return { ok: true };
+  }
+
+  // ---- the transfer window -----------------------------------------------------------------------------------------------------------------
+  function openWindow(w) {
+    const o = w.ow; if (!o.club) return;
+    const reqs = []; const pq = clamp(0.03 + 0.45 * Math.max(0, 48 - o.players) / 48 + (o.fans < 25 ? 0.06 : 0), 0.02, 0.5);
+    for (const p of squadOf(w, o.club).sort((x, y) => y.ovr - x.ovr)) if (p.ovr >= 60 && reqs.length < 3 && H(w.seed + "|req|" + w.season + "|" + p.uid) < pq) reqs.push(p.uid);
+    o.win = { req: reqs, season: w.season, round: 1, open: true, att: {}, pat: {}, cnt: {}, wars: {}, sale: {}, deals: [], inbox: [], done: [], dealId: 0, rounds: ROUNDS };
+    genRound(w);
+  }
+  const needWin = (w) => { const o = w.ow; if (!o || !o.club) fail("No club.", 409); if (o.reneg && !o.reneg.done) fail("Finish the contract talks first.", 409); if (!o.win || !o.win.open) fail("The transfer window is closed.", 409); return o.win; };
+  const deadline = (W) => W.round >= W.rounds;
+
+  // market price a seller wants (euro M) for this owner, this round
+  function reservation(w, p, W, attempt) {
+    const o = w.ow, me = o.club, seller = p.club, k = key(w, "res", p.uid, W.round, attempt);
+    const rivals = Math.floor(H(key(w, "riv", p.uid, W.round)) * (p.ovr >= 78 ? 3 : 2));
+    const sizeUp = stature(w, seller) > stature(w, me) + 15 ? 1.08 : 1.0;
+    let v = fair(w, p) * (1.05 + 0.25 * H(k)) * (1 + 0.08 * rivals) * sizeUp * [1.1, 1.05, 1.0, 0.97, 0.94][clamp(Math.round(rel(w, seller)) + 2, 0, 4)];
+    if (deadline(W)) v *= 0.96;
+    return { v, rivals };
+  }
+  function playerWage(w, p) {
+    const o = w.ow, me = o.club; let ask = wageFor(p) * X(w) * (1 + 0.15 * H(w.seed + "|wd|" + p.uid));
+    const gap = stature(w, me) - stature(w, p.club);
+    ask *= gap < -15 ? 1.15 : gap > 15 ? 0.92 : 1.0;
+    if (o.sponsors.some((s) => s.kind === "player")) ask *= 0.92;
+    return r2(ask);
+  }
+  function relShift(w, n, d) { w.ow.rel[n] = clamp((w.ow.rel[n] || 0) + d, -2, 2); }
+
+  function market(w, q) {
+    const o = w.ow, W = o.win; w.ensure_uids();
+    let rows = w.players.filter((p) => (q.free ? !p.club && p.age >= 17 : p.club && p.club !== o.club));
+    if (q.pos) rows = rows.filter((p) => p.pos === q.pos);
+    if (q.club) rows = rows.filter((p) => p.club === q.club);
+    if (q.grads) rows = rows.filter((p) => { const c = w.clubs.get(p.club); return (c.get("grads", []) || []).includes(p); });
+    if (q.expiring) rows = rows.filter((p) => p.contract <= 1);
+    if (q.minOvr) rows = rows.filter((p) => p.ovr >= +q.minOvr);
+    if (q.maxAge) rows = rows.filter((p) => p.age <= +q.maxAge);
+    if (q.q) { const s = String(q.q).toLowerCase(); rows = rows.filter((p) => p.name.toLowerCase().includes(s)); }
+    const by = q.sort || "ovr";
+    rows.sort((a, b) => (by === "age" ? a.age - b.age : by === "value" ? fair(w, a) - fair(w, b) : b.ovr - a.ovr || (a.name < b.name ? -1 : 1)));
+    return rows.slice(0, 60).map((p) => { const r = publicRow(w, p); r.locked = !!(W && (W.pat[p.club + "|" + p.uid] || PATIENCE) <= 0); r.war = !!(W && W.wars[p.uid]); r.rel = relName(rel(w, p.club)); return r; });
+  }
+  function bid(w, body) {
+    const W = needWin(w), o = w.ow, me = o.club; const p = find(w, +body.uid); if (!p || p.club === me) fail("Player not available.", 404);
+    if (!p.club) {        // a free agent: no fee, just terms
+      const W0 = playerWage(w, p), wg = Number(body.wage), yrs = clamp(Math.round(Number(body.years) || 2), 1, 5);
+      if (wg < 0.9 * W0) return { status: "terms", msg: p.name + " wants about " + W0 + "M a year.", need_wage: W0 };
+      if (squadOf(w, me).length >= 25) return { status: "full", msg: "Your squad is full (25). Sell or release someone first." };
+      p.club = me; p.league = club(w).get("league"); p.wage = wg / X(w); p.contract = yrs; p.prot = 0; p.pref = null;
+      W.done.push({ k: "buy", uid: p.uid, name: p.name, club: "free agent", fee: 0, round: W.round }); log(w, "Signed free agent " + p.name + " (" + p.ovr + ")."); return { status: "done", msg: p.name + " joins on a free.", fee: 0 };
+    }
+    const fee = Number(body.fee), wage = Number(body.wage), years = clamp(Math.round(Number(body.years) || 3), 1, 5);
+    if (!(fee > 0)) fail("Enter a fee."); const seller = p.club, pk = seller + "|" + p.uid;
+    const pat = W.pat[pk] === undefined ? PATIENCE : W.pat[pk];
+    if (pat <= 0) return { status: "locked", msg: seller + " will not talk about " + p.name + " again this window." };
+    W.att[p.uid] = (W.att[p.uid] || 0) + 1; const att = W.att[p.uid];
+    // an open war: beat the rival's bid and it is done
+    const war = W.wars[p.uid];
+    const R = reservation(w, p, W, war ? 0 : Math.min(att, 3)), res = Math.max(R.v, war ? war.bid : 0);
+    if (war && fee < war.bid) return { status: "war", msg: war.rival + " have bid " + r1(war.bid) + "M. Beat it before the round ends.", need: r1(war.bid) };
+    const untouch = stature(w, seller) > stature(w, me) + 10 && squadOf(w, seller).sort((a, b) => b.ovr - a.ovr).indexOf(p) < 3 && H(key(w, "un", p.uid)) < 0.4;
+    const q = fee / res;
+    if (untouch && fee < 2.2 * fair(w, p)) { W.pat[pk] = pat - 1; relShift(w, seller, -0.1); return { status: "notsale", msg: seller + " say " + p.name + " is not for sale.", patience: W.pat[pk] }; }
+    if (q >= 1) {
+      const W0 = playerWage(w, p);
+      if (wage < 0.9 * W0) return { status: "terms", msg: p.name + " wants about " + W0 + "M a year in wages.", need_wage: W0, fee_ok: true };
+      if (!war && !W.wars[p.uid] && H(key(w, "war", p.uid, W.round, att)) < clamp(0.08 + 0.12 * R.rivals + (p.ovr >= 80 ? 0.1 : 0), 0, 0.5) && !deadline(W)) {
+        const riv = rivalFor(w, p), b = r1(fee * 1.1);
+        if (riv) { W.wars[p.uid] = { rival: riv, bid: b, round: W.round }; return { status: "war", msg: riv + " have jumped in with " + b + "M. Raise your bid before the round ends.", need: b }; }
+      }
+      return finishBuy(w, p, fee, wage, years, W);
+    }
+    if (q >= 0.88) {
+      W.cnt[p.uid] = (W.cnt[p.uid] || 0) + 1;
+      if (W.cnt[p.uid] > COUNTERS) { W.pat[pk] = pat - 1; return { status: "final", msg: seller + " will not move again. Their last price was " + r1(res) + "M.", ask: r1(res), patience: W.pat[pk] }; }
+      return { status: "counter", msg: seller + " want " + r1(res) + "M.", ask: r1(res), patience: pat };
+    }
+    if (q >= 0.65) { W.pat[pk] = pat - 1; relShift(w, seller, -0.05); return { status: "no", msg: seller + " are not interested at that price.", patience: W.pat[pk] }; }
+    W.pat[pk] = pat - 2; relShift(w, seller, -0.3);
+    return { status: "insulted", msg: seller + " are insulted by that offer.", patience: W.pat[pk] };
+  }
+  function rivalFor(w, p) {
+    const names = w.clubs.keysArr().filter((n) => n !== p.club && n !== w.ow.club && w.clubs.get(n).get("league") === p.league);
+    if (!names.length) return null; names.sort((a, b) => stature(w, b) - stature(w, a)); return names[Math.floor(H(key(w, "rv", p.uid)) * Math.min(4, names.length))];
+  }
+  function finishBuy(w, p, fee, wage, years, W, quiet) {
+    const o = w.ow, me = o.club, c = club(w), seller = p.club;
+    if (c.get("funds") * X(w) < fee) return { status: "nofunds", msg: "The club only has " + r1(c.get("funds") * X(w)) + "M in cash. Put money in or lower the price.", need: r1(fee) };
+    if (squadOf(w, me).length >= 25) return { status: "full", msg: "Your squad is full (25). Sell or release someone first." };
+    const e = fee / X(w);
+    w._pay(me, seller, e); w._log_transfer(p, seller, me, e, "bid");
+    p.club = me; p.league = c.get("league"); p.wage = wage / X(w); p.contract = years; p.prot = 0; p.pref = null;
+    relShift(w, seller, 0.25); delete W.wars[p.uid];
+    W.done.push({ k: "buy", uid: p.uid, name: p.name, club: seller, fee: r1(fee), round: W.round });
+    log(w, "Signed " + p.name + " (" + p.ovr + ") from " + seller + " for " + r1(fee) + "M."); w.news("transfer", me + " sign " + p.name + " (OVR " + p.ovr + ") from " + seller);
+    return { status: "done", msg: p.name + " joins for " + r1(fee) + "M.", fee: r1(fee) };
+  }
+  function release(w, uid) {
+    const W = needWin(w), o = w.ow, p = find(w, +uid); if (!p || p.club !== o.club) fail("Not your player.", 404);
+    const cost = 0.5 * p.wage * X(w) * p.contract, c = club(w);
+    c.set("funds", c.get("funds") - cost / X(w)); p.club = null; p.pref = null; log(w, "Released " + p.name + " (settlement " + r1(cost) + "M).");
+    return { ok: true, cost: r1(cost) };
+  }
+
+  // ---- selling -------------------------------------------------------------------------------------------------------------------------
+  function sellOffers(w, p, W, tries) {
+    const o = w.ow, V = fair(w, p), out = [];
+    for (const n of w.clubs.keysArr()) {
+      if (n === o.club || n === p.club) continue; const c = w.clubs.get(n);
+      if (c.get("funds") * X(w) < V * 0.7 || squadOf(w, n).length >= 25) continue;
+      const sq = squadOf(w, n).map((x) => x.ovr).sort((a, b) => b - a), floor = sq.length >= 11 ? sq[10] : 0;
+      if (p.ovr < floor + 1) continue;
+      const h = H(key(w, "sell", p.uid, n, W.round, tries)), want = (p.ovr - floor) + 6 * h;
+      out.push({ club: n, fee: r1(Math.min(c.get("funds") * X(w), V * (0.8 + 0.4 * h) * (1 + 0.04 * tries) * ((W.req || []).includes(p.uid) ? 0.92 : 1))), want: want + ((W.req || []).includes(p.uid) ? 2 : 0), round: W.round });
+    }
+    out.sort((a, b) => b.want - a.want || (a.club < b.club ? -1 : 1)); return out.slice(0, 3).map(({ club, fee, round }) => ({ club, fee, round }));
+  }
+  function sell(w, uid) {
+    const W = needWin(w), o = w.ow, p = find(w, +uid); if (!p || p.club !== o.club) fail("Not your player.", 404);
+    const offers = sellOffers(w, p, W, 0);
+    W.sale[p.uid] = { offers, tries: 0, name: p.name }; return { offers, msg: offers.length ? "" : "Nobody wants " + p.name + " at the moment." };
+  }
+  function sellReply(w, body) {
+    const W = needWin(w), o = w.ow, p = find(w, +body.uid), S = p && W.sale[p.uid]; if (!S) fail("No offers for him.", 404);
+    if (body.action === "ask") {
+      if (S.tries >= 2) return { offers: S.offers, msg: "Nobody will pay more." };
+      S.tries++; const next = sellOffers(w, p, W, S.tries); S.offers = next.filter((x) => H(key(w, "walk", p.uid, x.club, S.tries)) > 0.3);
+      return { offers: S.offers, msg: S.offers.length ? "" : "They all walked away." };
+    }
+    const off = S.offers.find((x) => x.club === body.club); if (!off) fail("That club has no offer.", 404);
+    return doSell(w, p, off, W);
+  }
+  function doSell(w, p, off, W) {
+    const o = w.ow, e = off.fee / X(w), me = o.club;
+    if (w.clubs.get(off.club).get("funds") < e) { if (W.sale[p.uid]) W.sale[p.uid].offers = W.sale[p.uid].offers.filter((x) => x.club !== off.club); return { status: "nofunds", msg: off.club + " can no longer afford it." }; }
+    w._pay(off.club, me, e); w._log_transfer(p, me, off.club, e, "bid");
+    p.club = off.club; p.league = w.clubs.get(off.club).get("league"); p.contract = Math.max(2, p.contract); p.prot = 0; p.pref = null;
+    relShift(w, off.club, 0.25); delete W.sale[p.uid]; W.done.push({ k: "sell", uid: p.uid, name: p.name, club: off.club, fee: off.fee, round: W.round });
+    log(w, "Sold " + p.name + " (" + p.ovr + ") to " + off.club + " for " + off.fee + "M."); w.news("transfer", off.club + " sign " + p.name + " (OVR " + p.ovr + ") from " + me);
+    return { status: "done", msg: p.name + " sold for " + off.fee + "M.", fee: off.fee };
+  }
+
+  function persuade(w, b) {
+    const W = needWin(w), o = w.ow, p = find(w, +b.uid); if (!p || p.club !== o.club || !(W.req || []).includes(p.uid)) fail("He has not asked to leave.", 404);
+    const raise = p.wage * 0.25 * X(w), c = club(w);
+    if (b.confirm !== true) return { status: "preview", cost: r2(raise), chance: 50, msg: "A 25% raise (" + r2(raise) + "M a year) gives a 50% chance he stays." };
+    p.wage *= 1.25; if (H(key(w, "pers", p.uid, W.round)) < 0.5) { W.req = W.req.filter((u) => u !== p.uid); log(w, p.name + " withdraws his transfer request."); return { status: "stays", msg: p.name + " agrees to stay." }; }
+    return { status: "no", msg: p.name + " takes the raise but still wants out." };
+  }
+
+  // ---- coach deals ---------------------------------------------------------------------------------------------------------------------
+  function genRound(w) {
+    const o = w.ow, W = o.win, c = club(w); if (!c) return; const co = coachInfo(w), me = o.club;
+    W.inbox = W.inbox.filter((x) => false);
+    // offers for your players
+    const mine = squadOf(w, me).filter((p) => p.ovr >= 66).sort((a, b) => b.ovr - a.ovr);
+    for (let i = 0; i < Math.min(2, mine.length); i++) {
+      const p = mine[Math.floor(H(key(w, "in", W.round, i)) * Math.min(8, mine.length))];
+      if (!p || W.inbox.some((x) => x.uid === p.uid) || H(key(w, "ino", W.round, i, p.uid)) > 0.45) continue;
+      const offs = sellOffers(w, p, W, 0); if (offs.length) W.inbox.push({ uid: p.uid, name: p.name, club: offs[0].club, fee: offs[0].fee, once: false });
+    }
+    // coach deals (agreed in principle), unrequested bargains for the cheapest talent
+    W.deals = W.deals.filter((d) => d.round >= W.round - 1 && d.live);
+    if (H(key(w, "cd", W.round)) < clamp(0.3 + 0.006 * co.scout, 0, 0.9)) {
+      const xi = squadOf(w, me).map((p) => p.ovr).sort((a, b) => b - a), floor = xi.length >= 11 ? xi[10] : 55;
+      const pool = w.players.filter((p) => p.club && p.club !== me && p.age <= 31 && p.ovr >= floor - 1 && p.ovr <= (xi[0] || 70) + 4 && !W.deals.some((d) => d.uid === p.uid) && !W.done.some((d) => d.uid === p.uid));
+      pool.sort((a, b) => ((scoutPot(w, b) - b.ovr) * 1.5 + b.ovr - fair(w, b) * 0.1) - ((scoutPot(w, a) - a.ovr) * 1.5 + a.ovr - fair(w, a) * 0.1) || (a.uid - b.uid));
+      const p = pool[Math.floor(H(key(w, "cdp", W.round)) * Math.min(12, pool.length))];
+      if (p) {
+        const disc = 0.75 + 0.15 * (1 - co.scout / 100), bargain = p.contract <= 1;
+        W.deals.push({ id: ++W.dealId, uid: p.uid, name: p.name, age: p.age, pos: p.pos, ovr: p.ovr, pot: scoutPot(w, p), club: p.club, fee: r1(fair(w, p) * (bargain ? 1 : disc) * 1.1), wage: r2(playerWage(w, p) * 0.97), years: 3, round: W.round, live: true, tag: bargain ? "Bargain: contract running out" : "Agreed in principle" });
+      }
+    }
+  }
+  function dealPreview(w, d, counterFee) {
+    const o = w.ow, c = clamp(0.15 + 0.6 * (1 - counterFee / d.fee), 0.05, 0.95), roundsLeft = o.win.rounds - o.win.round;
+    return { collapse: counterFee >= d.fee ? 0 : r1(c), trust_loss: 6, relation: "-1 step with " + d.club, rounds_left: roundsLeft };
+  }
+  function dealAct(w, body) {
+    const W = needWin(w), o = w.ow; const d = W.deals.find((x) => x.id === +body.id && x.live); if (!d) fail("That deal is gone.", 404);
+    const p = find(w, d.uid); if (!p || !p.club) { d.live = false; fail("The player is no longer available.", 409); }
+    if (body.action === "preview") return dealPreview(w, d, Number(body.fee) || d.fee);
+    if (body.action === "veto") { d.live = false; o.trust = clamp(o.trust - 1, 0, 100); if (W.round < W.rounds && H(key(w, "back", d.id)) < 0.35) W.deals.push({ ...d, id: ++W.dealId, round: W.round + 1, live: true, tag: "The coach is back with it" }); return { status: "vetoed", msg: "Deal vetoed." }; }
+    if (body.action === "approve") { const r = finishBuy(w, p, d.fee, d.wage, d.years, W); if (r.status === "done") { d.live = false; o.trust = clamp(o.trust + 2, 0, 100); } return r; }
+    if (body.action === "counter") {
+      const f = Number(body.fee); if (!(f > 0)) fail("Enter a fee."); const pv = dealPreview(w, d, f);
+      o.trust = clamp(o.trust - 6, 0, 100); relShift(w, d.club, -0.5);
+      if (f < d.fee && H(key(w, "cc", d.id, f)) < pv.collapse) { d.live = false; relShift(w, d.club, -0.5); return { status: "collapsed", msg: d.club + " walked away: they thought the price was agreed." }; }
+      const r = finishBuy(w, p, Math.min(f, d.fee), d.wage, d.years, W); if (r.status === "done") d.live = false; return r;
+    }
+    fail("unknown action");
+  }
+  function inboxAct(w, body) {
+    const W = needWin(w), x = W.inbox.find((i) => i.uid === +body.uid); if (!x) fail("That offer is gone.", 404);
+    const p = find(w, x.uid); if (!p || p.club !== w.ow.club) { W.inbox = W.inbox.filter((i) => i !== x); fail("He is not yours any more.", 409); }
+    if (body.action === "decline") { W.inbox = W.inbox.filter((i) => i !== x); return { status: "declined" }; }
+    if (body.action === "counter") {
+      if (x.once) return { status: "no", msg: "They will not move again." };
+      x.once = true; if (H(key(w, "ic", x.uid, W.round)) < 0.55) { x.fee = r1(x.fee * 1.12); return { status: "counter", msg: x.club + " raise to " + x.fee + "M.", fee: x.fee }; }
+      W.inbox = W.inbox.filter((i) => i !== x); return { status: "walked", msg: x.club + " walked away." };
+    }
+    const r = doSell(w, p, { club: x.club, fee: x.fee }, W); W.inbox = W.inbox.filter((i) => i !== x); return r;
+  }
+  function autoApprove(w, W) {
+    const o = w.ow; if (!(o.limit > 0) || o.trust < 40) return;
+    for (const d of W.deals) { if (!d.live || d.fee > o.limit) continue; const p = find(w, d.uid); if (!p || !p.club) continue; const r = finishBuy(w, p, d.fee, d.wage, d.years, W); if (r.status === "done") { d.live = false; log(w, "Auto-approved by your limit: " + d.name + "."); } }
+  }
+  function nextRound(w) {
+    if (w.ow.reneg && !w.ow.reneg.done) return renegRound(w);
+    const W = needWin(w), o = w.ow; autoApprove(w, W);
+    for (const uid of Object.keys(W.wars)) {                  // unanswered wars: the rival signs him
+      const war = W.wars[uid], p = find(w, +uid);
+      if (p && p.club && p.club !== o.club && w.clubs.has(war.rival)) {
+        const e = war.bid / X(w), seller = p.club;
+        if (w.clubs.get(war.rival).get("funds") >= e) { w._pay(war.rival, seller, e); w._log_transfer(p, seller, war.rival, e, "bid"); p.club = war.rival; p.league = w.clubs.get(war.rival).get("league"); log(w, war.rival + " signed " + p.name + " for " + war.bid + "M. You were too slow."); }
+      }
+      delete W.wars[uid];
+    }
+    if (W.round >= W.rounds) return closeWindow(w);
+    W.round++; genRound(w); return { ok: true, round: W.round, deadline: deadline(W) };
+  }
+  function closeWindow(w) {
+    const o = w.ow, W = o.win; if (!W || !W.open) return { ok: true };
+    W.open = false; squadRules(w); return { ok: true, closed: true };
+  }
+  function squadRules(w) {
+    const o = w.ow, me = o.club; if (!me) return;
+    // squad rules: at most 25; at least 18 (the cheapest free agents fill the gap)
+    let sq = squadOf(w, me).sort((a, b) => a.ovr - b.ovr);
+    while (sq.length > 25) { const p = sq.shift(); p.club = null; p.pref = null; log(w, "Squad over 25: " + p.name + " released."); }
+    if (sq.length < 18) {
+      const fa = w.players.filter((p) => !p.club && p.age >= 17).sort((a, b) => b.ovr - a.ovr || a.uid - b.uid).slice(0, 60);
+      let need = 18 - sq.length; const c = club(w);
+      for (const p of fa) { if (!need) break; p.club = me; p.league = c.get("league"); p.wage = wageFor(p); p.contract = 2; p.pref = null; need--; log(w, "Free agent " + p.name + " signed to fill the squad."); }
+    }
+    w.recompute_clubs();
+  }
+
+
+  // ---- contract talks: two weeks before free agency, your expiring players ask for new terms ------------------------------------------------
+  function openReneg(w) {
+    const o = w.ow, me = o.club, all = squadOf(w, me).sort((a, b) => b.ovr - a.ovr), xs = all.filter((p) => p.contract <= 0), cut = all.length >= 15 ? all[14].ovr : 0;
+    if (!xs.length) { o.reneg = null; return openWindow(w); }
+    o.reneg = { round: 1, rounds: 2, done: false, list: xs.map((p) => ({ uid: p.uid, name: p.name, age: p.age, pos: p.pos, ovr: p.ovr, now: r2(p.wage * X(w)),
+      ask: r2(wageFor(p) * X(w) * (1 + 0.1 * H(w.seed + "|rn|" + p.uid)) * (o.players < 40 ? 1.1 : 1)), years: p.age >= 33 ? 1 : p.age >= 30 ? 2 : 3,
+      coach: p.ovr >= cut && p.age <= 34 ? "resign" : "letgo", state: "open", tries: 0, annoyed: 10, out: false })) };
+    // some players will not re-sign: the coach could not get a deal, the player just wants to leave. He starts high on the annoyed bar and asks a lot.
+    const pOut = clamp(0.06 + 0.4 * Math.max(0, 50 - o.players) / 50 + (o.ladder >= 2 ? 0.1 : 0), 0.04, 0.55);
+    for (const x of o.reneg.list) if (H(w.seed + "|rwo|" + w.season + "|" + x.uid) < pOut) { x.out = true; x.coach = "nodeal"; x.annoyed = 70; x.ask = r2(x.ask * 1.35); }
+    log(w, "Contract talks: " + xs.length + " players are out of contract. Two weeks before they reach free agency.");
+  }
+  function renegAct(w, b) {
+    const o = w.ow, R = o.reneg; if (!R || R.done) fail("No contract talks now.", 409);
+    const x = R.list.find((i) => i.uid === +b.uid && i.state === "open"), p = find(w, +b.uid); if (!x || !p) fail("That talk is closed.", 404);
+    const sign = (wage, yrs) => { p.wage = wage / X(w); p.contract = yrs; p.prot = 0; x.state = "signed"; x.wage = r2(wage); log(w, "Re-signed " + p.name + " (" + r2(wage) + "M, " + yrs + " yrs)."); return { status: "signed", msg: p.name + " signs a new deal.", wage: r1(wage) }; };
+    const years = clamp(Math.round(Number(b.years) || x.years), 1, 5);
+    if (b.action === "walk") { p.club = null; p.pref = null; x.state = "walked"; if (x.coach === "resign") o.trust = clamp(o.trust - 1, 0, 100); log(w, "You let " + p.name + " walk."); return { status: "walked", msg: p.name + " leaves on a free." }; }
+    const leave = (msg) => { p.club = null; p.pref = null; x.state = "walked"; log(w, p.name + " leaves: " + msg); return { status: "walked", msg: p.name + " " + msg }; };
+    const refuses = () => x.out && H(key(w, "rw", x.uid, x.tries)) < x.annoyed / 130;           // he wants out, whatever you offer
+    if (b.action === "approve") {
+      if (refuses()) { x.tries++; x.annoyed = Math.min(100, x.annoyed + 20); if (x.annoyed >= 100) return leave("will not stay. He wants to leave the club."); return { status: "no", msg: p.name + " is not interested in staying, whatever the money.", annoyed: x.annoyed }; }
+      if (x.coach === "resign") o.trust = clamp(o.trust + 1, 0, 100); return sign(x.ask, x.years);
+    }
+    if (b.action === "counter") {
+      const wage = Number(b.wage); if (!(wage > 0)) fail("Enter a wage.");
+      if (x.coach === "resign") o.trust = clamp(o.trust - 3, 0, 100);            // second-guessing the coach's agreed terms
+      if (!refuses() && wage >= x.ask * (0.9 + 0.07 * H(key(w, "rg", x.uid, x.tries)))) return sign(wage, years);
+      x.tries++; x.annoyed = Math.min(100, x.annoyed + 30);
+      if (x.annoyed >= 100) return leave(x.out ? "walks away. He never wanted to stay." : "is insulted and walks away.");
+      return { status: "no", msg: p.name + " wants about " + x.ask + "M." + (x.out ? " He is looking for the door." : " One more try."), ask: x.ask, annoyed: x.annoyed };
+    }
+    fail("unknown action");
+  }
+  function finishReneg(w, open) {
+    const o = w.ow, R = o.reneg; if (!R) return;
+    for (const x of R.list) if (x.state === "open") { const p = find(w, x.uid); if (p && p.club === o.club && p.contract <= 0) { p.club = null; p.pref = null; } x.state = "walked"; log(w, x.name + " runs down his contract and leaves."); }
+    R.done = true; if (open && o.club) openWindow(w);
+  }
+  function renegRound(w) { const R = w.ow.reneg; if (R.round < R.rounds) { R.round++; return { ok: true, talks: true, round: R.round }; } finishReneg(w, true); return { ok: true, talks: false, window: true }; }
+
+
+  // ---- staff: the coach, his abilities, his contract --------------------------------------------------------------------------------------------
+  function wageOfCoach(w) { const o = w.ow, c = club(w), co = c ? c.get("coach") : null; if (!co) return 0; if (o.coach_wage === undefined || o.coach_for !== co.name) { o.coach_wage = coachAsk(w, co); o.coach_for = co.name; } return o.coach_wage; }
+  function staffView(w) {
+    const o = w.ow, c = club(w), co = c ? c.get("coach") : null; w.ensure_coach_ids();
+    const row = (x) => ({ id: x.cid, name: x.name, age: x.age, prestige: Math.round(x.prestige), personality: x.personality, ...ratings(w, x), ask: coachAsk(w, x), contract: x.contract, titles: x.titles || 0 });
+    const cand = w.coach_pool.filter((x) => x.age <= 66).sort((a, b) => b.prestige - a.prestige || (a.name < b.name ? -1 : 1)).slice(0, 14).map(row);
+    return { current: co ? { ...row(co), wage: r2(wageOfCoach(w)), expired: co.contract <= 0 } : null, candidates: cand, annoyed: (o.staffTalk || {}).annoyed || 0 };
+  }
+  function coachAct(w, b) {
+    const o = w.ow, me = o.club, c = club(w); if (!me) fail("No club.", 409); w.ensure_coach_ids(); const co = c.get("coach");
+    const sev = co ? r2(0.5 * wageOfCoach(w) * Math.max(1, co.contract)) : 0;
+    if (b.action === "renew") {
+      if (!co || co.contract > 0) fail("His contract has not run out.", 409); const ask = coachAsk(w, co) * 1.1, T = o.staffTalk || (o.staffTalk = { annoyed: 10 });
+      const yrs = clamp(Math.round(Number(b.years) || 3), 1, 5), wage = b.counter ? Number(b.wage) : ask;
+      if (!b.counter || wage >= ask * (0.9 + 0.07 * H(key(w, "cr", T.annoyed)))) { co.contract = yrs; o.coach_wage = r2(wage); o.coach_for = co.name; o.staffTalk = null; log(w, "Coach " + co.name + " renews for " + yrs + " years."); return { status: "signed", msg: co.name + " stays." }; }
+      T.annoyed += 30; if (T.annoyed >= 100) { w._vacate(me, "left"); o.staffTalk = null; log(w, co.name + " leaves the club."); return { status: "left", msg: co.name + " walks away. You need a new coach." }; }
+      return { status: "no", msg: co.name + " wants about " + r2(ask) + "M a year.", ask: r2(ask), annoyed: T.annoyed };
+    }
+    if (b.action === "fire") { if (!co) fail("No coach.", 409); c.set("funds", c.get("funds") - sev / X(w)); w._vacate(me, "fired"); log(w, "You fire " + co.name + " (severance " + sev + "M)."); return { status: "fired", msg: "Fired. Severance " + sev + "M. Hire a new coach.", cost: sev }; }
+    if (b.action === "hire") {
+      const cand = w.coach_pool.find((x) => x.cid === +b.id); if (!cand) fail("That coach is not available.", 404);
+      const ask = coachAsk(w, cand), wage = Number(b.wage), yrs = clamp(Math.round(Number(b.years) || 3), 1, 5);
+      if (wage < ask * 0.92) return { status: "no", msg: cand.name + " wants about " + ask + "M a year.", ask };
+      if (co) { c.set("funds", c.get("funds") - sev / X(w)); w._vacate(me, "fired"); log(w, "You replace " + co.name + " (severance " + sev + "M)."); }
+      w.coach_pool = w.coach_pool.filter((x) => x !== cand); w._hire(me, cand); cand.contract = yrs; o.coach_wage = r2(wage); o.coach_for = cand.name; o.staffTalk = null;
+      log(w, "New coach: " + cand.name + "."); return { status: "hired", msg: cand.name + " takes over." };
+    }
+    fail("unknown action");
+  }
+  function beforeRollover(w) { const o = w.ow; if (!o || !o.club) return; o.snap = {}; for (const p of squadOf(w, o.club)) o.snap[p.uid] = p.ovr; }
+  function applyStaff(w) {
+    const o = w.ow, me = o.club, c = club(w); if (!me || !c.get("coach")) return; const ci = coachInfo(w); let up = 0, kept = 0;
+    for (const p of squadOf(w, me)) {
+      if (p.age <= 23 && p.ovr < p.pot && H(key(w, "dv", p.uid)) < 0.03 + 0.14 * ci.dev / 100) { p.ovr += 1; up++; }
+      else if (p.age >= 29 && o.snap && o.snap[p.uid] !== undefined && p.ovr < o.snap[p.uid] && H(key(w, "kp", p.uid)) < 0.1 + 0.45 * ci.keep / 100) { p.ovr += 1; kept++; }
+    }
+    o.snap = null; if (up || kept) log(w, "Your coach: " + up + " youngsters improved more than expected, " + kept + " veterans held their level.");
+    const wage = wageOfCoach(w); c.set("funds", c.get("funds") - wage / X(w)); o.staff_paid = wage;
+  }
+  function staffAuto(w) {      // a coach with no contract, or no coach at all, is sorted out for you when you move on
+    const o = w.ow, me = o.club, c = club(w); if (!me) return; let co = c.get("coach");
+    if (co && co.contract <= 0) coachAct(w, { action: "renew", years: 2 });
+    if (!c.get("coach")) { w.ensure_coach_ids(); const best = w.coach_pool.filter((x) => x.age <= 66).sort((a, b) => b.prestige - a.prestige)[0]; if (best) coachAct(w, { action: "hire", id: best.cid, wage: coachAsk(w, best), years: 2 }); }
+  }
+
+  // ---- season hook (called at the end of rollover) ---------------------------------------------------------------------------------------
+  function deathChance(age) { return clamp((age - 72) / 16, 0, 1) ** 1.2; }
+  function afterRollover(w, rec) {
+    const o = w.ow; if (!o || o.ended) return; const fin = rec.get("season"); w.ensure_uids();
+    o.reqKept = o.win && o.win.req && o.club ? o.win.req.filter((u) => { const q = find(w, u); return q && q.club === o.club; }).length : 0;
+    o.age += 1; for (const k of Object.keys(o.rel)) o.rel[k] *= 0.75;
+    const c = club(w);
+    // personal income swings from year to year
+    const swing = 0.4 + 1.4 * H(w.seed + "|inc|" + fin), inc = r1(o.income * swing), upkeep = o.life.reduce((a, k) => a + LIFE[k].cost * 0.05, 0);
+    o.wealth += inc - upkeep; let sp = 0, div = 0, injct = 0;
+    const row = { season: fin, income: inc, upkeep: r1(upkeep), sponsor: 0, dividends: r1(o.div_year[fin] || 0), injections: r1(o.inj_year[fin] || 0), club: o.club, profit: 0, finish: null };
+    if (c) {
+      const led = c.get("ledger", []), last = led.length ? led[led.length - 1] : null;
+      if (last && last.get_ ? last.get("season") === fin : last && last.season === fin) {
+        const get = (k) => (last.get_ ? last.get(k) : last[k]);
+        const payout = get("payout") || 0;                                    // the engine pays surplus cash out: an owner decides that himself
+        c.set("funds", c.get("funds") + payout); if (last.set) last.set("payout", 0); else last.payout = 0;
+        row.profit = r1((get("profit") || 0) * X(w)); row.revenue = r1((get("income") || 0) * X(w));
+      }
+      for (const s of o.sponsors) { c.set("funds", c.get("funds") + s.per_year / X(w)); sp += s.per_year; s.left--; }
+      o.sponsors = o.sponsors.filter((s) => s.left > 0); row.sponsor = r1(sp);
+      row.finish = c.get("last_finish", null); row.staff = r2(o.staff_paid || 0);
+      pressure(w, rec, c, row);
+    }
+    o.peak = Math.max(o.peak, o.wealth); row.wealth = r1(o.wealth); row.cash = c ? r1(c.get("funds") * X(w)) : 0; o.ledger.push(row); if (o.ledger.length > 40) o.ledger.shift();
+    o.trust += (60 - o.trust) * 0.15;
+    // death
+    if (H(w.seed + "|death|" + o.age) < deathChance(o.age)) return end(w, "death");
+    if (o.club) applyStaff(w);
+    if (o.club) openReneg(w);
+    sponsorOffers(w);
+  }
+  function pressure(w, rec, c, row) {
+    const o = w.ow, me = o.club, L = w.leagues.get(c.get("league")), size = L.get("clubs").length;
+    const exp = w.clubs.keysArr().filter((n) => w.clubs.get(n).get("league") === c.get("league")).sort((a, b) => stature(w, b) - stature(w, a)).indexOf(me) + 1;
+    const fin = c.get("last_finish", exp), res = clamp((exp - fin) / Math.max(3, size / 2), -1, 1);
+    const champ = rec.get("champs").get(c.get("league")) === me; const RS = rec.get("season");
+    if (champ) { o.titles.push({ season: RS, what: c.get("league") }); o.rep = clamp(o.rep + 5, 0, 100); } else if (fin <= 4) o.rep = clamp(o.rep + 1, 0, 100); else o.rep = clamp(o.rep + 0.3, 0, 100);
+    const income = c.get("income") * X(w), pay = payroll(w, me), bud = c.get("budget") * X(w), debt = c.get("debt", 0) * X(w);
+    const divShare = (o.div_year[RS] || 0) / Math.max(1, income);
+    o.fans = clamp(o.fans + (50 - o.fans) * 0.25 + 16 * res + (champ ? 10 : 0) + 0.5 * o.status - 6 * divShare * 10, 0, 100);
+    o.pl_perf = clamp(o.pl_perf * 0.5 + 15 * res, -30, 30);
+    o.pl_money = clamp((pay / Math.max(1, bud) - 0.5) * 40 - 15 * divShare * 10, -25, 15);
+    o.players = clamp(50 + o.pl_perf + o.pl_money - 4 * (o.reqKept || 0), 0, 100);
+    const feed = (res > 0 && o.pl_money < 0) ? o.pl_perf : o.pl_perf + o.pl_money;        // winning and only upset about money: the board stays neutral
+    const debtPen = clamp(debt / Math.max(1, income) * 40, 0, 30);
+    const target = 50 + 38 * res + 0.3 * (o.fans - 50) + 0.4 * feed - debtPen + (champ ? 10 : 0) - (res < 0.25 ? 60 * divShare : 0);
+    o.board = clamp(o.board * 0.55 + target * 0.45, 0, 100);
+    const off = Math.min(10, o.wealth / 400);                                               // richer owners get more patience
+    o.ladder = o.board < 22 - off ? 3 : o.board < 32 - off ? 2 : o.board < 42 - off ? 1 : 0;
+    const bad = debt > 0.8 * income; o.debt_years = bad ? o.debt_years + 1 : 0;
+    row.board = r1(o.board); row.fans = r1(o.fans); row.players = r1(o.players);
+    if (o.debt_years >= 2 || debt > 1.6 * income) { o.bankrupt++; log(w, me + " go into administration. You lose the club."); const lost = me; leave(w, "bankrupt"); o.rep = clamp(o.rep - 30, 0, 100); w.news("collapse", lost + " enter administration"); return; }
+    if (o.ladder === 3) {
+      o.declines = o.declines || 0; const v = clubValue(w, me), offer = Math.round(v * 0.9 * Math.pow(0.9, o.declines) / 5) * 5;
+      o.buyout = { offer, season: RS, counter: false }; log(w, "The board offers to buy you out: " + offer + "M.");
+    } else o.buyout = null;
+    if (o.ladder === 1) log(w, "The board is concerned."); if (o.ladder === 2) log(w, "The board is putting you under pressure.");
+    c.set("fans", c.get("fans") * (1 + 0.001 * (o.fans - 50)));
+  }
+  function leave(w, how) { const o = w.ow, h = o.clubs[o.clubs.length - 1]; if (h) { h.to = w.season; h.how2 = how; } o.club = null; o.state = "between"; o.win = null; o.buyout = null; o.sponsors = []; o.ladder = 0; }
+  function buyoutAct(w, action) {
+    const o = w.ow, b = o.buyout; if (!b || !o.club) fail("No offer.", 409);
+    if (action === "accept") { o.wealth += b.offer; log(w, "You accept the buyout: " + b.offer + "M."); leave(w, "sold"); return { ok: true, msg: "You sold the club for " + b.offer + "M. You can buy another." }; }
+    if (action === "counter") {
+      if (b.counter) fail("You can counter once.", 409); b.counter = true;
+      if (H(key(w, "bo", o.declines || 0)) < 0.5) { b.offer = Math.round(b.offer * 1.15 / 5) * 5; return { ok: true, msg: "The board agrees to " + b.offer + "M." }; }
+      o.board = clamp(o.board - 8, 0, 100); return { ok: true, msg: "The board refused and is angrier." };
+    }
+    if (action === "refuse") { o.declines = (o.declines || 0) + 1; o.buyout = null; return { ok: true, msg: "You refuse. The next offer will be lower." }; }
+    fail("unknown action");
+  }
+  function end(w, why) {
+    const o = w.ow; const years = w.season - o.start_season; o.ended = { why, season: w.season, age: o.age, years, wealth: r1(o.wealth), peak: r1(o.peak), start_wealth: o.start_wealth, injected: r1(o.injected), dividends: r1(o.dividends), titles: o.titles.length, clubs: o.clubs.length, bankrupt: o.bankrupt, rep: Math.round(o.rep) };
+    o.state = "ended"; if (o.club) leave(w, why); o.win = null; log(w, why === "death" ? "You die at " + o.age + "." : "You retire."); return o.ended;
+  }
+  function retire(w) { const o = w.ow; if (o.ended) fail("Already over.", 409); return end(w, "retired"); }
+
+  // ---- views ---------------------------------------------------------------------------------------------------------------------------
+  function view(w) {
+    const o = w.ow; if (!o) return { active: false };
+    const c = club(w), W = o.win, co = coachInfo(w);
+    const out = { active: true, state: o.state, name: o.name, back: BACK[o.back].label, mode: o.mode, age: o.age, wealth: r1(o.wealth), income: o.income, rep: Math.round(o.rep), season: w.season,
+      injected: r1(o.injected), dividends: r1(o.dividends), speed: o.speed, limit: o.limit, coach_expired: !!(c && c.get("coach") && c.get("coach").contract <= 0), no_coach: !!(c && !c.get("coach")), trust: Math.round(o.trust), life: o.life, status: o.status, feed: o.feed.slice(0, 25), ledger: o.ledger.slice(-15), ended: o.ended,
+      titles: o.titles, clubs: o.clubs, coach: co, sponsors: o.sponsors, backstories: Object.entries(BACK).map(([k, v]) => ({ id: k, ...v })), lifestyle: Object.entries(LIFE).map(([k, v]) => ({ id: k, ...v, owned: o.life.includes(k) })) };
+    if (c) {
+      const inc = c.get("income") * X(w);
+      out.club = { name: o.club, league: c.get("league"), cash: r1(c.get("funds") * X(w)), debt: r1(c.get("debt", 0) * X(w)), income: r1(inc), payroll: r1(payroll(w, o.club)), value: price(w, o.club), squad: squadOf(w, o.club).length,
+        inj_left: o.mode === "classic" ? r1(Math.max(0, 0.25 * inc - (o.inj_year[w.season] || 0))) : null };
+      out.pressure = { fans: Math.round(o.fans), players: Math.round(o.players), board: Math.round(o.board), ladder: o.ladder, ladder_name: ["Calm", "Concern", "Pressure", "Buyout offers"][o.ladder], money_only: o.pl_money < 0 && o.pl_perf > 0 };
+      out.buyout = o.buyout;
+    }
+    if (o.reneg && !o.reneg.done) out.reneg = o.reneg;
+    if (W) out.window = { requests: (W.req || []).map((u) => { const p = find(w, u); return p && p.club === o.club ? { uid: u, name: p.name, ovr: p.ovr } : null; }).filter(Boolean), open: W.open, round: W.round, rounds: W.rounds, deadline: deadline(W), deals: W.deals.filter((d) => d.live), inbox: W.inbox, wars: Object.entries(W.wars).map(([u, x]) => ({ uid: +u, name: (find(w, +u) || {}).name, ...x })), done: W.done.slice(-12) };
+    return out;
+  }
+  function squadView(w) {
+    const o = w.ow; if (!o.club) return { rows: [] }; w.ensure_uids(); const c = club(w), g = new Set((c.get("grads", []) || []).map((p) => p.uid));
+    return { rows: squadOf(w, o.club).sort((a, b) => b.ovr - a.ovr).map((p) => ({ ...publicRow(w, p), grad: g.has(p.uid), req: !!(o.win && (o.win.req || []).includes(p.uid)), sale: !!(o.win && o.win.sale[p.uid]), offers: o.win && o.win.sale[p.uid] ? o.win.sale[p.uid].offers : null })) };
+  }
+  function setSpeed(w, b) { const o = w.ow; if (b.speed) { if (!["season", "month", "week"].includes(b.speed)) fail("bad speed"); o.speed = b.speed; } if (b.limit !== undefined) o.limit = Math.max(0, Number(b.limit) || 0); return { ok: true }; }
+  function afterFlowDone(w) { const o = w.ow; if (!o) return; if (o.club) staffAuto(w); if (o.reneg && !o.reneg.done) finishReneg(w, false); if (o.win && o.win.open) closeWindow(w); squadRules(w); }
+  // stays out of the owner's way: the AI market must not buy from, or sell to, the owner's club
+  const blocked = (w, ...names) => !!(w && w.ow && w.ow.club && names.includes(w.ow.club));
+  return { create, buy, priceList, dividend, inject, lifestyle, sponsorOffers, takeSponsor, market, bid, release, sell, sellReply, dealAct, inboxAct, nextRound, renegAct, persuade, staffView, coachAct, beforeRollover, closeWindow, afterRollover, buyoutAct, retire, view, squadView, setSpeed, afterFlowDone, blocked, BACK, ROUNDS, openWindow };
+})();
+
 $mods["sim_core"] = (function() {
 const gzip = $py.gzip;
 const json = $py.json;
@@ -6838,6 +7436,7 @@ class World {
       left = (() => { const $r = []; let c; for (const $c0 of $iter(self.active())) { c = $c0; $r.push(c.id); } return $r; })();
       throw $new(RuntimeError, [("Season not finished: " + $M.join(", ", left))]);
     }
+    if (self.ow) $mods.owner.beforeRollover(self);
     $mods.rivals.update_season(self);
     $mods.moves.begin(self);
     rec = $lit_dict([["season", self.season], ["retired", 0], ["youth", 0], ["outflow", 0], ["down", 0], ["up", 0]]);
@@ -6986,6 +7585,7 @@ class World {
       }
     }
     $mods.moves.finish(self, $idx(rec, "season"));
+    if (self.ow) $mods.owner.afterRollover(self, rec);       // owner mode (inert when there is no owner)
     return rec;
   }
   comps_nat_refresh(nm) {
@@ -7269,6 +7869,7 @@ class World {
           co.contract = self._contract();
         }
       }
+      if (self.ow && self.ow.club === n && reason !== "retire") reason = null;      // owner mode: you decide about your own coach
       if ($T(reason)) {
         self._vacate(n, reason);
       }
@@ -7614,7 +8215,9 @@ class World {
       for (const $f87 of $iter($enumerate($sorted(members, $kw({"key": ((x) => (-x.ovr))}))))) {
         [rank, p] = $iter($f87);
         p.contract = p.contract - 1;
-        if ((p.contract <= 0)) {
+        if ((p.contract <= 0) && self.ow && self.ow.club === p.club) {
+          p.contract = 0;                 // owner mode: the owner negotiates his own expiring contracts before free agency
+        } else if ((p.contract <= 0)) {
           if (($lt(rank, cfg.release_top_n) && (rng.random() < 0.9))) {
             p.contract = rng.randint(1, 4);
             p.wage = wage_for(p.ovr, p.age);
@@ -9165,7 +9768,9 @@ function v_status() {
   if ((w == null)) {
     return $dict($kw({"has_world": false, "god": ST.god, "saves": list_saves(), "stop_items": (() => { const $r = []; let k, t; for (const $c0 of $iter(STOP_ITEMS)) { [k, t] = $iter($c0); $r.push($dict($kw({"key": k, "text": t}))); } return $r; })(), "rules": rule_defaults()}));
   }
-  return $dict($kw({"has_world": true, "god": ST.god, "header": header(w), "stops": stops_view(), "saves": list_saves(), "stop_items": (() => { const $r = []; let k, t; for (const $c0 of $iter(STOP_ITEMS)) { [k, t] = $iter($c0); $r.push($dict($kw({"key": k, "text": t}))); } return $r; })(), "leagues": $sorted(w.leagues), "seasons_played": $len(w.hist)}));
+  const out = $dict($kw({"has_world": true, "god": ST.god, "header": header(w), "stops": stops_view(), "saves": list_saves(), "stop_items": (() => { const $r = []; let k, t; for (const $c0 of $iter(STOP_ITEMS)) { [k, t] = $iter($c0); $r.push($dict($kw({"key": k, "text": t}))); } return $r; })(), "leagues": $sorted(w.leagues), "seasons_played": $len(w.hist)}));
+  if (w.ow) out.set("owner", true);       // owner mode only: normal worlds report exactly what they always did
+  return out;
 }
 function stops_view() {
   let s;
@@ -9901,7 +10506,7 @@ function a_flow(body) {
   if (!cur) return $dict($kw({"ok": true, "header": header(w)}));
   if (step === "graduates" && cur === "awards") w.flow.set("step", "graduates");
   else if (step === "transfers" && (cur === "graduates" || cur === "awards")) w.flow.set("step", "transfers");
-  else if (step === "done") w.flow = null;
+  else if (step === "done") { if (w.ow) $mods.owner.afterFlowDone(w); w.flow = null; }
   else if (step !== cur) throw $new(ApiError, ["That step does not follow the current one.", 409]);
   return $dict($kw({"ok": true, "header": header(w)}));
 }
@@ -9999,6 +10604,49 @@ POST = $lit_dict([["/api/favs", a_favs], ["/api/favnations", a_favnations], ["/a
   GET.set("/api/movemoney", (q) => { const w = need_world(); return $dict($kw($mods.movepages.v_money(w, { season: hq(q, "season", null) ? $int(hq(q, "season", null)) : 0, league: hq(q, "league", null) }))); });
   GET.set("/api/moves", (q) => { const w = need_world(); const g = (k) => hq(q, k, null); return $dict($kw($mods.movepages.v_moves(w, { season: g("season") ? $int(g("season")) : 0, tab: g("tab"), kind: g("kind"), mv: g("mv"), sort: g("sort"), league: g("league"), club: g("club"), who: g("who"), limit: g("limit") ? $int(g("limit")) : 0 }))); });
   GET.set("/api/hofwatch", (q) => $dict($kw({ "rows": HP.v_watch(need_world()) })));
+}
+// ---- Owner Mode routes (beta). All inert unless an owner run exists on the world. ----
+{
+  const O = $mods.owner, pl = (q) => $plain(q), bad = (m, c = 409) => { throw $new(ApiError, [m, c]); };
+  const own = () => { const w = need_world(); if (!w.ow) bad("This world has no owner run. Start one from New game > Owner mode."); return w; };
+  const R = (f) => (q) => { const w = own(); const r = f(w, pl(q)); return $dict($kw(Object.assign({ ok: true }, r || {}))); };
+  GET.set("/api/ow_state", (q) => { const w = need_world(); return $dict($kw(O.view(w))); });
+  GET.set("/api/ow_clubs", (q) => { const w = own(); return $dict($kw({ rows: O.priceList(w) })); });
+  GET.set("/api/ow_market", (q) => { const w = own(); return $dict($kw({ rows: O.market(w, pl(q)) })); });
+  GET.set("/api/ow_squad", (q) => { const w = own(); return $dict($kw(O.squadView(w))); });
+  GET.set("/api/ow_sponsors", (q) => { const w = own(); return $dict($kw({ rows: O.sponsorOffers(w) })); });
+  POST.set("/api/ow_new", (body) => { a_new(body); const w = need_world(); O.create(w, pl(body)); return $dict($kw({ ok: true })); });
+  POST.set("/api/ow_buy", R((w, b) => O.buy(w, b.club)));
+  POST.set("/api/ow_dividend", R((w, b) => O.dividend(w, b.amount)));
+  POST.set("/api/ow_inject", R((w, b) => O.inject(w, b.amount)));
+  POST.set("/api/ow_life", R((w, b) => O.lifestyle(w, b.item)));
+  POST.set("/api/ow_sponsor", R((w, b) => O.takeSponsor(w, b.id)));
+  POST.set("/api/ow_bid", R((w, b) => O.bid(w, b)));
+  POST.set("/api/ow_release", R((w, b) => O.release(w, b.uid)));
+  POST.set("/api/ow_sell", R((w, b) => O.sell(w, b.uid)));
+  POST.set("/api/ow_sellreply", R((w, b) => O.sellReply(w, b)));
+  POST.set("/api/ow_deal", R((w, b) => O.dealAct(w, b)));
+  POST.set("/api/ow_inbox", R((w, b) => O.inboxAct(w, b)));
+  POST.set("/api/ow_reneg", R((w, b) => O.renegAct(w, b)));
+  POST.set("/api/ow_persuade", R((w, b) => O.persuade(w, b)));
+  GET.set("/api/ow_staff", (q) => { const w = own(); return $dict($kw(O.staffView(w))); });
+  POST.set("/api/ow_coach", R((w, b) => O.coachAct(w, b)));
+  POST.set("/api/ow_round", R((w, b) => O.nextRound(w)));
+  POST.set("/api/ow_endwindow", R((w, b) => { O.closeWindow(w); return {}; }));
+  POST.set("/api/ow_settings", R((w, b) => O.setSpeed(w, b)));
+  POST.set("/api/ow_buyout", R((w, b) => O.buyoutAct(w, b.action)));
+  POST.set("/api/ow_retire", R((w, b) => ({ ended: O.retire(w) })));
+  // play on at the owner's speed: a week, a month (4 weeks) or to the end of the season; at season end the year rolls over and the window opens
+  POST.set("/api/ow_advance", R((w, b) => {
+    if (w.ow.state === "ended") bad("This run is over.");
+    if (w.ow.win && w.ow.win.open) bad("Finish the transfer window first (End window).");
+    if (w.flow) bad("Finish the off-season steps first.");
+    const unit = b.unit || w.ow.speed, n = unit === "week" ? 1 : unit === "month" ? 4 : null;
+    a_sim($dict($kw({ scope: "world", weeks: n || 1, to_end: n === null })));
+    let rolled = false;
+    if (w.season_done()) { a_rollover($dict($kw({}))); rolled = true; }
+    return { rolled, header: header(w) };
+  }));
 }
 return {ApiError: ApiError, BaseHTTPRequestHandler: BaseHTTPRequestHandler, C: C, CONF_ORDER: CONF_ORDER, G: G, GEO: GEO, GET: GET, Handler: Handler, POST: POST, PRESETS: PRESETS, S: S, ST: ST, STOP_ITEMS: STOP_ITEMS, State: State, Stops: Stops, T: T, ThreadingHTTPServer: ThreadingHTTPServer, _LS: _LS, _a_sim: _a_sim, _done_set: _done_set, a_beat: a_beat, a_delete: a_delete, a_edit: a_edit, a_export: a_export, a_load: a_load, a_new: a_new, a_quit: a_quit, a_rollover: a_rollover, a_save: a_save, a_settings: a_settings, a_sim: a_sim, a_stops: a_stops, a_year: a_year, argparse: argparse, awards_brief: awards_brief, bracket_upcoming: bracket_upcoming, cal: cal, coach_row: coach_row, comp_emblem: comp_emblem, comp_progress: comp_progress, compstats: compstats, cur_stats: cur_stats, ev_date: ev_date, find_browser: find_browser, header: header, json: json, list_saves: list_saves, live_stats: live_stats, main: main, mimetypes: mimetypes, mx: mx, need_world: need_world, os: os, parse_qs: parse_qs, player_row: player_row, r1: r1, re: re, review: review, round_name_: round_name_, rule_defaults: rule_defaults, safe_slot: safe_slot, shim: shim, shutil: shutil, stops_view: stops_view, subprocess: subprocess, sys: sys, threading: threading, time: time, traceback: traceback, urlparse: urlparse, v_awards: v_awards, v_charts: v_charts, v_club: v_club, v_comp: v_comp, v_compsum: v_compsum, v_continent: v_continent, v_edits: v_edits, v_league: v_league, v_league_season: v_league_season, v_ledger: v_ledger, v_map: v_map, v_money: v_money, v_nation: v_nation, v_nations: v_nations, v_news: v_news, v_player: v_player, v_players: v_players, v_records: v_records, v_status: v_status, v_world: v_world, watchdog: watchdog};
 })();
@@ -11598,7 +12246,7 @@ function renderShell() {
   applyDense();
   const has = STATUS && STATUS.has_world;
   const route = location.hash.split("/")[1] || "";
-  const items = [["world", "World"], ["nations", "Nations"], ["news", "News"], ["money", "Money"], ["moves", "Off-season"], ["rivals", "Rivals"], ["players", "Players"], ["ceremony", "Awards"], ["hof", "Hall of Fame"], ["trophies", "Trophies"], ["records", "Records"]];
+  const items = [...(STATUS && STATUS.owner ? [["owner", "Owner"]] : []), ["world", "World"], ["nations", "Nations"], ["news", "News"], ["money", "Money"], ["moves", "Off-season"], ["rivals", "Rivals"], ["players", "Players"], ["ceremony", "Awards"], ["hof", "Hall of Fame"], ["trophies", "Trophies"], ["records", "Records"]];
   $("#nav").innerHTML = has ? items.map(([k, t]) => `<a href="#/${k}" class="${route === k || (k === "moves" && route === "ledger") ? "on" : ""}">${t}</a>`).join("") : "";
   renderTabbar(has, route);
   document.body.classList.toggle("inapp", !!has);
@@ -11638,6 +12286,7 @@ function menuPage(title, sub, groups) {
 }
 function viewMore() {
   menuPage("More", "Everything else, in one place.", [
+    ...(STATUS && STATUS.owner ? [["Owner", [["pres", "Owner hub", "your club, window and money", "#/owner"]]]] : []),
     ["Money and moves", [["money", "Money", "finances across the world", "#/money"], ["moves", "Off-season moves", "transfers, retirements, new players", "#/moves"], ["grad", "Graduates", "academy prospects", "#/prospects"]]],
     ["Explore", [["nations", "Nations", "national teams and rankings", "#/nations"], ["rivals", "Rivals", "derbies and rivalries", "#/rivals"]]],
     ["Game", [["save", "Save and load", "slots, export, import", "", "mr-save"], ["gear", "Settings", "animations, god mode, logos", "", "mr-set"]]],
@@ -11939,7 +12588,7 @@ function wireSaves(inGame) {
 
 // ---------------------------------------------------------------- favorites
 // A favorite is a key: "L:<league>" or "<kind>:<confed>" (cup, ct, nl, qual). The list is kept inside the world, so it travels with every save.
-const APP_VERSION = "v16.2.0-beta", APP_TAG = "Show Your Worth";
+const APP_VERSION = "v17.0.0-beta (Owner Mode)", APP_TAG = "Show Your Worth";
 let FAVS = null, PICK_ASKED = false;                    // FAVS: null until the player has chosen, then an array of keys
 const CT_NAMES = { UEFA: "European Championship", CONMEBOL: "Copa America", CONCACAF: "Gold Cup", CAF: "Africa Cup of Nations", AFC: "Asian Cup", OFC: "OFC Nations Cup" };
 const NL_NAMES = { UEFA: "UEFA Nations League", CONMEBOL: "CONMEBOL Nations League", CONCACAF: "CONCACAF Nations League", CAF: "CAF Nations League", AFC: "AFC Nations League", OFC: "OFC Nations League" };
@@ -12109,7 +12758,7 @@ async function viewStart() {
     <div class="start-head"><h1>Soccer Sim <span class="ver">${APP_VERSION}</span></h1>
       <div class="start-tag">${starSvg(14)} ${APP_TAG}<span>Title stars, federation badges, league and competition logos</span></div>
       <div class="sub">Commissioner mode: no lineups, no relegation, one worldwide player market.</div></div>
-    ${hasSaves ? loadCard + newCard : newCard + loadCard}</div>`;
+    ${hasSaves ? loadCard + newCard : newCard + loadCard}${typeof owStartCard === "function" ? owStartCard() : ""}</div>`;
   $("#rules-on").onchange = (e) => ($("#rules").hidden = !e.target.checked);
   $("#seed-rnd").onclick = () => ($("#seed").value = 1 + Math.floor(Math.random() * 99999));
   $("#go-new").onclick = async () => {
@@ -12121,7 +12770,7 @@ async function viewStart() {
     const ok = await busy("Building the world (about 2 seconds)...", () => api("/api/new", { seed: $("#seed").value, rules }));
     if (ok) { PICK_ASKED = false; location.hash = "#/world"; await refreshStatus(); await route(); }
   };
-  wireSaves(false); wireSaveTools(false); wireLogoPanel(); storageNote();
+  wireSaves(false); wireSaveTools(false); wireLogoPanel(); storageNote(); if (typeof owWireStart === "function") owWireStart();
 }
 
 function progressRow(c) {
@@ -13567,6 +14216,7 @@ async function route() {
 async function routeInner(r, a, b) {
   {
     if (!r || r === "start") return viewStart();
+    if (r === "owner") return await viewOwner(a);
     if (r === "world") return await viewWorld();
     if (r === "leagues") return await viewLeagues();
     if (r === "more") return viewMore();
@@ -13612,5 +14262,215 @@ $("#brand").onclick = () => (location.hash = STATUS && STATUS.has_world ? "#/wor
   if (STATUS.has_world && !location.hash) location.hash = "#/world";
   await route();
 })();
+</script>
+<script>"use strict";
+/* Owner Mode screens (beta). Plain JS; uses api(), esc(), money(), busy(), toast(), openModal() from app.js. Route: #/owner/<tab> */
+const OWT = { tab: "hub", mq: { q: "", pos: "", grads: false, expiring: false, free: false, sort: "ovr" }, sq: "all", ST: null };
+const owM = (x) => money(x);
+const owBar = (v, label, hint) => `<div class="owm"><div class="owm-t"><span>${label}</span><b>${Math.round(v)}</b></div><div class="owm-b"><i style="width:${Math.max(2, Math.min(100, v))}%;background:${v < 30 ? "#e05a4f" : v < 50 ? "#e0b44f" : "#4fbf7a"}"></i></div>${hint ? `<div class="dim small">${hint}</div>` : ""}</div>`;
+async function owPost(path, body, ok) {
+  try { const r = await api(path, body || {}); if (ok) toast(ok, true); return r; } catch (e) { toast(e.message); return null; }
+}
+async function viewOwner(tab) {
+  const st = await api("/api/ow_state"); OWT.ST = st;
+  if (!st.active) { location.hash = "#/"; return; }
+  if (st.state === "ended") return owEnded(st);
+  if (st.state === "start" || st.state === "between") return await owBuy(st);
+  const tabs = [["hub", "Hub"], ["window", "Window"], ["squad", "Squad"], ["staff", "Staff"], ["money", "Money"], ["board", "Board"]];
+  OWT.tab = tabs.some((t) => t[0] === tab) ? tab : OWT.tab || "hub";
+  const body = OWT.tab === "hub" ? owHub(st) : OWT.tab === "window" ? await owWindow(st) : OWT.tab === "squad" ? await owSquad(st) : OWT.tab === "staff" ? await owStaff(st) : OWT.tab === "money" ? await owMoney(st) : owBoard(st);
+  $("#view").innerHTML = `<div class="v2 ow"><div class="dim small">${esc(st.name)} &middot; ${esc(st.back)} &middot; age ${st.age} &middot; ${st.mode === "sandbox" ? "Sandbox" : "Classic"}</div>
+    <h1>${esc(st.club.name)}</h1>
+    <div class="owtop"><div><span class="dim small">Your money</span><b>${owM(st.wealth)}</b></div><div><span class="dim small">Club cash</span><b>${owM(st.club.cash)}</b></div><div><span class="dim small">Debt</span><b>${st.club.debt ? owM(st.club.debt) : "none"}</b></div></div>
+    <nav class="tabs2 lgtabs">${tabs.map(([k, t]) => `<a href="#/owner/${k}" class="${OWT.tab === k ? "on" : ""}">${t}${k === "window" && (st.window || st.reneg) ? " &bull;" : ""}</a>`).join("")}</nav>${body}</div>`;
+  owWire(st);
+}
+// ---- start (new owner world) ----
+function owStartCard() {
+  return `<div class="card"><h3>Owner mode <small>beta</small></h3><div class="dim small" style="margin-bottom:8px">You are the owner. Buy or inherit a club, hire the right people, run the transfer window, answer to the board. Your career ends when you die, go broke or retire.</div>
+    <div class="field"><label>Name</label><input id="ow-name" value="The Owner" maxlength="30" style="width:170px"></div>
+    <div class="field"><label>Seed</label><input type="number" id="ow-seed" value="1" min="1" style="width:90px"></div>
+    <div class="field"><label>Mode</label><select id="ow-mode"><option value="classic">Classic (injections capped)</option><option value="sandbox">Sandbox (no caps)</option></select></div>
+    <div class="ow-back" id="ow-back">${[["selfmade", "Self-made", 32, "700M", "Little money, lots of time"], ["trust", "Trust fund", 35, "1.2B", "A family club, handed down"], ["founder", "Founder", 42, "2B", "A big exit and a big ego"], ["fan", "Local fan", 48, "500M", "Save the club you grew up with"], ["veteran", "Veteran", 62, "4B", "Rich, with little time left"]]
+      .map(([k, t, a, m, d], i) => `<label class="owb"><input type="radio" name="owb" value="${k}" ${i === 0 ? "checked" : ""}><span><b>${t}</b> &middot; age ${a} &middot; ${m}<br><span class="dim small">${d}</span></span></label>`).join("")}</div>
+    <button class="pri wide" id="ow-go">Start owner run</button></div>`;
+}
+function owWireStart() {
+  const go = $("#ow-go"); if (!go) return;
+  go.onclick = async () => {
+    const back = document.querySelector("input[name=owb]:checked").value;
+    const ok = await busy("Building the world (about 2 seconds)...", () => api("/api/ow_new", { seed: $("#ow-seed").value, backstory: back, name: $("#ow-name").value, mode: $("#ow-mode").value }));
+    if (ok) { PICK_ASKED = false; await refreshStatus(); location.hash = "#/owner"; await route(); }
+  };
+}
+async function owBuy(st) {
+  const d = await api("/api/ow_clubs"), inh = st.back === "Trust fund" && st.clubs.length === 0;
+  const ord = { open: 0, rep: 1, money: 2, member: 3 };
+  d.rows.sort((x, y) => ord[x.status] - ord[y.status] || y.stature - x.stature);
+  const rows = d.rows.filter((r) => (inh ? r.stature >= 40 && r.stature <= 80 && !r.member : true));
+  const tag = (r) => r.member ? `<span class="dim small">member-owned</span>` : r.status === "rep" ? `<span class="dim small">needs reputation ${r.need_rep}</span>` : r.status === "money" ? `<span class="dim small">too expensive</span>` : `<button class="pri mini" data-buy="${esc(r.club)}">${inh ? "Take over" : "Buy"}</button>`;
+  $("#view").innerHTML = `<div class="v2 ow"><h1>${st.state === "between" ? "Buy another club" : inh ? "Your family club" : "Buy a club"}</h1>
+    <div class="owtop"><div><span class="dim small">Your money</span><b>${owM(st.wealth)}</b></div><div><span class="dim small">Reputation</span><b>${st.rep}</b></div><div><span class="dim small">Age</span><b>${st.age}</b></div></div>
+    <div class="dim small" style="margin:8px 0">${inh ? "Pick the club your family has held. You get it without paying." : "You must keep 15% of your money in reserve. Bigger clubs need a bigger reputation. Member-owned clubs are not for sale."}</div>
+    <div class="card">${rows.map((r) => `<div class="row"><span class="rl"><span class="rt">${clubLink(r.club)}<div class="meta">${esc(r.league)} &middot; income ${owM(r.income)}${r.debt ? " &middot; debt " + owM(r.debt) : ""}</div></span></span><span class="prow"><b>${inh ? "free" : owM(r.price)}</b> ${tag(r)}</span></div>`).join("")}</div></div>`;
+  document.querySelectorAll("[data-buy]").forEach((b) => (b.onclick = async () => { if (await owPost("/api/ow_buy", { club: b.dataset.buy }, "Done.")) { await refreshStatus(); location.hash = "#/owner/hub"; await route(); } }));
+}
+function owEnded(st) {
+  const e = st.ended;
+  $("#view").innerHTML = `<div class="v2 ow"><h1>${e.why === "death" ? "Your story ends" : "You retire"}</h1><div class="dim small">Age ${e.age} &middot; ${e.years} seasons as an owner</div>
+    <div class="card"><div class="row"><span>Net worth</span><b>${owM(e.wealth)}</b></div><div class="row"><span>Started with</span><span>${owM(e.start_wealth)}</span></div><div class="row"><span>Peak</span><span>${owM(e.peak)}</span></div>
+    <div class="row"><span>Put into clubs</span><span>${owM(e.injected)}</span></div><div class="row"><span>Taken out as dividends</span><span>${owM(e.dividends)}</span></div><div class="row"><span>Titles</span><span>${e.titles}</span></div><div class="row"><span>Clubs owned</span><span>${e.clubs}</span></div><div class="row"><span>Bankruptcies</span><span>${e.bankrupt}</span></div><div class="row"><span>Reputation</span><span>${e.rep}</span></div></div>
+    <div class="card"><h3>Your clubs</h3>${st.clubs.map((c) => `<div class="row"><span>${clubLink(c.club)}</span><span class="dim small">${c.from}-${c.to || "now"} &middot; ${esc(c.how)}${c.how2 ? ", " + esc(c.how2) : ""}</span></div>`).join("")}</div>
+    <button class="pri wide" onclick="location.hash='#/'">New run</button></div>`;
+}
+// ---- hub ----
+function owHub(st) {
+  const h = STATUS.header, off = !!h.flow, p = st.pressure;
+  const staffAlert = st.no_coach ? "You have no coach. Hire one on the Staff tab." : st.coach_expired ? "Your coach's contract has run out. Renew or replace him on the Staff tab." : "";
+  const phase = st.reneg ? "Contract talks" : st.window && st.window.open ? "Transfer window" : off ? "Off-season" : "In season";
+  let act = "";
+  if (st.reneg) act = `<button class="pri wide" data-tab="window">Open contract talks (week ${st.reneg.round} of ${st.reneg.rounds})</button>`;
+  else if (st.window && st.window.open) act = `<button class="pri wide" data-tab="window">Open the transfer window (round ${st.window.round} of ${st.window.rounds})</button>`;
+  else if (off) act = `<div class="dim small" style="margin-bottom:6px">Awards and graduates are in the usual pages.</div><button class="pri wide" id="ow-next">Start season ${h.season}</button>`;
+  else act = `<div class="ow-speed">${["week", "month", "season"].map((k) => `<button class="${st.speed === k ? "on" : ""}" data-speed="${k}">${k[0].toUpperCase() + k.slice(1)}</button>`).join("")}</div><button class="pri wide" id="ow-adv">Play ${st.speed === "season" ? "the season" : "a " + st.speed}</button><div class="dim small">${seasonLine(h)}</div>`;
+  const bo = st.buyout ? `<div class="card ow-alert"><h3>Buyout offer</h3>The board offers <b>${owM(st.buyout.offer)}</b> for the club.<div class="owbtns"><button data-bo="accept">Accept</button><button data-bo="counter" ${st.buyout.counter ? "disabled" : ""}>Counter (+15%)</button><button data-bo="refuse">Refuse</button></div><div class="dim small">Refusing makes the next offer worse.</div></div>` : "";
+  return `${bo}${staffAlert ? `<div class="card ow-alert">${staffAlert} <button class="mini" data-tab="staff">Open staff</button></div>` : ""}<div class="card"><h3>${phase}<small>Season ${st.season}</small></h3>${act}</div>
+    <div class="card"><h3>Pressure <small>${esc(p.ladder_name)}</small></h3>${owBar(p.board, "Board")}${owBar(p.fans, "Fans")}${owBar(p.players, "Players", p.money_only ? "Upset about money, but winning: the board stays neutral." : "")}</div>
+    <div class="card"><h3>Coach</h3><div class="row"><span>${esc(st.coach.name)}</span><span class="dim small">prestige ${st.coach.prestige}</span></div><div class="row"><span>Trust in you</span><b>${st.trust}</b></div></div>
+    <div class="card"><h3>News</h3>${st.feed.slice(0, 8).map((f) => `<div class="row"><span class="small">${esc(f.t)}</span><span class="dim small">S${f.season}</span></div>`).join("") || '<div class="dim small">Nothing yet.</div>'}</div>
+    <div class="card"><button class="btn wide" id="ow-retire">Retire from ownership</button></div>`;
+}
+// ---- window ----
+async function owWindow(st) {
+  if (st.reneg) {
+    const R = st.reneg;
+    return `<div class="card"><h3>Contract talks <small>week ${R.round} of ${R.rounds}</small></h3><div class="dim small">These players are out of contract. Your coach has a view on each. Anyone left unresolved reaches free agency when the talks end.</div>
+      ${R.list.map((x) => `<div class="row ow-deal"><span class="rt"><b>${esc(x.name)}</b> ${ovr(x.ovr)} <span class="dim small">${x.pos} &middot; ${x.age}</span><div class="meta">${x.state === "open" ? `${x.coach === "nodeal" ? "Coach: <b>no deal</b>, he wants to leave the club" : "Coach says: <b>" + (x.coach === "resign" ? "re-sign" : "let him walk") + "</b>"} &middot; wants ${owM(x.ask)}/yr for ${x.years} yr (now ${owM(x.now)})<div class="owm-b" style="max-width:160px"><i style="width:${x.annoyed}%;background:${x.annoyed > 60 ? "#e05a4f" : "#e0b44f"}"></i></div><span class="dim small">annoyed ${x.annoyed}</span>` : x.state === "signed" ? "Re-signed at " + owM(x.wage) : "Gone"}</div></span>
+      ${x.state === "open" ? `<span class="owbtns"><button class="pri mini" data-rg="approve" data-uid="${x.uid}">Approve</button><button class="mini" data-rg="counter" data-uid="${x.uid}" data-ask="${x.ask}">Counter</button><button class="mini" data-rg="walk" data-uid="${x.uid}">Let walk</button></span>` : ""}</div>`).join("")}
+      <button class="btn wide" id="ow-round">${R.round < R.rounds ? "Next week" : "End talks and open the window"}</button></div>`;
+  }
+  const W = st.window; if (!W || !W.open) return `<div class="card"><h3>Transfer window</h3><div class="dim small">The window opens after the season ends. ${STATUS.header.flow ? "It is closed now." : "Play the season first."}</div></div>`;
+  const deals = W.deals.map((d) => `<div class="row ow-deal"><span class="rt"><b>${esc(d.name)}</b> ${ovr(d.ovr)} <span class="dim small">${d.pos} &middot; ${d.age} &middot; coach sees potential ${d.pot}</span><div class="meta">${esc(d.tag)} &middot; from ${clubLink(d.club)}<br>${owM(d.fee)} fee &middot; ${owM(d.wage)}/yr &middot; ${d.years} yr</div></span>
+    <span class="owbtns"><button class="pri mini" data-deal="approve" data-id="${d.id}">Approve</button><button class="mini" data-deal="counter" data-id="${d.id}" data-fee="${d.fee}">Counter</button><button class="mini" data-deal="veto" data-id="${d.id}">Veto</button></span></div>`).join("");
+  const inbox = W.inbox.map((x) => `<div class="row ow-deal"><span class="rt"><b>${esc(x.name)}</b><div class="meta">${esc(x.club)} offer ${owM(x.fee)}</div></span><span class="owbtns"><button class="pri mini" data-ib="accept" data-uid="${x.uid}">Accept</button><button class="mini" data-ib="counter" data-uid="${x.uid}" ${x.once ? "disabled" : ""}>Ask more</button><button class="mini" data-ib="decline" data-uid="${x.uid}">Decline</button></span></div>`).join("");
+  const wars = W.wars.map((x) => `<div class="row"><span><b>${esc(x.name)}</b> <span class="dim small">${esc(x.rival)} bid ${owM(x.bid)}</span></span><span class="dim small">beat it this round</span></div>`).join("");
+  const m = await api("/api/ow_market?" + new URLSearchParams(Object.entries(OWT.mq).filter(([k, v]) => v)).toString());
+  const q = OWT.mq;
+  return `<div class="card"><h3>Round ${W.round} of ${W.rounds} <small>${W.deadline ? "DEADLINE DAY" : ""}</small></h3><div class="dim small">Squad ${st.club.squad}/25. Fair value is what a player is worth; sellers ask more, and lowballing locks you out.</div>
+      <div class="owbtns"><button class="pri" id="ow-round">${W.deadline ? "Deadline passes: close window" : "Next round"}</button><button id="ow-endw">End window now</button></div></div>
+    ${W.requests && W.requests.length ? `<div class="card ow-alert"><h3>Asked to leave</h3><div class="dim small">These players are unhappy and want out. Sell them (buyers pay a little less), or talk them round on the Squad tab. Keeping them hurts the players' mood.</div>${W.requests.map((x) => `<div class="row"><span><b>${esc(x.name)}</b> ${ovr(x.ovr)}</span><button class="mini" data-tab="squad">Open squad</button></div>`).join("")}</div>` : ""}
+    ${wars ? `<div class="card ow-alert"><h3>Bidding wars</h3>${wars}</div>` : ""}
+    <div class="card"><h3>Your coach's deals</h3>${deals || '<div class="dim small">No deals right now. The coach may find something next round.</div>'}</div>
+    ${inbox ? `<div class="card"><h3>Offers for your players</h3>${inbox}</div>` : ""}
+    <div class="card"><h3>Market</h3>
+      <div class="owf"><input id="mq-q" placeholder="Search name" value="${esc(q.q)}"><select id="mq-pos"><option value="">Any</option>${["GK", "DEF", "MID", "FWD"].map((x) => `<option ${q.pos === x ? "selected" : ""}>${x}</option>`).join("")}</select>
+      <select id="mq-sort">${[["ovr", "Best"], ["value", "Cheapest"], ["age", "Youngest"]].map(([k, t]) => `<option value="${k}" ${q.sort === k ? "selected" : ""}>${t}</option>`).join("")}</select></div>
+      <div class="owf">${[["grads", "Graduates"], ["expiring", "Expiring"], ["free", "Free agents"]].map(([k, t]) => `<label class="check"><input type="checkbox" data-mqf="${k}" ${q[k] ? "checked" : ""}> ${t}</label>`).join("")}</div>
+      ${m.rows.map((p) => `<div class="row"><span class="rt">${playerLink(p)} ${ovr(p.ovr)} <span class="dim small">${p.pos} &middot; ${p.age}${p.coach_pot ? " &middot; coach: pot " + p.coach_pot : ""}${p.grad ? " &middot; <b>graduate</b>" : ""}</span><div class="meta">${p.club ? esc(p.club) + " (" + p.rel + ")" : "free agent"} &middot; value ${owM(p.value)} &middot; wage ${owM(p.wage)} &middot; ${p.contract}y${p.last ? " &middot; " + p.last.g + "g " + p.last.a + "a" : ""}</div></span>
+      <button class="mini ${p.locked ? "" : "pri"}" data-bid="${p.uid}" data-name="${esc(p.name)}" data-val="${p.value}" data-wage="${p.wage}" ${p.locked ? "disabled" : ""}>${p.locked ? "Locked" : p.war ? "War!" : p.club ? "Bid" : "Sign"}</button></div>`).join("") || '<div class="dim small">No players match.</div>'}</div>`;
+}
+// ---- squad (own players: sell, release; graduates) ----
+async function owSquad(st) {
+  const d = await api("/api/ow_squad"), rows = d.rows.filter((p) => OWT.sq !== "grads" || p.grad), W = st.window && st.window.open;
+  return `<div class="card"><h3>Squad <small>${d.rows.length}/25</small></h3><nav class="chips"><button class="${OWT.sq === "all" ? "on" : ""}" data-sq="all">All</button><button class="${OWT.sq === "grads" ? "on" : ""}" data-sq="grads">Graduates</button></nav>
+    <div class="dim small" style="margin:6px 0">${W ? "Sell to another club, or release (you pay half the wages left). Graduates stay with you unless you sell or release them." : "Selling and releasing happen in the transfer window."}</div>
+    ${rows.map((p) => `<div class="row"><span class="rt">${playerLink(p)} ${ovr(p.ovr)} <span class="dim small">${p.pos} &middot; ${p.age}${p.coach_pot ? " &middot; pot " + p.coach_pot : ""}${p.grad ? " &middot; <b>graduate</b>" : ""}${p.req ? " &middot; <b style=\"color:#e0b44f\">asked to leave</b>" : ""}</span><div class="meta">value ${owM(p.value)} &middot; wage ${owM(p.wage)} &middot; ${p.contract}y${p.req && W ? ` <button class="mini" data-pers="${p.uid}">Talk him round</button>` : ""}${p.offers ? "<br>" + p.offers.map((o) => `<button class="mini pri" data-sell="${p.uid}" data-club="${esc(o.club)}">${esc(o.club)} ${owM(o.fee)}</button>`).join(" ") + ` <button class="mini" data-ask="${p.uid}">Ask more</button>` : ""}</div></span>
+      ${W && !p.offers ? `<span class="owbtns"><button class="mini" data-selll="${p.uid}">Sell</button><button class="mini" data-rel="${p.uid}" data-name="${esc(p.name)}">Release</button></span>` : ""}</div>`).join("")}</div>`;
+}
+// ---- staff ----
+const owRt = (x) => `<div class="ow-rt">${[["scout", "Finds players"], ["dev", "Develops youth"], ["keep", "Keeps veterans"]].map(([k, t]) => `<div class="row"><span class="small">${t}</span><span class="owm-b" style="width:90px;display:inline-block"><i style="width:${x[k]}%;background:#4fbf7a"></i></span><b class="small">${x[k]}</b></div>`).join("")}</div>`;
+async function owStaff(st) {
+  const d = await api("/api/ow_staff"), c = d.current;
+  return `<div class="card"><h3>Your coach <small>${c ? "contract " + (c.contract > 0 ? c.contract + "y" : "expired") : "vacant"}</small></h3>
+    ${c ? `<div class="row"><span><a href="#/coach/${c.id}">${esc(c.name)}</a> <span class="dim small">age ${c.age} &middot; prestige ${c.prestige} &middot; ${esc(c.personality)}</span></span><b>${owM(c.wage)}/yr</b></div>${owRt(c)}
+      <div class="dim small">Prestige lifts the team on the pitch. Scouting finds cheaper talent and sees potential. Development makes your young players improve. Keeping slows the fade of older players.</div>
+      <div class="owbtns">${c.expired ? `<button class="pri mini" data-cc="renew">Renew at his price</button><button class="mini" data-cc="renewc">Counter</button>` : ""}<button class="mini" data-cc="fire">Fire (severance)</button></div>` : '<div class="dim small">Hire one below.</div>'}</div>
+    <div class="card"><h3>Coaches looking for work</h3>${d.candidates.map((x) => `<div class="row ow-deal"><span class="rt"><a href="#/coach/${x.id}">${esc(x.name)}</a> <span class="dim small">age ${x.age} &middot; prestige ${x.prestige} &middot; ${esc(x.personality)}</span>${owRt(x)}</span><span>${owM(x.ask)}/yr<br><button class="mini pri" data-hire="${x.id}" data-ask="${x.ask}" data-name="${esc(x.name)}">Offer</button></span></div>`).join("") || '<div class="dim small">Nobody is looking for work right now. More coaches appear after the season ends.</div>'}</div>`;
+}
+// ---- money ----
+async function owMoney(st) {
+  const sp = await api("/api/ow_sponsors"), c = st.club;
+  return `<div class="card"><h3>Two wallets</h3><div class="row"><span>Your money</span><b>${owM(st.wealth)}</b></div><div class="row"><span>Club cash</span><b>${owM(c.cash)}</b></div>
+    <div class="row"><span>Put into the club (all time)</span><span>${owM(st.injected)}</span></div><div class="row"><span>Taken out (all time)</span><span>${owM(st.dividends)}</span></div>
+    <div class="owf"><input type="number" id="ow-amt" placeholder="Amount (M)" style="width:120px"><button id="ow-inj">Put in</button><button id="ow-div">Take out</button></div>${c.inj_left !== null ? `<div class="dim small">Classic: ${owM(c.inj_left)} left to put in this year. The club must keep 15% of its income as cash.</div>` : '<div class="dim small">Sandbox: no limits.</div>'}</div>
+    <div class="card"><h3>Sponsors</h3>${st.sponsors.map((s) => `<div class="row"><span>${esc(s.name)}</span><span>${owM(s.per_year)}/yr &middot; ${s.left}y left</span></div>`).join("") || '<div class="dim small">None signed.</div>'}
+      ${sp.rows.map((s) => `<div class="row"><span class="rt"><b>${esc(s.name)}</b><div class="meta">${esc(s.note)}</div></span><span>${owM(s.per_year)}/yr &middot; ${s.years}y <button class="mini pri" data-sp="${s.id}">Sign</button></span></div>`).join("")}</div>
+    <div class="card"><h3>Lifestyle <small>status ${st.status}</small></h3><div class="dim small">Money you spend on yourself. Fans notice, and so does your reputation.</div>${st.lifestyle.map((l) => `<div class="row"><span>${esc(l.label)}</span><span>${owM(l.cost)} <button class="mini" data-life="${l.id}" ${l.owned ? "disabled" : ""}>${l.owned ? "Owned" : "Buy"}</button></span></div>`).join("")}</div>
+    <div class="card"><h3>Your ledger</h3><div class="dim small">Your income swings from year to year.</div>${st.ledger.slice().reverse().map((l) => `<div class="row"><span>S${l.season}${l.club ? " &middot; " + esc(l.club) : ""}</span><span class="small">income ${owM(l.income)} &middot; divs ${owM(l.dividends)} &middot; in ${owM(l.injections)} &middot; worth ${owM(l.wealth)}</span></div>`).join("")}</div>`;
+}
+function owBoard(st) {
+  const p = st.pressure, steps = ["Calm", "Concern", "Pressure", "Buyout offers"];
+  return `<div class="card"><h3>Who is watching</h3>${owBar(p.board, "Board", "The most powerful group. The board decides whether you stay.")}${owBar(p.fans, "Fans", "They have the least power but hit tickets and sponsors.")}${owBar(p.players, "Players", "Unhappy players make the board uneasy, unless it is only about money and the team is winning.")}</div>
+    <div class="card"><h3>The ladder</h3>${steps.map((s, i) => `<div class="row"><span style="${i === p.ladder ? "font-weight:800" : "opacity:.6"}">${i === p.ladder ? "&#9658; " : ""}${s}</span></div>`).join("")}<div class="dim small" style="margin-top:6px">Nobody can force you out. At the top of the ladder the board offers to buy you out, and each offer you refuse is lower than the last. A club that keeps losing money ends in administration.</div></div>
+    <div class="card"><h3>Reputation <small>${st.rep}</small></h3><div class="dim small">Titles raise it. Administration costs a lot. Bigger clubs need a higher reputation to buy.</div></div>`;
+}
+// ---- wiring ----
+function owWire(st) {
+  const go = (p, b, ok) => owPost(p, b, ok).then(async (r) => { if (r) { await refreshStatus(); await route(); } return r; });
+  document.querySelectorAll("[data-tab]").forEach((b) => (b.onclick = () => (location.hash = "#/owner/" + b.dataset.tab)));
+  document.querySelectorAll("[data-speed]").forEach((b) => (b.onclick = () => go("/api/ow_settings", { speed: b.dataset.speed })));
+  const adv = $("#ow-adv"); if (adv) adv.onclick = async () => { const r = await busy("Playing...", () => api("/api/ow_advance", { unit: st.speed })); if (r) { await refreshStatus(); if (r.rolled) toast("Season over. The off-season begins.", true); await route(); } };
+  const nx = $("#ow-next"); if (nx) nx.onclick = async () => { try { const f = STATUS.header.flow; if (f) { for (const s of ["graduates", "transfers", "done"]) await api("/api/flow", { step: s }).catch(() => 0); } } catch (e) { toast(e.message); } await refreshStatus(); await route(); };
+  const rt = $("#ow-retire"); if (rt) rt.onclick = async () => { if (confirm("Retire from ownership? This ends the run.")) await go("/api/ow_retire"); };
+  document.querySelectorAll("[data-bo]").forEach((b) => (b.onclick = async () => { const r = await owPost("/api/ow_buyout", { action: b.dataset.bo }); if (r) { toast(r.msg || "Done", true); await refreshStatus(); await route(); } }));
+  const rd = $("#ow-round"); if (rd) rd.onclick = () => go("/api/ow_round");
+  const ew = $("#ow-endw"); if (ew) ew.onclick = () => go("/api/ow_endwindow");
+  document.querySelectorAll("[data-rg]").forEach((b) => (b.onclick = async () => {
+    let body = { uid: +b.dataset.uid, action: b.dataset.rg };
+    if (b.dataset.rg === "counter") { const v = prompt("Your wage offer per year (M). He asks " + b.dataset.ask + "M.", b.dataset.ask); if (!v) return; body.wage = +v; }
+    const r = await owPost("/api/ow_reneg", body); if (r) { toast(r.msg || "Done", true); await route(); }
+  }));
+  document.querySelectorAll("[data-deal]").forEach((b) => (b.onclick = async () => {
+    const id = +b.dataset.id, act = b.dataset.deal; let body = { id, action: act };
+    if (act === "counter") {
+      const v = prompt("Your counter fee (M). Their agreed price is " + b.dataset.fee + "M.", b.dataset.fee); if (!v) return;
+      const pv = await owPost("/api/ow_deal", { id, action: "preview", fee: +v }); if (!pv) return;
+      if (!confirm("Counter " + v + "M?\nChance the other club walks away: " + Math.round(pv.collapse * 100) + "%\nYour coach loses trust (" + pv.trust_loss + ").\nRelation with the club cools.\nRounds left: " + pv.rounds_left)) return;
+      body.fee = +v;
+    }
+    const r = await owPost("/api/ow_deal", body); if (r) { toast(r.msg || "Done", r.status === "done"); await route(); }
+  }));
+  document.querySelectorAll("[data-ib]").forEach((b) => (b.onclick = async () => { const r = await owPost("/api/ow_inbox", { uid: +b.dataset.uid, action: b.dataset.ib }); if (r) { toast(r.msg || "Done", true); await route(); } }));
+  document.querySelectorAll("[data-bid]").forEach((b) => (b.onclick = () => owBidDialog(b.dataset)));
+  const mq = (k, el, ev) => { const e = $(el); if (e) e[ev] = () => { OWT.mq[k] = e.type === "checkbox" ? e.checked : e.value; route(); }; };
+  mq("q", "#mq-q", "onchange"); mq("pos", "#mq-pos", "onchange"); mq("sort", "#mq-sort", "onchange");
+  document.querySelectorAll("[data-mqf]").forEach((c) => (c.onchange = () => { OWT.mq[c.dataset.mqf] = c.checked; route(); }));
+  document.querySelectorAll("[data-pers]").forEach((b) => (b.onclick = async () => { const pv = await owPost("/api/ow_persuade", { uid: +b.dataset.pers }); if (!pv) return; if (!confirm(pv.msg + "\nTry it?")) return; const r = await owPost("/api/ow_persuade", { uid: +b.dataset.pers, confirm: true }); if (r) { toast(r.msg, r.status === "stays"); await route(); } }));
+  document.querySelectorAll("[data-cc]").forEach((b) => (b.onclick = async () => {
+    const a = b.dataset.cc; let body = { action: a === "renewc" ? "renew" : a };
+    if (a === "renewc") { const v = prompt("Your wage offer per year (M)"); if (!v) return; body.counter = true; body.wage = +v; }
+    if (a === "fire" && !confirm("Fire your coach? You pay severance.")) return;
+    const r = await owPost("/api/ow_coach", body); if (r) { toast(r.msg || "Done", r.status === "signed" || r.status === "fired"); await route(); }
+  }));
+  document.querySelectorAll("[data-hire]").forEach((b) => (b.onclick = async () => {
+    const v = prompt("Offer " + b.dataset.name + " a wage per year (M). He asks " + b.dataset.ask + "M. Hiring him replaces your current coach (severance applies).", b.dataset.ask); if (!v) return;
+    const r = await owPost("/api/ow_coach", { action: "hire", id: +b.dataset.hire, wage: +v, years: 3 }); if (r) { toast(r.msg || "Done", r.status === "hired"); await route(); }
+  }));
+  document.querySelectorAll("[data-sq]").forEach((b) => (b.onclick = () => { OWT.sq = b.dataset.sq; route(); }));
+  document.querySelectorAll("[data-selll]").forEach((b) => (b.onclick = async () => { const r = await owPost("/api/ow_sell", { uid: +b.dataset.selll }); if (r) { if (r.msg) toast(r.msg); await route(); } }));
+  document.querySelectorAll("[data-sell]").forEach((b) => (b.onclick = async () => { const r = await owPost("/api/ow_sellreply", { uid: +b.dataset.sell, club: b.dataset.club, action: "accept" }); if (r) { toast(r.msg || "Done", r.status === "done"); await route(); } }));
+  document.querySelectorAll("[data-ask]").forEach((b) => (b.onclick = async () => { const r = await owPost("/api/ow_sellreply", { uid: +b.dataset.ask, action: "ask" }); if (r) { toast(r.msg || "New offers."); await route(); } }));
+  document.querySelectorAll("[data-rel]").forEach((b) => (b.onclick = async () => { if (confirm("Release " + b.dataset.name + "? You pay half of his remaining wages.")) { const r = await owPost("/api/ow_release", { uid: +b.dataset.rel }); if (r) { toast("Released (" + owM(r.cost) + ")", true); await route(); } } }));
+  const amt = () => +$("#ow-amt").value;
+  const inj = $("#ow-inj"); if (inj) inj.onclick = () => go("/api/ow_inject", { amount: amt() }, "Money put in.");
+  const dv = $("#ow-div"); if (dv) dv.onclick = () => go("/api/ow_dividend", { amount: amt() }, "Dividend taken.");
+  document.querySelectorAll("[data-sp]").forEach((b) => (b.onclick = () => go("/api/ow_sponsor", { id: +b.dataset.sp }, "Signed.")));
+  document.querySelectorAll("[data-life]").forEach((b) => (b.onclick = () => go("/api/ow_life", { item: b.dataset.life })));
+}
+function owBidDialog(d) {
+  const val = +d.val, wage = +d.wage;
+  openModal(`<div class="ow-dlg"><h3>${esc(d.name)}</h3><div class="dim small">Fair value ${owM(val)}. Expect to pay more. Rival clubs may jump in.</div>
+    <div class="field"><label>Fee (M)</label><input type="number" id="bd-fee" value="${(val * 1.25).toFixed(1)}" step="0.5"></div>
+    <div class="field"><label>Wage per year (M)</label><input type="number" id="bd-wage" value="${(wage * 1.1).toFixed(1)}" step="0.5"></div>
+    <div class="field"><label>Years</label><input type="number" id="bd-yrs" value="3" min="1" max="5"></div><div id="bd-msg" class="small" style="margin:8px 0"></div>
+    <div class="owbtns"><button class="pri" id="bd-go">Send offer</button><button id="bd-x">Close</button></div></div>`);
+  $("#bd-x").onclick = closeModal;
+  $("#bd-go").onclick = async () => {
+    const r = await owPost("/api/ow_bid", { uid: +d.bid, fee: +$("#bd-fee").value, wage: +$("#bd-wage").value, years: +$("#bd-yrs").value }); if (!r) return;
+    $("#bd-msg").innerHTML = `<b>${esc(r.msg || r.status)}</b>${r.ask ? " (they ask " + owM(r.ask) + ")" : ""}${r.need ? " (needs " + owM(r.need) + ")" : ""}${r.need_wage ? " (wage " + owM(r.need_wage) + ")" : ""}${r.patience !== undefined ? " &middot; patience left " + Math.max(0, r.patience) : ""}`;
+    if (r.ask) $("#bd-fee").value = r.ask; if (r.need) $("#bd-fee").value = r.need; if (r.need_wage) $("#bd-wage").value = r.need_wage;
+    if (r.status === "done") { setTimeout(async () => { closeModal(); await route(); }, 900); } else if (r.status === "locked") { await route(); }
+  };
+}
 </script>
 <script>if ("serviceWorker" in navigator && location.protocol.startsWith("http")) addEventListener("load", function () { navigator.serviceWorker.register("sw.js").catch(function () {}); });</script></body></html>
